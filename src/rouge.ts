@@ -78,6 +78,7 @@ export function s(
   ref: string,
   opts: {
     beta?: number;
+    gapLength?: number;
     skipBigram?: (tokens: string[]) => string[];
     tokenizer?: (input: string) => string[];
   }
@@ -89,6 +90,7 @@ export function s(
   const options = Object.assign(
     {
       beta: 0.5,
+      gapLength: 2,
       skipBigram: utils.skipBigram,
       tokenizer: utils.treeBankTokenize,
     },

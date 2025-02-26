@@ -46,7 +46,7 @@ A small but growing number of tests exist. To run them:
 npm test
 ```
 
-This should give you many lines of colorful text in your CLI. Naturally, you'll need to have [Mocha](https://mochajs.org/) installed, but you knew that already.
+This should give you many lines of colorful text in your CLI. Naturally, you'll need to have [Jest](https://jestjs.io/) installed, but you should get that from npm install.
 
 **NOTE:** Function test coverage is 100%, but branch coverage numbers look horrible because the current testing implementation has no way of accounting for the additional code injected by [Babel](https://babeljs.io/) when transpiling from ES2015 to ES5. A fix is in the pipeline, but if anyone has anything good, feel free to PR!
 
@@ -80,7 +80,7 @@ Here's an example applying jackknife resampling as described in the original pap
 
 ```javascript
 import { n as rougeN } from 'js-rouge';
-import { jackKnife } from 'rouge/utils';
+import { jackKnife } from 'js-rouge/utils';
 
 const reference = 'police killed the gunman';
 const candidates = ['police kill the gunman', 'the gunman kill police', 'the gunman police killed'];
@@ -126,3 +126,17 @@ The amount of data available for writing tests is unfortunately woefully inadequ
 ## License
 
 MIT
+
+## TypeScript Support
+
+This fork adds full TypeScript support:
+
+```typescript
+import { l as rougeL } from 'js-rouge';
+
+// TypeScript will enforce correct parameter types
+const score = rougeL('police kill the gunman', 'police killed the gunman', { beta: 0.5 });
+
+// Error: Type 'boolean' is not assignable to type 'number'
+const invalidScore = rougeL('text', 'reference', { beta: true });
+```
