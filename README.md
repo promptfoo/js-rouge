@@ -6,7 +6,15 @@ A JavaScript implementation of the Recall-Oriented Understudy for Gisting Evalua
 - Longest Common Subsequence (ROUGE-L)
 - Skip Bigram (ROUGE-S)
 
-> **Note**: This is a fork of [the original ROUGE.js](https://github.com/kenlimmj/rouge) by kenlimmj. This fork adds TypeScript types and other improvements.
+> **Note**: This is a fork of [the original ROUGE.js](https://github.com/kenlimmj/rouge) by kenlimmj. This fork is maintained by [promptfoo](https://github.com/promptfoo) and adds TypeScript types and other improvements.
+
+## Installation
+
+```shell
+npm install --save js-rouge
+```
+
+The package is published on npm as [js-rouge](https://www.npmjs.com/package/js-rouge).
 
 ## Rationale
 
@@ -63,7 +71,7 @@ const candidate = 'police kill the gunman';
 const score = rougeL(candidate, reference, { beta: 0.5 });
 
 // => 0.75
-console.log('score:', score); 
+console.log('score:', score);
 ```
 
 In addition, the main functions rely on a battery of utility functions specified in `lib/utils.js`. These perform a bunch of things like quick evaluation of skip bigrams, string tokenization, sentence segmentation, and set intersections.
