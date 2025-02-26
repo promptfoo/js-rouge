@@ -1,5 +1,5 @@
 name: npm package release
-run-name: promptfoo npm package release by @${{ github.actor }}
+run-name: js-rouge npm package release by @${{ github.actor }}
 
 on:
   release:
