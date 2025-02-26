@@ -46,21 +46,24 @@ This should give you many lines of colorful text in your CLI. Naturally, you'll 
 
 Rouge.js provides three functions:
 
-- **ROUGE-N**: `rouge.n(cand, ref, opts)`
-- **ROUGE-L**: `rouge.l(cand, ref, opts)`
-- **ROUGE-S**: `rouge.s(cand, ref, opts)`
+- **ROUGE-N**: `rouge.n(candidate, reference, opts)`
+- **ROUGE-L**: `rouge.l(candidate, reference, opts)`
+- **ROUGE-S**: `rouge.s(candidate, reference, opts)`
 
 All functions take in a candidate string, a reference string, and a configuration object specifying additional options. Documentation for the options is provided inline in `lib/rouge.js`. Type signatures are specified and checked using [TypeScript](https://www.typescriptlang.org/).
 
 Here's an example evaluating ROUGE-L using an averaged-F1 score instead of the DUC-F1:
 
 ```javascript
-import { l as rougeL } from 'rouge';
+import { l as rougeL } from 'js-rouge';
 
-const ref = 'police killed the gunman';
-const cand = 'police kill the gunman';
+const reference = 'police killed the gunman';
+const candidate = 'police kill the gunman';
 
-rougeL(cand, ref, { beta: 0.5 });
+const score = rougeL(candidate, reference, { beta: 0.5 });
+
+// => 0.75
+console.log('score:', score); 
 ```
 
 In addition, the main functions rely on a battery of utility functions specified in `lib/utils.js`. These perform a bunch of things like quick evaluation of skip bigrams, string tokenization, sentence segmentation, and set intersections.
@@ -68,20 +71,20 @@ In addition, the main functions rely on a battery of utility functions specified
 Here's an example applying jackknife resampling as described in the original paper:
 
 ```javascript
-import { n as rougeN } from 'rouge';
+import { n as rougeN } from 'js-rouge';
 import { jackKnife } from 'rouge/utils';
 
-const ref = 'police killed the gunman';
-const cands = ['police kill the gunman', 'the gunman kill police', 'the gunman police killed'];
+const reference = 'police killed the gunman';
+const candidates = ['police kill the gunman', 'the gunman kill police', 'the gunman police killed'];
 
 // Standard evaluation taking the arithmetic mean
-jackKnife(cands, ref, rougeN);
+jackKnife(candidates, reference, rougeN);
 
 // A function that returns the max value in an array
 const distMax = (arr) => Math.max(...arr);
 
 // Modified evaluation taking the distribution maximum
-jackKnife(cands, ref, rougeN, distMax);
+jackKnife(candidates, reference, rougeN, distMax);
 ```
 
 ## Versioning
