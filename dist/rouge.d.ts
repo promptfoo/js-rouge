@@ -49,6 +49,7 @@ export declare function n(cand: string, ref: string, opts: {
  */
 export declare function s(cand: string, ref: string, opts: {
     beta?: number;
+    gapLength?: number;
     skipBigram?: (tokens: string[]) => string[];
     tokenizer?: (input: string) => string[];
 }): number;
