@@ -595,6 +595,13 @@ describe('Core Functions', () => {
     test('should correctly compute ROUGE-N score for ref 2 with different opts', () => {
       expect(n(cand, refs[1], { n: 2 })).toBe(0);
     });
+
+    test('should be case-sensitive by default', () => {
+      expect(n('Hello World', 'hello world', { n: 1 })).toBe(0);
+    });
+    test('should support case-insensitive comparison', () => {
+      expect(n('Hello World', 'hello world', { n: 1, caseSensitive: false })).toBe(1);
+    });
   });
 
   describe('ROUGE-S', () => {
@@ -626,6 +633,13 @@ describe('Core Functions', () => {
     test('should correctly compute ROUGE-S score for cand 3 with different opts', () => {
       expect(s(cands[2], ref, { beta: 1 })).toBe(1 / 3);
     });
+
+    test('should be case-sensitive by default', () => {
+      expect(s('Hello World test', 'hello world test', { beta: 1 })).toBe(0);
+    });
+    test('should support case-insensitive comparison', () => {
+      expect(s('Hello World test', 'hello world test', { beta: 1, caseSensitive: false })).toBe(1);
+    });
   });
 
   describe('ROUGE-L', () => {
@@ -651,6 +665,13 @@ describe('Core Functions', () => {
     });
     test('should correctly compute ROUGE-L score for cand 3 with different opts', () => {
       expect(l(cands[2], ref, { beta: 1 })).toBe(2 / 4);
+    });
+
+    test('should be case-sensitive by default', () => {
+      expect(l('Hello World', 'hello world', { beta: 1 })).toBe(0);
+    });
+    test('should support case-insensitive comparison', () => {
+      expect(l('Hello World', 'hello world', { beta: 1, caseSensitive: false })).toBe(1);
     });
   });
 });

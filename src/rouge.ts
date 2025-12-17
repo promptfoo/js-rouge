@@ -8,6 +8,7 @@ export * from './utils';
  * ```
  * {
  * 	n: 1                            // The size of the ngram used
+ * 	caseSensitive: true             // Whether comparison is case-sensitive
  * 	nGram: <inbuilt function>,      // The ngram generator function
  * 	tokenizer: <inbuilt function>   // The string tokenizer
  * }
@@ -27,6 +28,7 @@ export function n(
   ref: string,
   opts: {
     n?: number;
+    caseSensitive?: boolean;
     nGram?: (tokens: string[], n: number) => string[];
     tokenizer?: (input: string) => string[];
   }
@@ -38,14 +40,19 @@ export function n(
   const options = Object.assign(
     {
       n: 1,
+      caseSensitive: true,
       nGram: utils.nGram,
       tokenizer: utils.treeBankTokenize,
     },
     opts
   );
 
-  const candGrams = options.nGram(options.tokenizer(cand), options.n);
-  const refGrams = options.nGram(options.tokenizer(ref), options.n);
+  // Normalize case if case-insensitive comparison is requested
+  const candText = options.caseSensitive ? cand : cand.toLowerCase();
+  const refText = options.caseSensitive ? ref : ref.toLowerCase();
+
+  const candGrams = options.nGram(options.tokenizer(candText), options.n);
+  const refGrams = options.nGram(options.tokenizer(refText), options.n);
 
   const match = utils.intersection(candGrams, refGrams);
   return match.length / refGrams.length;
@@ -58,7 +65,7 @@ export function n(
  * ```
  * {
  * 	beta: 1                             // The beta value used for the f-measure
- * 	gapLength: 2                        // The skip window
+ * 	caseSensitive: true                 // Whether comparison is case-sensitive
  * 	skipBigram: <inbuilt function>,     // The skip-bigram generator function
  * 	tokenizer: <inbuilt function>       // The string tokenizer
  * }
@@ -78,6 +85,7 @@ export function s(
   ref: string,
   opts: {
     beta?: number;
+    caseSensitive?: boolean;
     skipBigram?: (tokens: string[]) => string[];
     tokenizer?: (input: string) => string[];
   }
@@ -89,14 +97,19 @@ export function s(
   const options = Object.assign(
     {
       beta: 0.5,
+      caseSensitive: true,
       skipBigram: utils.skipBigram,
       tokenizer: utils.treeBankTokenize,
     },
     opts
   );
 
-  const candGrams = options.skipBigram(options.tokenizer(cand));
-  const refGrams = options.skipBigram(options.tokenizer(ref));
+  // Normalize case if case-insensitive comparison is requested
+  const candText = options.caseSensitive ? cand : cand.toLowerCase();
+  const refText = options.caseSensitive ? ref : ref.toLowerCase();
+
+  const candGrams = options.skipBigram(options.tokenizer(candText));
+  const refGrams = options.skipBigram(options.tokenizer(refText));
 
   const skip2 = utils.intersection(candGrams, refGrams).length;
 
@@ -117,6 +130,7 @@ export function s(
  * ```
  * {
  * 	beta: 1                             // The beta value used for the f-measure
+ * 	caseSensitive: true                 // Whether comparison is case-sensitive
  * 	lcs: <inbuilt function>             // The least common subsequence function
  * 	segmenter: <inbuilt function>,      // The sentence segmenter
  * 	tokenizer: <inbuilt function>       // The string tokenizer
@@ -138,6 +152,7 @@ export function l(
   ref: string,
   opts: {
     beta?: number;
+    caseSensitive?: boolean;
     lcs?: (a: string[], b: string[]) => string[];
     segmenter?: (input: string) => string[];
     tokenizer?: (input: string) => string[];
@@ -150,6 +165,7 @@ export function l(
   const options = Object.assign(
     {
       beta: 0.5,
+      caseSensitive: true,
       lcs: utils.lcs,
       segmenter: utils.sentenceSegment,
       tokenizer: utils.treeBankTokenize,
@@ -157,11 +173,15 @@ export function l(
     opts
   );
 
-  const candSents = options.segmenter(cand);
-  const refSents = options.segmenter(ref);
+  // Normalize case if case-insensitive comparison is requested
+  const candText = options.caseSensitive ? cand : cand.toLowerCase();
+  const refText = options.caseSensitive ? ref : ref.toLowerCase();
 
-  const candWords = options.tokenizer(cand);
-  const refWords = options.tokenizer(ref);
+  const candSents = options.segmenter(candText);
+  const refSents = options.segmenter(refText);
+
+  const candWords = options.tokenizer(candText);
+  const refWords = options.tokenizer(refText);
 
   const lcsAcc = refSents.map((r) => {
     const rTokens = options.tokenizer(r);
@@ -173,6 +193,10 @@ export function l(
   // Sum the array as quickly as we can
   let lcsSum = 0;
   while (lcsAcc.length) lcsSum += lcsAcc.pop() || 0;
+
+  if (lcsSum === 0) {
+    return 0;
+  }
 
   const lcsRecall = lcsSum / candWords.length;
   const lcsPrec = lcsSum / refWords.length;
