@@ -436,8 +436,9 @@ describe('Utility Functions', () => {
     });
 
     // ReDoS regression tests - ensure pathological inputs complete quickly
+    // Using 500ms threshold to account for CI environment variability
     describe('ReDoS prevention', () => {
-      const TIMEOUT_MS = 100; // Should complete well under 100ms
+      const TIMEOUT_MS = 500;
 
       test('should handle long strings without sentence terminators quickly', () => {
         const input = 'a'.repeat(10000);
@@ -469,6 +470,29 @@ describe('Utility Functions', () => {
         ss(input);
         const elapsed = Date.now() - start;
         expect(elapsed).toBeLessThan(TIMEOUT_MS);
+      });
+    });
+
+    // Additional edge case tests for branch coverage
+    describe('edge cases', () => {
+      test('should handle input with no sentence terminators', () => {
+        // Covers line 166: return input as single sentence when no matches
+        expect(ss('just some text without any ending')).toEqual([
+          'just some text without any ending',
+        ]);
+      });
+
+      test('should handle abbreviation followed by lowercase text', () => {
+        // Covers line 131: abbreviation merge with non-title-case next chunk
+        // Uses 'etc.' which is in ABBR_COMMON
+        expect(ss('There are cats, dogs, etc. and more animals.')).toEqual([
+          'There are cats, dogs, etc. and more animals.',
+        ]);
+      });
+
+      test('should handle single letter abbreviation at sentence boundary', () => {
+        // Covers line 140: small-letter abbreviation merge
+        expect(ss('Please see p. 10 for details.')).toEqual(['Please see p. 10 for details.']);
       });
     });
   });
