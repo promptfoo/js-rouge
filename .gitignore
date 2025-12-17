@@ -90,3 +90,13 @@ Temporary Items
 
 # sftp configuration file
 sftp-config.json
+
+### Audit Files ###
+AUDIT.md
+ALGORITHM_AUDIT.md
+IMPLEMENTATION_COMPARISON.md
+PR_TASKS.md
+
+### Reference Repos ###
+rouge-original/
+ROUGE-2.0-reference/
