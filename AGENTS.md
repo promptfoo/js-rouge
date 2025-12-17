@@ -1,0 +1,150 @@
+# Agent Guidelines for js-rouge
+
+This document provides guidance for AI agents and automated tools working on the js-rouge codebase.
+
+## Project Overview
+
+js-rouge is a TypeScript implementation of ROUGE (Recall-Oriented Understudy for Gisting Evaluation) metrics for evaluating automatic text summarization. It implements:
+
+- **ROUGE-N**: N-gram based evaluation
+- **ROUGE-L**: Longest Common Subsequence based evaluation
+- **ROUGE-S**: Skip-bigram based evaluation
+
+## Architecture
+
+```
+src/
+├── rouge.ts      # Main API: n(), s(), l() functions
+├── utils.ts      # Utility functions: tokenization, LCS, n-grams, etc.
+└── constants.ts  # NLP constants: abbreviations, contractions, etc.
+
+test/
+└── tests.ts      # Jest test suite
+
+dist/             # Build output (do not edit)
+├── rouge.js      # CommonJS bundle
+├── rouge.mjs     # ESM bundle
+└── *.d.ts        # Type declarations
+```
+
+## Build System
+
+- **Bundler**: esbuild (fast, produces dual CJS/ESM output)
+- **Type Checking**: TypeScript with strict mode
+- **Testing**: Jest with @swc/jest transformer
+- **Linting**: ESLint with TypeScript plugin
+- **Formatting**: Prettier
+
+## Key Commands
+
+```bash
+npm run build      # Clean and build (JS + types)
+npm run test       # Run Jest tests with coverage
+npm run lint       # Run ESLint
+npm run format     # Run Prettier
+npm run type-check # TypeScript type checking only
+```
+
+## Code Conventions
+
+### TypeScript
+
+- Strict mode is enabled with all strict flags
+- Explicit return types required (warn level)
+- No explicit `any` (warn level)
+- Prefer `const` over `let`
+- Use template literals over string concatenation
+
+### Commit Messages
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
+
+```
+feat: add new feature
+fix: fix a bug
+docs: documentation only changes
+chore: maintenance tasks
+refactor: code change that neither fixes bug nor adds feature
+test: adding or correcting tests
+```
+
+Do NOT include AI attribution in commits.
+
+### Testing
+
+- Tests are in `test/tests.ts`
+- Use Jest's `describe`/`test` structure
+- Test error conditions with `expect(() => fn()).toThrow()`
+- Golden Rule tests from pragmatic_segmenter for sentence segmentation
+
+## Important Implementation Details
+
+### ROUGE-N
+
+Returns F-score using precision and recall:
+- Precision = matches / candidate_ngrams
+- Recall = matches / reference_ngrams
+- F-score via `fMeasure(precision, recall, beta)`
+
+### ROUGE-L
+
+Uses summary-level LCS with union across sentence pairs:
+```typescript
+const lcsUnion = new Set(candSents.flatMap((c) =>
+  options.lcs(options.tokenizer(c), rTokens)
+));
+```
+
+### ROUGE-S
+
+Skip-bigram evaluation with configurable window:
+- `maxSkip` parameter controls skip distance
+- Default is `Infinity` (all pairs)
+
+### Tokenization
+
+Penn Treebank tokenization is the default:
+- Handles contractions ("can't" → ["ca", "n't"])
+- Preserves punctuation as tokens
+- Handles quotes, brackets, dashes
+
+### F-Measure
+
+```
+F_β = ((1 + β²) × P × R) / (β² × P + R)
+```
+
+- β = 1.0: Harmonic mean (standard)
+- β < 1.0: Favors precision
+- β > 1.0: Favors recall
+
+## Files to Never Commit
+
+- `AUDIT.md`
+- `ALGORITHM_AUDIT.md`
+- `IMPLEMENTATION_COMPARISON.md`
+- `PR_TASKS.md`
+- `rouge-original/` (reference repo)
+- `ROUGE-2.0-reference/` (reference repo)
+
+## CI/CD
+
+GitHub Actions runs on push/PR to main:
+1. Matrix test: Node 18, 20, 22
+2. Format check
+3. Lint check
+4. Build
+5. Test
+
+All checks must pass before merge.
+
+## Dependencies
+
+**Runtime**: Zero (this is intentional - keep it dependency-free)
+
+**Dev Dependencies**:
+- @swc/core, @swc/jest: Fast TypeScript compilation
+- esbuild: Bundling
+- typescript: Type checking
+- eslint, prettier: Code quality
+- jest: Testing
