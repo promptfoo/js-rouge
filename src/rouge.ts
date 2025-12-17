@@ -8,7 +8,8 @@ export * from './utils';
  * ```
  * {
  * 	n: 1                            // The size of the ngram used
- * 	beta: 0.5                       // The beta value used for the f-measure
+ * 	beta: 1.0                       // The beta value used for the f-measure
+ * 	caseSensitive: true             // Whether comparison is case-sensitive
  * 	nGram: <inbuilt function>,      // The ngram generator function
  * 	tokenizer: <inbuilt function>   // The string tokenizer
  * }
@@ -26,9 +27,10 @@ export * from './utils';
 export function n(
   cand: string,
   ref: string,
-  opts: {
+  opts?: {
     n?: number;
     beta?: number;
+    caseSensitive?: boolean;
     nGram?: (tokens: string[], n: number) => string[];
     tokenizer?: (input: string) => string[];
   }
@@ -40,13 +42,17 @@ export function n(
   const options = {
     n: 1,
     beta: 1.0,
+    caseSensitive: true,
     nGram: utils.nGram,
     tokenizer: utils.treeBankTokenize,
     ...opts,
   };
 
-  const candGrams = options.nGram(options.tokenizer(cand), options.n);
-  const refGrams = options.nGram(options.tokenizer(ref), options.n);
+  const candText = options.caseSensitive ? cand : cand.toLowerCase();
+  const refText = options.caseSensitive ? ref : ref.toLowerCase();
+
+  const candGrams = options.nGram(options.tokenizer(candText), options.n);
+  const refGrams = options.nGram(options.tokenizer(refText), options.n);
 
   const match = utils.intersection(candGrams, refGrams);
 
@@ -66,7 +72,8 @@ export function n(
  * Configuration object schema and defaults:
  * ```
  * {
- * 	beta: 1                             // The beta value used for the f-measure
+ * 	beta: 1.0                           // The beta value used for the f-measure
+ * 	caseSensitive: true                 // Whether comparison is case-sensitive
  * 	maxSkip: Infinity                   // Maximum skip distance between words
  * 	skipBigram: <inbuilt function>,     // The skip-bigram generator function
  * 	tokenizer: <inbuilt function>       // The string tokenizer
@@ -85,8 +92,9 @@ export function n(
 export function s(
   cand: string,
   ref: string,
-  opts: {
+  opts?: {
     beta?: number;
+    caseSensitive?: boolean;
     maxSkip?: number;
     skipBigram?: (tokens: string[], maxSkip?: number) => string[];
     tokenizer?: (input: string) => string[];
@@ -98,14 +106,18 @@ export function s(
   // Merge user-provided configuration with defaults
   const options = {
     beta: 1.0,
+    caseSensitive: true,
     maxSkip: Infinity,
     skipBigram: utils.skipBigram,
     tokenizer: utils.treeBankTokenize,
     ...opts,
   };
 
-  const candGrams = options.skipBigram(options.tokenizer(cand), options.maxSkip);
-  const refGrams = options.skipBigram(options.tokenizer(ref), options.maxSkip);
+  const candText = options.caseSensitive ? cand : cand.toLowerCase();
+  const refText = options.caseSensitive ? ref : ref.toLowerCase();
+
+  const candGrams = options.skipBigram(options.tokenizer(candText), options.maxSkip);
+  const refGrams = options.skipBigram(options.tokenizer(refText), options.maxSkip);
 
   const skip2 = utils.intersection(candGrams, refGrams).length;
 
@@ -125,7 +137,8 @@ export function s(
  * Configuration object schema and defaults:
  * ```
  * {
- * 	beta: 1                             // The beta value used for the f-measure
+ * 	beta: 1.0                           // The beta value used for the f-measure
+ * 	caseSensitive: true                 // Whether comparison is case-sensitive
  * 	lcs: <inbuilt function>             // The least common subsequence function
  * 	segmenter: <inbuilt function>,      // The sentence segmenter
  * 	tokenizer: <inbuilt function>       // The string tokenizer
@@ -145,8 +158,9 @@ export function s(
 export function l(
   cand: string,
   ref: string,
-  opts: {
+  opts?: {
     beta?: number;
+    caseSensitive?: boolean;
     lcs?: (a: string[], b: string[]) => string[];
     segmenter?: (input: string) => string[];
     tokenizer?: (input: string) => string[];
@@ -158,17 +172,21 @@ export function l(
   // Merge user-provided configuration with defaults
   const options = {
     beta: 1.0,
+    caseSensitive: true,
     lcs: utils.lcs,
     segmenter: utils.sentenceSegment,
     tokenizer: utils.treeBankTokenize,
     ...opts,
   };
 
-  const candSents = options.segmenter(cand);
-  const refSents = options.segmenter(ref);
+  const candText = options.caseSensitive ? cand : cand.toLowerCase();
+  const refText = options.caseSensitive ? ref : ref.toLowerCase();
 
-  const candWords = options.tokenizer(cand);
-  const refWords = options.tokenizer(ref);
+  const candSents = options.segmenter(candText);
+  const refSents = options.segmenter(refText);
+
+  const candWords = options.tokenizer(candText);
+  const refWords = options.tokenizer(refText);
 
   const lcsAcc = refSents.map((r) => {
     const rTokens = options.tokenizer(r);
@@ -180,6 +198,10 @@ export function l(
   // Sum the array as quickly as we can
   let lcsSum = 0;
   while (lcsAcc.length) lcsSum += lcsAcc.pop() || 0;
+
+  if (lcsSum === 0) {
+    return 0;
+  }
 
   const lcsRecall = lcsSum / candWords.length;
   const lcsPrec = lcsSum / refWords.length;
