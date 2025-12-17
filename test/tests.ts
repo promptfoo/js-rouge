@@ -712,4 +712,39 @@ describe('Core Functions', () => {
       expect(score).toBeGreaterThan(0);
     });
   });
+
+  describe('caseSensitive option', () => {
+    const { n, s, l } = rouge;
+
+    test('ROUGE-N should be case-sensitive by default', () => {
+      expect(n('Hello World', 'hello world')).toBe(0);
+    });
+
+    test('ROUGE-N should match when caseSensitive is false', () => {
+      expect(n('Hello World', 'hello world', { caseSensitive: false })).toBe(1);
+    });
+
+    test('ROUGE-S should be case-sensitive by default', () => {
+      expect(s('Hello World', 'hello world')).toBe(0);
+    });
+
+    test('ROUGE-S should match when caseSensitive is false', () => {
+      expect(s('Hello World', 'hello world', { caseSensitive: false })).toBe(1);
+    });
+
+    test('ROUGE-L should be case-sensitive by default', () => {
+      expect(l('Hello World', 'hello world')).toBe(0);
+    });
+
+    test('ROUGE-L should match when caseSensitive is false', () => {
+      expect(l('Hello World', 'hello world', { caseSensitive: false })).toBe(1);
+    });
+
+    test('caseSensitive option should work with partial matches', () => {
+      // 'The cat' vs 'the CAT sat' - case insensitive should find 2/3 word match
+      const score = n('The cat', 'the CAT sat', { caseSensitive: false });
+      expect(score).toBeGreaterThan(0);
+      expect(score).toBeLessThan(1);
+    });
+  });
 });
