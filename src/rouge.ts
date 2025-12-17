@@ -96,7 +96,7 @@ export function s(
 
   // Merge user-provided configuration with defaults
   const options = {
-    beta: 0.5,
+    beta: 1.0,
     skipBigram: utils.skipBigram,
     tokenizer: utils.treeBankTokenize,
     ...opts,
@@ -155,7 +155,7 @@ export function l(
 
   // Merge user-provided configuration with defaults
   const options = {
-    beta: 0.5,
+    beta: 1.0,
     lcs: utils.lcs,
     segmenter: utils.sentenceSegment,
     tokenizer: utils.treeBankTokenize,
