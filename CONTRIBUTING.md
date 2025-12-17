@@ -139,3 +139,24 @@ project:
 
 **IMPORTANT**: By submitting a patch, you agree to allow the project owner to
 license your work under the same license as that used by the project.
+
+<a name="releases"></a>
+
+## Releases
+
+This project uses [release-please](https://github.com/googleapis/release-please) to automate releases. Release-please creates and maintains a release PR that tracks changes since the last release.
+
+### How it works
+
+1. Use [Conventional Commits](https://www.conventionalcommits.org/) for your commit messages:
+   - `fix: ...` - triggers a patch release (1.0.0 -> 1.0.1)
+   - `feat: ...` - triggers a minor release (1.0.0 -> 1.1.0)
+   - `feat!: ...` or `fix!: ...` or a commit with `BREAKING CHANGE:` in the body - triggers a major release (1.0.0 -> 2.0.0)
+
+2. When commits are pushed to `main`, release-please automatically creates or updates a release PR with:
+   - Version bump in `package.json`
+   - Updated `CHANGELOG.md`
+
+3. When the release PR is merged, release-please:
+   - Creates a GitHub release
+   - Triggers the publish workflow to publish to npm with provenance

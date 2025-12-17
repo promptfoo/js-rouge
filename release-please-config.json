@@ -1,0 +1,9 @@
+{
+  "packages": {
+    ".": {
+      "release-type": "node",
+      "package-name": "js-rouge",
+      "changelog-path": "CHANGELOG.md"
+    }
+  }
+}
