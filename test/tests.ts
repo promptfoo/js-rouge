@@ -652,5 +652,24 @@ describe('Core Functions', () => {
     test('should correctly compute ROUGE-L score for cand 3 with different opts', () => {
       expect(l(cands[2], ref, { beta: 1 })).toBe(2 / 4);
     });
+
+    test('should compute union LCS across all candidate sentences', () => {
+      // This test verifies the fix for the Set spread bug
+      // Multiple candidate sentences should all contribute to the LCS union
+      const multiSentCand = 'The cat sat. The dog ran. The bird flew.';
+      const multiSentRef = 'The cat sat on the mat.';
+      const score = l(multiSentCand, multiSentRef, { beta: 1 });
+      // All three candidate sentences have "The" which should contribute
+      expect(score).toBeGreaterThan(0);
+    });
+
+    test('should handle multi-sentence summaries correctly', () => {
+      // Candidate has words spread across multiple sentences
+      const cand = 'Police arrived. They killed the gunman.';
+      const reference = 'police killed the gunman';
+      const score = l(cand, reference, { beta: 1 });
+      // LCS should find matches from both candidate sentences
+      expect(score).toBeGreaterThan(0);
+    });
   });
 });

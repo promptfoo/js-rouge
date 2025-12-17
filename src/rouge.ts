@@ -165,7 +165,7 @@ export function l(
 
   const lcsAcc = refSents.map((r) => {
     const rTokens = options.tokenizer(r);
-    const lcsUnion = new Set(...candSents.map((c) => options.lcs(options.tokenizer(c), rTokens)));
+    const lcsUnion = new Set(candSents.flatMap((c) => options.lcs(options.tokenizer(c), rTokens)));
 
     return lcsUnion.size;
   });
