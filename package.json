@@ -26,7 +26,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/promptfoo/rouge.git"
+    "url": "git+https://github.com/promptfoo/js-rouge.git"
   },
   "keywords": [
     "ROUGE",
@@ -40,9 +40,9 @@
   ],
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/promptfoo/rouge/issues"
+    "url": "https://github.com/promptfoo/js-rouge/issues"
   },
-  "homepage": "https://github.com/promptfoo/rouge",
+  "homepage": "https://github.com/promptfoo/js-rouge",
   "devDependencies": {
     "@swc/core": "^1.7.12",
     "@swc/jest": "^0.2.36",
