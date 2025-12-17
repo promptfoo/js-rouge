@@ -607,11 +607,32 @@ describe('Utility Functions', () => {
       expect(() => fm(0.5, 0.75, -1)).toThrow(RangeError);
     });
 
-    test('should ignore precision when beta > 1', () => {
+    test('should return pure recall when beta is Infinity', () => {
       expect(fm(0.5, 0.75, Infinity)).toBe(0.75);
     });
-    test('should correctly compute DUC score', () => {
+    test('should correctly compute F1 score (beta=1)', () => {
       expect(fm(0.5, 0.75, 1)).toBe(0.6);
+    });
+    test('should correctly compute F2 score (beta=2, favors recall)', () => {
+      // F2 = (1 + 4) * P * R / (4 * P + R) = 5 * 0.5 * 0.75 / (2 + 0.75) = 1.875 / 2.75
+      expect(fm(0.5, 0.75, 2)).toBeCloseTo(1.875 / 2.75, 10);
+    });
+    test('should correctly compute F0.5 score (beta=0.5, favors precision)', () => {
+      // F0.5 = (1 + 0.25) * P * R / (0.25 * P + R) = 1.25 * 0.5 * 0.75 / (0.125 + 0.75)
+      expect(fm(0.5, 0.75, 0.5)).toBeCloseTo((1.25 * 0.5 * 0.75) / 0.875, 10);
+    });
+    test('should return 0 when both precision and recall are 0', () => {
+      expect(fm(0, 0, 1)).toBe(0);
+    });
+    test('should return 0 when precision is 0', () => {
+      expect(fm(0, 0.5, 1)).toBe(0);
+    });
+    test('should return 0 when recall is 0', () => {
+      expect(fm(0.5, 0, 1)).toBe(0);
+    });
+    test('should return 0 when beta=0 and recall=0 (edge case denominator=0)', () => {
+      // When beta=0, denominator = 0*p + r = r. If r=0, denominator=0
+      expect(fm(0.5, 0, 0)).toBe(0);
     });
   });
 
