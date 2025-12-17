@@ -16,43 +16,39 @@ Nevertheless, the [paper](http://www.aclweb.org/anthology/W04-1013) describing R
 
 ## Quick Start
 
-This package is available on NPM, like so:
+This package is available on NPM:
 
 ```shell
-npm install --save js-rouge
+npm install js-rouge
 ```
 
-To use it, simply require the package:
+To use it:
 
 ```javascript
-import rouge from 'js-rouge'; // ES2015+
+import { n, l, s } from 'js-rouge'; // ES Modules
 
 // OR
 
-const rouge = require('js-rouge'); // CommonJS
+const { n, l, s } = require('js-rouge'); // CommonJS
 ```
 
-A small but growing number of tests exist. To run them:
+To run tests:
 
 ```shell
 npm test
 ```
 
-This should give you many lines of colorful text in your CLI. Naturally, you'll need to have [Mocha](https://mochajs.org/) installed, but you knew that already.
-
-**NOTE:** Function test coverage is 100%, but branch coverage numbers look horrible because the current testing implementation has no way of accounting for the additional code injected by [Babel](https://babeljs.io/) when transpiling from ES2015 to ES5. A fix is in the pipeline, but if anyone has anything good, feel free to PR!
-
 ## Usage
 
-Rouge.js provides three functions:
+js-rouge provides three main functions:
 
-- **ROUGE-N**: `rouge.n(candidate, reference, opts)`
-- **ROUGE-L**: `rouge.l(candidate, reference, opts)`
-- **ROUGE-S**: `rouge.s(candidate, reference, opts)`
+- **ROUGE-N**: `n(candidate, reference, opts)`
+- **ROUGE-L**: `l(candidate, reference, opts)`
+- **ROUGE-S**: `s(candidate, reference, opts)`
 
-All functions take in a candidate string, a reference string, and a configuration object specifying additional options. Documentation for the options is provided inline in `lib/rouge.js`. Type signatures are specified and checked using [TypeScript](https://www.typescriptlang.org/).
+All functions take a candidate string, a reference string, and an optional configuration object.
 
-Here's an example evaluating ROUGE-L using an averaged-F1 score instead of the DUC-F1:
+### ROUGE-L Example
 
 ```javascript
 import { l as rougeL } from 'js-rouge';
@@ -62,20 +58,22 @@ const candidate = 'police kill the gunman';
 
 const score = rougeL(candidate, reference, { beta: 0.5 });
 
-// => 0.75
-console.log('score:', score); 
+console.log('score:', score); // => 0.75
 ```
 
-In addition, the main functions rely on a battery of utility functions specified in `lib/utils.js`. These perform a bunch of things like quick evaluation of skip bigrams, string tokenization, sentence segmentation, and set intersections.
+### Jackknife Resampling
 
-Here's an example applying jackknife resampling as described in the original paper:
+The package also exports utility functions, including jackknife resampling as described in the original paper:
 
 ```javascript
-import { n as rougeN } from 'js-rouge';
-import { jackKnife } from 'rouge/utils';
+import { n as rougeN, jackKnife } from 'js-rouge';
 
 const reference = 'police killed the gunman';
-const candidates = ['police kill the gunman', 'the gunman kill police', 'the gunman police killed'];
+const candidates = [
+  'police kill the gunman',
+  'the gunman kill police',
+  'the gunman police killed',
+];
 
 // Standard evaluation taking the arithmetic mean
 jackKnife(candidates, reference, rougeN);
@@ -86,6 +84,10 @@ const distMax = (arr) => Math.max(...arr);
 // Modified evaluation taking the distribution maximum
 jackKnife(candidates, reference, rougeN, distMax);
 ```
+
+## TypeScript
+
+This package is written in TypeScript and includes type definitions. All functions and utilities are fully typed.
 
 ## Versioning
 
@@ -105,13 +107,11 @@ For more information on SemVer, visit http://semver.org/.
 
 ## Bug Tracking and Feature Requests
 
-Have a bug or a feature request? [Please open a new issue](https://github.com/promptfoo/rouge/issues).
-
-Before opening any issue, please search for existing issues and read the [Issue Guidelines](CONTRIBUTING.md).
+Have a bug or a feature request? [Please open a new issue](https://github.com/promptfoo/js-rouge/issues).
 
 ## Contributing
 
-Please submit all pull requests against \*-wip branches. All code should pass ESLint validation. Note that files in `/lib` are written in TypeScript syntax and transpiled to corresponding files in `/dist`. Gulp build pipelines exist and should be used.
+Please submit all pull requests against the main branch. All code should pass ESLint validation and tests.
 
 The amount of data available for writing tests is unfortunately woefully inadequate. We've tried to be as thorough as possible, but that eliminates neither the possibility of nor existence of errors. The gold standard is the DUC data-set, but that too is form-walled and legal-release-walled, which is infuriating. If you have data in the form of a candidate summary, reference(s), and a verified ROUGE score you do not mind sharing, we would love to add that to the test harness.
 
