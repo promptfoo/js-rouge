@@ -1,4 +1,4 @@
-module.exports = {
+export default {
   // The root directory that Jest should scan for tests and modules within
   rootDir: '.',
 
