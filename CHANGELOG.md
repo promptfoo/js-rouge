@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.1.1](https://github.com/promptfoo/js-rouge/compare/js-rouge-v3.1.0...js-rouge-v3.1.1) (2025-12-17)
+
+
+### Bug Fixes
+
+* add NODE_AUTH_TOKEN to npm publish step ([9a1bb06](https://github.com/promptfoo/js-rouge/commit/9a1bb06613f027b52f68cbdf0e216eeb2fdbc2c2))
+* use npm OIDC for publish authentication ([#35](https://github.com/promptfoo/js-rouge/issues/35)) ([82dd724](https://github.com/promptfoo/js-rouge/commit/82dd724eebefb81d90ebd58a945121fb533fe76d))
+
 ## [3.1.0](https://github.com/promptfoo/js-rouge/compare/js-rouge-v3.0.0...js-rouge-v3.1.0) (2025-12-17)
 
 
