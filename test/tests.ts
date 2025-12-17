@@ -434,6 +434,43 @@ describe('Utility Functions', () => {
         '"Bohr [...] used the analogy of parallel stairways [...]" (Smith 55).',
       ]);
     });
+
+    // ReDoS regression tests - ensure pathological inputs complete quickly
+    describe('ReDoS prevention', () => {
+      const TIMEOUT_MS = 100; // Should complete well under 100ms
+
+      test('should handle long strings without sentence terminators quickly', () => {
+        const input = 'a'.repeat(10000);
+        const start = Date.now();
+        ss(input);
+        const elapsed = Date.now() - start;
+        expect(elapsed).toBeLessThan(TIMEOUT_MS);
+      });
+
+      test('should handle many dots quickly', () => {
+        const input = '.'.repeat(10000);
+        const start = Date.now();
+        ss(input);
+        const elapsed = Date.now() - start;
+        expect(elapsed).toBeLessThan(TIMEOUT_MS);
+      });
+
+      test('should handle repeated patterns quickly', () => {
+        const input = 'word. '.repeat(1000);
+        const start = Date.now();
+        ss(input);
+        const elapsed = Date.now() - start;
+        expect(elapsed).toBeLessThan(TIMEOUT_MS);
+      });
+
+      test('should handle long string with many spaces quickly', () => {
+        const input = `${' '.repeat(10000)}text. more text.`;
+        const start = Date.now();
+        ss(input);
+        const elapsed = Date.now() - start;
+        expect(elapsed).toBeLessThan(TIMEOUT_MS);
+      });
+    });
   });
 
   describe('treeBankTokenize', () => {
