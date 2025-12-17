@@ -35,14 +35,12 @@ export function n(
   if (ref.length === 0) throw new RangeError('Reference cannot be an empty string');
 
   // Merge user-provided configuration with defaults
-  const options = Object.assign(
-    {
-      n: 1,
-      nGram: utils.nGram,
-      tokenizer: utils.treeBankTokenize,
-    },
-    opts
-  );
+  const options = {
+    n: 1,
+    nGram: utils.nGram,
+    tokenizer: utils.treeBankTokenize,
+    ...opts,
+  };
 
   const candGrams = options.nGram(options.tokenizer(cand), options.n);
   const refGrams = options.nGram(options.tokenizer(ref), options.n);
@@ -86,14 +84,12 @@ export function s(
   if (ref.length === 0) throw new RangeError('Reference cannot be an empty string');
 
   // Merge user-provided configuration with defaults
-  const options = Object.assign(
-    {
-      beta: 0.5,
-      skipBigram: utils.skipBigram,
-      tokenizer: utils.treeBankTokenize,
-    },
-    opts
-  );
+  const options = {
+    beta: 0.5,
+    skipBigram: utils.skipBigram,
+    tokenizer: utils.treeBankTokenize,
+    ...opts,
+  };
 
   const candGrams = options.skipBigram(options.tokenizer(cand));
   const refGrams = options.skipBigram(options.tokenizer(ref));
@@ -147,15 +143,13 @@ export function l(
   if (ref.length === 0) throw new RangeError('Reference cannot be an empty string');
 
   // Merge user-provided configuration with defaults
-  const options = Object.assign(
-    {
-      beta: 0.5,
-      lcs: utils.lcs,
-      segmenter: utils.sentenceSegment,
-      tokenizer: utils.treeBankTokenize,
-    },
-    opts
-  );
+  const options = {
+    beta: 0.5,
+    lcs: utils.lcs,
+    segmenter: utils.sentenceSegment,
+    tokenizer: utils.treeBankTokenize,
+    ...opts,
+  };
 
   const candSents = options.segmenter(cand);
   const refSents = options.segmenter(ref);
