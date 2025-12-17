@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.4](https://github.com/promptfoo/js-rouge/compare/js-rouge-v3.1.3...js-rouge-v3.1.4) (2025-12-17)
+
+
+### Bug Fixes
+
+* use Node 24 for npm OIDC trusted publishing ([#40](https://github.com/promptfoo/js-rouge/issues/40)) ([399398e](https://github.com/promptfoo/js-rouge/commit/399398e3c13e24bc3d19a7b76d027d37afa93109))
+
 ## [3.1.3](https://github.com/promptfoo/js-rouge/compare/js-rouge-v3.1.2...js-rouge-v3.1.3) (2025-12-17)
 
 
