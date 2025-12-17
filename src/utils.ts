@@ -366,15 +366,16 @@ export function jackKnife(
  * Calculates the ROUGE f-measure for a given precision
  * and recall score.
  *
- * DUC evaluation favors precision by setting beta to an
- * arbitrary large number. To replicate this, set beta to
- * any value larger than 1.
+ * Beta controls the tradeoff between precision and recall:
+ * - beta = 1: F1 score (harmonic mean, equal weight)
+ * - beta < 1: Favors precision
+ * - beta > 1: Favors recall (DUC evaluation style)
  *
  * @method fMeasure
  * @param  {number}     p       Precision score
  * @param  {number}     r       Recall score
  * @param  {number}     beta    Weighing value (precision vs. recall).
- *                              Defaults to 0.5, i.e. mean f-score
+ *                              Defaults to 0.5 (precision-favoring).
  * @return {number}             Computed f-score
  */
 export function fMeasure(p: number, r: number, beta: number = 0.5): number {
