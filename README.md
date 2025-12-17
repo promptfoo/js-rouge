@@ -69,11 +69,7 @@ The package also exports utility functions, including jackknife resampling as de
 import { n as rougeN, jackKnife } from 'js-rouge';
 
 const reference = 'police killed the gunman';
-const candidates = [
-  'police kill the gunman',
-  'the gunman kill police',
-  'the gunman police killed',
-];
+const candidates = ['police kill the gunman', 'the gunman kill police', 'the gunman police killed'];
 
 // Standard evaluation taking the arithmetic mean
 jackKnife(candidates, reference, rougeN);

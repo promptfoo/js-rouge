@@ -82,6 +82,7 @@ Do NOT include AI attribution in commits.
 ### ROUGE-N
 
 Returns F-score using precision and recall:
+
 - Precision = matches / candidate_ngrams
 - Recall = matches / reference_ngrams
 - F-score via `fMeasure(precision, recall, beta)`
@@ -89,21 +90,22 @@ Returns F-score using precision and recall:
 ### ROUGE-L
 
 Uses summary-level LCS with union across sentence pairs:
+
 ```typescript
-const lcsUnion = new Set(candSents.flatMap((c) =>
-  options.lcs(options.tokenizer(c), rTokens)
-));
+const lcsUnion = new Set(candSents.flatMap((c) => options.lcs(options.tokenizer(c), rTokens)));
 ```
 
 ### ROUGE-S
 
 Skip-bigram evaluation with configurable window:
+
 - `maxSkip` parameter controls skip distance
 - Default is `Infinity` (all pairs)
 
 ### Tokenization
 
 Penn Treebank tokenization is the default:
+
 - Handles contractions ("can't" → ["ca", "n't"])
 - Preserves punctuation as tokens
 - Handles quotes, brackets, dashes
@@ -130,6 +132,7 @@ F_β = ((1 + β²) × P × R) / (β² × P + R)
 ## CI/CD
 
 GitHub Actions runs on push/PR to main:
+
 1. Matrix test: Node 18, 20, 22
 2. Format check
 3. Lint check
@@ -143,6 +146,7 @@ All checks must pass before merge.
 **Runtime**: Zero (this is intentional - keep it dependency-free)
 
 **Dev Dependencies**:
+
 - @swc/core, @swc/jest: Fast TypeScript compilation
 - esbuild: Bundling
 - typescript: Type checking

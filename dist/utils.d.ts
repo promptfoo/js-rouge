@@ -36,7 +36,7 @@ export declare function sentenceSegment(input: string): string[];
  */
 export declare function strIsTitleCase(input: string): boolean;
 /**
- * Checks if a character is uppercase
+ * Checks if a character is uppercase (i18n-compatible)
  * @method charIsUpperCase
  * @param  {string}   input     The character to be tested
  * @return {boolean}            True if the character is uppercase and false otherwise.
@@ -48,9 +48,10 @@ export declare const fact: (arg: number) => number;
  *
  * @method skipBigram
  * @param  {Array<string>}    tokens      An array of word tokens
+ * @param  {number}           maxSkip     Maximum skip distance between words. Defaults to Infinity (all pairs).
  * @return {Array<string>}                An array of skip bigram strings
  */
-export declare function skipBigram(tokens: string[]): string[];
+export declare function skipBigram(tokens: string[], maxSkip?: number): string[];
 interface NGramOptions {
     start: boolean;
     end: boolean;
@@ -102,15 +103,16 @@ export declare function jackKnife(cands: string[], ref: string, func: (x: string
  * Calculates the ROUGE f-measure for a given precision
  * and recall score.
  *
- * DUC evaluation favors precision by setting beta to an
- * arbitrary large number. To replicate this, set beta to
- * any value larger than 1.
+ * Beta controls the tradeoff between precision and recall:
+ * - beta = 1: F1 score (harmonic mean, equal weight)
+ * - beta < 1: Favors precision
+ * - beta > 1: Favors recall (DUC evaluation style)
  *
  * @method fMeasure
  * @param  {number}     p       Precision score
  * @param  {number}     r       Recall score
  * @param  {number}     beta    Weighing value (precision vs. recall).
- *                              Defaults to 0.5, i.e. mean f-score
+ *                              Defaults to 0.5 (precision-favoring).
  * @return {number}             Computed f-score
  */
 export declare function fMeasure(p: number, r: number, beta?: number): number;
