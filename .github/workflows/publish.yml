@@ -56,6 +56,14 @@ jobs:
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
       - run: npm ci
+      - name: Build package
+        run: npm run build
+      - name: Verify build artifacts
+        run: |
+          test -f dist/rouge.js || (echo "Missing dist/rouge.js" && exit 1)
+          test -f dist/rouge.mjs || (echo "Missing dist/rouge.mjs" && exit 1)
+          test -f dist/rouge.d.ts || (echo "Missing dist/rouge.d.ts" && exit 1)
+          echo "Build artifacts verified successfully"
       # Publishing uses npm's OIDC trusted publishers for authentication.
       # This requires npm 11.5.1+ (Node 24 includes npm 11.6.0) and the package
       # must be configured on npmjs.com to trust this GitHub repository/workflow.
