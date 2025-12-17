@@ -471,6 +471,23 @@ describe('Utility Functions', () => {
         const elapsed = Date.now() - start;
         expect(elapsed).toBeLessThan(TIMEOUT_MS);
       });
+
+      test('should handle many consecutive exclamation marks quickly', () => {
+        // Specifically tests CodeQL alert #1 scenario
+        const input = `${'!'.repeat(10000)}`;
+        const start = Date.now();
+        ss(input);
+        const elapsed = Date.now() - start;
+        expect(elapsed).toBeLessThan(TIMEOUT_MS);
+      });
+
+      test('should handle mixed punctuation repetitions quickly', () => {
+        const input = `${'!?'.repeat(5000)}`;
+        const start = Date.now();
+        ss(input);
+        const elapsed = Date.now() - start;
+        expect(elapsed).toBeLessThan(TIMEOUT_MS);
+      });
     });
 
     // Additional edge case tests for branch coverage
