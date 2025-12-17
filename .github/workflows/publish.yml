@@ -56,6 +56,9 @@ jobs:
           cache: 'npm'
           registry-url: 'https://registry.npmjs.org'
       - run: npm ci
+      # Publishing uses npm's OIDC integration for authentication.
+      # Requires the npm package to be configured to trust GitHub Actions:
+      # 1. Go to npmjs.com > Package Settings > Publishing access
+      # 2. Enable "Require two-factor authentication or an automation or granular access token"
+      # 3. Configure trusted publishers to allow this GitHub repository
       - run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
