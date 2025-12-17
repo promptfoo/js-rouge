@@ -170,7 +170,7 @@ export function strIsTitleCase(input: string): boolean {
 }
 
 /**
- * Checks if a character is uppercase
+ * Checks if a character is uppercase (i18n-compatible)
  * @method charIsUpperCase
  * @param  {string}   input     The character to be tested
  * @return {boolean}            True if the character is uppercase and false otherwise.
@@ -178,8 +178,8 @@ export function strIsTitleCase(input: string): boolean {
 export function charIsUpperCase(input: string): boolean {
   if (input.length !== 1) throw new RangeError('Input should be a single character');
 
-  const char = input.charCodeAt(0);
-  return char >= 65 && char <= 90;
+  // Use locale-aware comparison to support international characters
+  return input.toUpperCase() === input && input.toLowerCase() !== input;
 }
 
 /**
