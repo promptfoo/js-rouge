@@ -184,11 +184,10 @@ export const ABBR_DATES: string[] = [
   'jul',
   'aug',
   'sep',
+  'sept',
   'oct',
   'nov',
   'dec',
-  'sept',
-  'sep',
 ];
 
 export const GATE_EXCEPTIONS: string[] = [
