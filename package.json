@@ -5,6 +5,13 @@
   "main": "dist/rouge.js",
   "module": "dist/rouge.mjs",
   "types": "dist/rouge.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/rouge.d.ts",
+      "import": "./dist/rouge.mjs",
+      "require": "./dist/rouge.js"
+    }
+  },
   "scripts": {
     "test": "jest",
     "build": "npm run clean && npm run build:js && npm run build:types",
