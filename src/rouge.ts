@@ -203,8 +203,10 @@ export function l(
     return 0;
   }
 
-  const lcsRecall = lcsSum / candWords.length;
-  const lcsPrec = lcsSum / refWords.length;
+  // Recall = LCS / |reference| (how much of reference is captured)
+  // Precision = LCS / |candidate| (how precise is the candidate)
+  const lcsRecall = lcsSum / refWords.length;
+  const lcsPrec = lcsSum / candWords.length;
 
   return utils.fMeasure(lcsPrec, lcsRecall, options.beta);
 }
