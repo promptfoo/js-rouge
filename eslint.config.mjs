@@ -40,12 +40,20 @@ export default tseslint.config(
   {
     files: ['test/**/*.ts', 'test/**/*.js'],
     ...jest.configs['flat/recommended'],
+    languageOptions: {
+      parser: tseslint.parser,
+      parserOptions: {
+        project: null,
+      },
+    },
     rules: {
       ...jest.configs['flat/recommended'].rules,
       'jest/prefer-expect-assertions': 'off',
+      // Disable rules that require type information for test files
+      '@typescript-eslint/explicit-function-return-type': 'off',
     },
   },
   {
-    ignores: ['dist/**', 'jest.config.js', '**/*.d.ts', '**/*.js', 'test/**.ts']
+    ignores: ['dist/**', 'jest.config.js', '**/*.d.ts', '**/*.js'],
   },
 );
