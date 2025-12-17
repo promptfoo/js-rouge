@@ -55,8 +55,12 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "directories": {
-    "lib": "lib",
+    "lib": "dist",
     "test": "test"
   }
 }
