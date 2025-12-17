@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.5](https://github.com/promptfoo/js-rouge/compare/js-rouge-v3.1.4...js-rouge-v3.1.5) (2025-12-17)
+
+
+### Bug Fixes
+
+* update repository URLs to match actual repo name ([#44](https://github.com/promptfoo/js-rouge/issues/44)) ([80d6210](https://github.com/promptfoo/js-rouge/commit/80d621059f53db48cc5d3c3dc256abda4a18820d))
+
 ## [3.1.4](https://github.com/promptfoo/js-rouge/compare/js-rouge-v3.1.3...js-rouge-v3.1.4) (2025-12-17)
 
 
