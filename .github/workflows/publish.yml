@@ -57,7 +57,7 @@ jobs:
           registry-url: 'https://registry.npmjs.org'
       - run: npm ci
       # Publishing uses npm's OIDC trusted publishers for authentication.
-      # This requires the npm package to be configured to trust this GitHub repository.
-      # See: https://docs.npmjs.com/generating-provenance-statements
-      # Note: NODE_AUTH_TOKEN is not needed when using npm trusted publishing with OIDC.
-      - run: npm publish --provenance --access public
+      # This requires npm 11.5.1+ (Node 24 includes npm 11.6.0) and the package
+      # must be configured on npmjs.com to trust this GitHub repository/workflow.
+      # See: https://docs.npmjs.com/trusted-publishers/
+      - run: npm publish --access public
