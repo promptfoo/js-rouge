@@ -476,14 +476,19 @@ describe('Utility Functions', () => {
     // Additional edge case tests for branch coverage
     describe('edge cases', () => {
       test('should handle input with no sentence terminators', () => {
-        // Covers line 166: return input as single sentence when no matches
         expect(ss('just some text without any ending')).toEqual([
           'just some text without any ending',
         ]);
       });
 
+      test('should handle whitespace-only input', () => {
+        // Whitespace gets trimmed to empty string, so no chunks are added to acc
+        // Returns [input] when acc is empty (line 166)
+        expect(ss('   ')).toEqual(['   ']);
+        expect(ss('\t\t')).toEqual(['\t\t']);
+      });
+
       test('should handle abbreviation followed by lowercase text', () => {
-        // Covers line 131: abbreviation merge with non-title-case next chunk
         // Uses 'etc.' which is in ABBR_COMMON
         expect(ss('There are cats, dogs, etc. and more animals.')).toEqual([
           'There are cats, dogs, etc. and more animals.',
@@ -491,8 +496,12 @@ describe('Utility Functions', () => {
       });
 
       test('should handle single letter abbreviation at sentence boundary', () => {
-        // Covers line 140: small-letter abbreviation merge
         expect(ss('Please see p. 10 for details.')).toEqual(['Please see p. 10 for details.']);
+      });
+
+      test('should handle mid-sentence ellipsis', () => {
+        // Tests ellipsis merge branch (line 157)
+        expect(ss('He said.. and then continued.')).toEqual(['He said..and then continued.']);
       });
     });
   });

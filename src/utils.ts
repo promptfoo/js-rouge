@@ -112,8 +112,7 @@ export function sentenceSegment(input: string): string[] {
           // Catch line breaks embedded within valid sentences
           // i.e. sentences that start with a capital letter
           // and merge them with a delimiting space
-          chunks[idx + 1] =
-            `${chunks[idx].trim() || ''} ${(chunks[idx + 1] || '').replace(/ +/g, ' ')}`;
+          chunks[idx + 1] = `${chunks[idx].trim()} ${chunks[idx + 1].replace(/ +/g, ' ')}`;
         } else {
           // Assume that all other embedded line breaks are
           // valid sentence breakpoints
@@ -128,7 +127,7 @@ export function sentenceSegment(input: string): string[] {
           chunks[idx] = '';
         } else {
           // Catch common abbreviations and merge them with a delimiting space
-          chunks[idx + 1] = `${chunks[idx] || ''} ${(nextChunk || '').replace(/ +/g, ' ')}`;
+          chunks[idx + 1] = `${chunks[idx]} ${nextChunk.replace(/ +/g, ' ')}`;
         }
       } else if (chunks[idx].length > 1 && chunks[idx + 1] && acronymReg.test(chunks[idx])) {
         const words = chunks[idx].split(' ');
@@ -136,16 +135,12 @@ export function sentenceSegment(input: string): string[] {
 
         if (lastWord === lastWord.toLowerCase()) {
           // Catch small-letter abbreviations and merge them.
-          chunks[idx + 1] = chunks[idx + 1] =
-            `${chunks[idx] || ''} ${(chunks[idx + 1] || '').replace(/ +/g, ' ')}`;
+          chunks[idx + 1] = `${chunks[idx]} ${chunks[idx + 1].replace(/ +/g, ' ')}`;
         } else if (chunks[idx + 2]) {
           if (strIsTitleCase(words[words.length - 2]) && strIsTitleCase(chunks[idx + 2])) {
             // Catch name abbreviations (e.g. Albert I. Jones) by checking if
             // the previous and next words are all capitalized.
-            chunks[idx + 2] =
-              (chunks[idx] || '') +
-              (chunks[idx + 1] || '').replace(/ +/g, ' ') +
-              (chunks[idx + 2] || '');
+            chunks[idx + 2] = chunks[idx] + chunks[idx + 1].replace(/ +/g, ' ') + chunks[idx + 2];
           } else {
             // Assume that remaining entities are indeed end-of-sentence markers.
             acc.push(chunks[idx]);
@@ -154,7 +149,7 @@ export function sentenceSegment(input: string): string[] {
         }
       } else if (chunks[idx + 1] && ellipseReg.test(chunks[idx])) {
         // Catch mid-sentence ellipses (and their derivatives) and merge them
-        chunks[idx + 1] = (chunks[idx] || '') + (chunks[idx + 1] || '').replace(/ +/g, ' ');
+        chunks[idx + 1] = chunks[idx] + chunks[idx + 1].replace(/ +/g, ' ');
       } else if (chunks[idx] && chunks[idx].length > 0) {
         acc.push(chunks[idx]);
         chunks[idx] = '';
