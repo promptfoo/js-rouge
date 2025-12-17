@@ -548,6 +548,17 @@ describe('Utility Functions', () => {
     test('should return false for non-alphabetical input', () => {
       expect(isUpper('1')).toBe(false);
     });
+
+    test('should return true for uppercase international characters', () => {
+      expect(isUpper('Ü')).toBe(true);
+      expect(isUpper('É')).toBe(true);
+      expect(isUpper('Ñ')).toBe(true);
+    });
+    test('should return false for lowercase international characters', () => {
+      expect(isUpper('ü')).toBe(false);
+      expect(isUpper('é')).toBe(false);
+      expect(isUpper('ñ')).toBe(false);
+    });
   });
 
   describe('strIsTitleCase', () => {
