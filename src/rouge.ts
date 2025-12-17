@@ -8,6 +8,7 @@ export * from './utils';
  * ```
  * {
  * 	n: 1                            // The size of the ngram used
+ * 	beta: 0.5                       // The beta value used for the f-measure
  * 	nGram: <inbuilt function>,      // The ngram generator function
  * 	tokenizer: <inbuilt function>   // The string tokenizer
  * }
@@ -20,13 +21,14 @@ export * from './utils';
  * @param  {string}     cand        The candidate summary to be evaluated
  * @param  {string}     ref         The reference summary to be evaluated against
  * @param  {Object}     opts        Configuration options (see example)
- * @return {number}                 The ROUGE-N score
+ * @return {number}                 The ROUGE-N F-score
  */
 export function n(
   cand: string,
   ref: string,
   opts: {
     n?: number;
+    beta?: number;
     nGram?: (tokens: string[], n: number) => string[];
     tokenizer?: (input: string) => string[];
   }
@@ -37,6 +39,7 @@ export function n(
   // Merge user-provided configuration with defaults
   const options = {
     n: 1,
+    beta: 1.0,
     nGram: utils.nGram,
     tokenizer: utils.treeBankTokenize,
     ...opts,
@@ -46,7 +49,15 @@ export function n(
   const refGrams = options.nGram(options.tokenizer(ref), options.n);
 
   const match = utils.intersection(candGrams, refGrams);
-  return match.length / refGrams.length;
+
+  if (match.length === 0) {
+    return 0;
+  }
+
+  const precision = match.length / candGrams.length;
+  const recall = match.length / refGrams.length;
+
+  return utils.fMeasure(precision, recall, options.beta);
 }
 
 /**

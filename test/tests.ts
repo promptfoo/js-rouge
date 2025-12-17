@@ -593,18 +593,23 @@ describe('Core Functions', () => {
       expect(() => n(cand, '', { n: 2 })).toThrow(RangeError);
     });
 
-    test('should correctly compute ROUGE-N score for ref 1', () => {
-      expect(n(cand, refs[0], { n: 2 })).toBe(1 / 3);
+    test('should correctly compute ROUGE-N F1-score for ref 1', () => {
+      // 3 matching bigrams, 4 candidate bigrams, 9 reference bigrams
+      // precision = 3/4, recall = 3/9 = 1/3
+      // F1 = 2 * P * R / (P + R) = 2 * (3/4) * (1/3) / (3/4 + 1/3) = 6/13
+      expect(n(cand, refs[0], { n: 2, beta: 1 })).toBe(6 / 13);
     });
-    test('should correctly compute ROUGE-N score for ref 2', () => {
-      expect(n(cand, refs[1], { n: 2 })).toBe(0);
+    test('should correctly compute ROUGE-N F1-score for ref 2', () => {
+      expect(n(cand, refs[1], { n: 2, beta: 1 })).toBe(0);
     });
 
-    test('should correctly compute ROUGE-N score for ref 1 with different opts', () => {
-      expect(n(cand, refs[0], { n: 2 })).toBe(1 / 3);
+    test('should correctly compute ROUGE-N score with custom beta', () => {
+      // With beta=0, F-score equals precision
+      // 3 matching bigrams out of 4 candidate bigrams = 3/4
+      expect(n(cand, refs[0], { n: 2, beta: 0 })).toBe(3 / 4);
     });
-    test('should correctly compute ROUGE-N score for ref 2 with different opts', () => {
-      expect(n(cand, refs[1], { n: 2 })).toBe(0);
+    test('should return 0 for no matches', () => {
+      expect(n(cand, refs[1], { n: 2, beta: 0 })).toBe(0);
     });
   });
 
