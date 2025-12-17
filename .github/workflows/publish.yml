@@ -54,9 +54,10 @@ jobs:
         with:
           node-version-file: '.nvmrc'
           cache: 'npm'
-          # Note: NOT using registry-url here to allow npm OIDC authentication
+          registry-url: 'https://registry.npmjs.org'
       - run: npm ci
       # Publishing uses npm's OIDC trusted publishers for authentication.
       # This requires the npm package to be configured to trust this GitHub repository.
       # See: https://docs.npmjs.com/generating-provenance-statements
+      # Note: NODE_AUTH_TOKEN is not needed when using npm trusted publishing with OIDC.
       - run: npm publish --provenance --access public
