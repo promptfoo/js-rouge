@@ -237,14 +237,16 @@ export const fact = memoize(factRec);
  *
  * @method skipBigram
  * @param  {Array<string>}    tokens      An array of word tokens
+ * @param  {number}           maxSkip     Maximum skip distance between words. Defaults to Infinity (all pairs).
  * @return {Array<string>}                An array of skip bigram strings
  */
-export function skipBigram(tokens: string[]): string[] {
+export function skipBigram(tokens: string[], maxSkip: number = Infinity): string[] {
   if (tokens.length < 2) throw new RangeError('Input must have at least two words');
 
   const acc: string[] = [];
   for (let baseIdx = 0; baseIdx < tokens.length - 1; baseIdx++) {
-    for (let sweepIdx = baseIdx + 1; sweepIdx < tokens.length; sweepIdx++) {
+    const maxIdx = Math.min(baseIdx + 1 + maxSkip, tokens.length);
+    for (let sweepIdx = baseIdx + 1; sweepIdx < maxIdx; sweepIdx++) {
       acc.push(`${tokens[baseIdx]} ${tokens[sweepIdx]}`);
     }
   }

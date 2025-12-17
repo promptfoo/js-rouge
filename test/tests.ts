@@ -205,6 +205,22 @@ describe('Utility Functions', () => {
     test('should return the correct result', () => {
       expect(sb(data)).toEqual(result);
     });
+
+    test('should return all pairs with default maxSkip (Infinity)', () => {
+      expect(sb(data, Infinity)).toEqual(result);
+    });
+
+    test('should return only adjacent pairs with maxSkip=1', () => {
+      expect(sb(data, 1)).toEqual(['a b', 'b c', 'c d']);
+    });
+
+    test('should return pairs within skip distance of 2', () => {
+      expect(sb(data, 2)).toEqual(['a b', 'a c', 'b c', 'b d', 'c d']);
+    });
+
+    test('should return pairs within skip distance of 3', () => {
+      expect(sb(data, 3)).toEqual(['a b', 'a c', 'a d', 'b c', 'b d', 'c d']);
+    });
   });
 
   describe('sentenceSegment', () => {
@@ -641,6 +657,14 @@ describe('Core Functions', () => {
     });
     test('should correctly compute ROUGE-S score for cand 3 with different opts', () => {
       expect(s(cands[2], ref, { beta: 1 })).toBe(1 / 3);
+    });
+
+    test('should respect maxSkip option', () => {
+      // With maxSkip=1, only adjacent pairs are considered
+      // cand: 'police kill the gunman' -> adjacent pairs: 'police kill', 'kill the', 'the gunman'
+      // ref: 'police killed the gunman' -> adjacent pairs: 'police killed', 'killed the', 'the gunman'
+      // Only 'the gunman' matches, so precision = 1/3, recall = 1/3, F1 = 1/3
+      expect(s(cands[0], ref, { beta: 1, maxSkip: 1 })).toBe(1 / 3);
     });
   });
 

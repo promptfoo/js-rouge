@@ -67,7 +67,7 @@ export function n(
  * ```
  * {
  * 	beta: 1                             // The beta value used for the f-measure
- * 	gapLength: 2                        // The skip window
+ * 	maxSkip: Infinity                   // Maximum skip distance between words
  * 	skipBigram: <inbuilt function>,     // The skip-bigram generator function
  * 	tokenizer: <inbuilt function>       // The string tokenizer
  * }
@@ -87,7 +87,8 @@ export function s(
   ref: string,
   opts: {
     beta?: number;
-    skipBigram?: (tokens: string[]) => string[];
+    maxSkip?: number;
+    skipBigram?: (tokens: string[], maxSkip?: number) => string[];
     tokenizer?: (input: string) => string[];
   }
 ): number {
@@ -97,13 +98,14 @@ export function s(
   // Merge user-provided configuration with defaults
   const options = {
     beta: 1.0,
+    maxSkip: Infinity,
     skipBigram: utils.skipBigram,
     tokenizer: utils.treeBankTokenize,
     ...opts,
   };
 
-  const candGrams = options.skipBigram(options.tokenizer(cand));
-  const refGrams = options.skipBigram(options.tokenizer(ref));
+  const candGrams = options.skipBigram(options.tokenizer(cand), options.maxSkip);
+  const refGrams = options.skipBigram(options.tokenizer(ref), options.maxSkip);
 
   const skip2 = utils.intersection(candGrams, refGrams).length;
 
