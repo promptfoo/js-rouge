@@ -15,6 +15,12 @@ jobs:
         node-version: [18, 20, 22]
     steps:
     - uses: actions/checkout@v6
+    - name: Verify dist is not committed
+      run: |
+        if [ -d dist ]; then
+          echo "Error: dist/ directory should not be committed to git"
+          exit 1
+        fi
     - name: Use Node.js ${{ matrix.node-version }}
       uses: actions/setup-node@v6
       with:
@@ -23,4 +29,9 @@ jobs:
     - run: npm run format
     - run: npm run lint
     - run: npm run build
+    - name: Verify build artifacts
+      run: |
+        test -f dist/rouge.js || (echo "Missing dist/rouge.js" && exit 1)
+        test -f dist/rouge.mjs || (echo "Missing dist/rouge.mjs" && exit 1)
+        test -f dist/rouge.d.ts || (echo "Missing dist/rouge.d.ts" && exit 1)
     - run: npm test
