@@ -434,6 +434,76 @@ describe('Utility Functions', () => {
         '"Bohr [...] used the analogy of parallel stairways [...]" (Smith 55).',
       ]);
     });
+
+    // ReDoS regression tests - ensure pathological inputs complete quickly
+    // Using 500ms threshold to account for CI environment variability
+    describe('ReDoS prevention', () => {
+      const TIMEOUT_MS = 500;
+
+      test('should handle long strings without sentence terminators quickly', () => {
+        const input = 'a'.repeat(10000);
+        const start = Date.now();
+        ss(input);
+        const elapsed = Date.now() - start;
+        expect(elapsed).toBeLessThan(TIMEOUT_MS);
+      });
+
+      test('should handle many dots quickly', () => {
+        const input = '.'.repeat(10000);
+        const start = Date.now();
+        ss(input);
+        const elapsed = Date.now() - start;
+        expect(elapsed).toBeLessThan(TIMEOUT_MS);
+      });
+
+      test('should handle repeated patterns quickly', () => {
+        const input = 'word. '.repeat(1000);
+        const start = Date.now();
+        ss(input);
+        const elapsed = Date.now() - start;
+        expect(elapsed).toBeLessThan(TIMEOUT_MS);
+      });
+
+      test('should handle long string with many spaces quickly', () => {
+        const input = `${' '.repeat(10000)}text. more text.`;
+        const start = Date.now();
+        ss(input);
+        const elapsed = Date.now() - start;
+        expect(elapsed).toBeLessThan(TIMEOUT_MS);
+      });
+    });
+
+    // Additional edge case tests for branch coverage
+    describe('edge cases', () => {
+      test('should handle input with no sentence terminators', () => {
+        expect(ss('just some text without any ending')).toEqual([
+          'just some text without any ending',
+        ]);
+      });
+
+      test('should handle whitespace-only input', () => {
+        // Whitespace gets trimmed to empty string, so no chunks are added to acc
+        // Returns [input] when acc is empty (line 166)
+        expect(ss('   ')).toEqual(['   ']);
+        expect(ss('\t\t')).toEqual(['\t\t']);
+      });
+
+      test('should handle abbreviation followed by lowercase text', () => {
+        // Uses 'etc.' which is in ABBR_COMMON
+        expect(ss('There are cats, dogs, etc. and more animals.')).toEqual([
+          'There are cats, dogs, etc. and more animals.',
+        ]);
+      });
+
+      test('should handle single letter abbreviation at sentence boundary', () => {
+        expect(ss('Please see p. 10 for details.')).toEqual(['Please see p. 10 for details.']);
+      });
+
+      test('should handle mid-sentence ellipsis', () => {
+        // Tests ellipsis merge branch (line 157)
+        expect(ss('He said.. and then continued.')).toEqual(['He said..and then continued.']);
+      });
+    });
   });
 
   describe('treeBankTokenize', () => {
