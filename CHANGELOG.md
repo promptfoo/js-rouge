@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.1.3](https://github.com/promptfoo/js-rouge/compare/js-rouge-v3.1.2...js-rouge-v3.1.3) (2025-12-17)
+
+
+### Bug Fixes
+
+* add registry-url for npm OIDC authentication ([#38](https://github.com/promptfoo/js-rouge/issues/38)) ([20f0068](https://github.com/promptfoo/js-rouge/commit/20f0068b32edd075f48faab80d0a637dd563dd55))
+
 ## [3.1.2](https://github.com/promptfoo/js-rouge/compare/js-rouge-v3.1.1...js-rouge-v3.1.2) (2025-12-17)
 
 
