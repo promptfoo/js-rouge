@@ -370,29 +370,35 @@ export function jackKnife(
  * Calculates the ROUGE f-measure for a given precision
  * and recall score.
  *
+ * Uses the standard F-beta formula:
+ * F_β = ((1 + β²) × P × R) / (β² × P + R)
+ *
  * Beta controls the tradeoff between precision and recall:
+ * - beta = 0: Pure precision (F₀ = P)
  * - beta = 1: F1 score (harmonic mean, equal weight)
- * - beta < 1: Favors precision
- * - beta > 1: Favors recall (DUC evaluation style)
+ * - beta = 2: F2 score (weighs recall twice as much as precision)
+ * - beta = Infinity: Pure recall
  *
  * @method fMeasure
- * @param  {number}     p       Precision score
- * @param  {number}     r       Recall score
- * @param  {number}     beta    Weighing value (precision vs. recall).
- *                              Defaults to 0.5 (precision-favoring).
+ * @param  {number}     p       Precision score (0 to 1)
+ * @param  {number}     r       Recall score (0 to 1)
+ * @param  {number}     beta    Weighing value (precision vs. recall). Defaults to 1.0 (F1).
  * @return {number}             Computed f-score
  */
-export function fMeasure(p: number, r: number, beta: number = 0.5): number {
+export function fMeasure(p: number, r: number, beta: number = 1.0): number {
   if (p < 0 || p > 1) throw new RangeError('Precision value p must have bounds 0 ≤ p ≤ 1');
   if (r < 0 || r > 1) throw new RangeError('Recall value r must have bounds 0 ≤ r ≤ 1');
+  if (beta < 0) throw new RangeError('beta value must be >= 0');
 
-  if (beta < 0) {
-    throw new RangeError('beta value must be greater than 0');
-  } else if (0 <= beta && beta <= 1) {
-    return ((1 + beta * beta) * r * p) / (r + beta * beta * p);
-  } else {
-    return r;
-  }
+  // Handle special cases
+  if (p === 0 && r === 0) return 0;
+  if (!Number.isFinite(beta)) return r; // β → ∞ means pure recall
+
+  const betaSq = beta * beta;
+  const denominator = betaSq * p + r;
+  if (denominator === 0) return 0;
+
+  return ((1 + betaSq) * p * r) / denominator;
 }
 
 /**
