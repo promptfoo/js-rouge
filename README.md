@@ -6,7 +6,7 @@ A JavaScript implementation of the Recall-Oriented Understudy for Gisting Evalua
 - Longest Common Subsequence (ROUGE-L)
 - Skip Bigram (ROUGE-S)
 
-> **Note**: This is a fork of [the original ROUGE.js](https://github.com/kenlimmj/rouge) by kenlimmj. This fork adds TypeScript types and other improvements.
+> **Note**: This is a fork of [the original ROUGE.js](https://github.com/kenlimmj/rouge) by kenlimmj. This fork adds TypeScript types, security fixes, and other improvements.
 
 ## Rationale
 
@@ -32,21 +32,33 @@ import { n, l, s } from 'js-rouge'; // ES Modules
 const { n, l, s } = require('js-rouge'); // CommonJS
 ```
 
-To run tests:
-
-```shell
-npm test
-```
-
 ## Usage
 
 js-rouge provides three main functions:
 
-- **ROUGE-N**: `n(candidate, reference, opts)`
-- **ROUGE-L**: `l(candidate, reference, opts)`
-- **ROUGE-S**: `s(candidate, reference, opts)`
+- **ROUGE-N**: `n(candidate, reference, opts)` - N-gram overlap
+- **ROUGE-L**: `l(candidate, reference, opts)` - Longest Common Subsequence
+- **ROUGE-S**: `s(candidate, reference, opts)` - Skip-bigram co-occurrence
 
-All functions take a candidate string, a reference string, and an optional configuration object.
+All functions return an F-score between 0 and 1.
+
+### ROUGE-N Example
+
+```javascript
+import { n as rougeN } from 'js-rouge';
+
+const candidate = 'the cat sat on the mat';
+const reference = 'the cat sat on the mat';
+
+// ROUGE-1 (unigram)
+rougeN(candidate, reference, { n: 1 }); // => 1.0
+
+// ROUGE-2 (bigram)
+rougeN(candidate, reference, { n: 2 }); // => 1.0
+
+// With partial match
+rougeN('the cat sat', 'the cat sat on the mat', { n: 1 }); // => 0.75
+```
 
 ### ROUGE-L Example
 
@@ -56,12 +68,68 @@ import { l as rougeL } from 'js-rouge';
 const reference = 'police killed the gunman';
 const candidate = 'police kill the gunman';
 
-const score = rougeL(candidate, reference, { beta: 0.5 });
-
-console.log('score:', score); // => 0.75
+rougeL(candidate, reference); // => 0.75
 ```
 
-### Jackknife Resampling
+### ROUGE-S Example
+
+```javascript
+import { s as rougeS } from 'js-rouge';
+
+const reference = 'police killed the gunman';
+const candidate = 'police kill the gunman';
+
+// Default: considers all word pairs
+rougeS(candidate, reference); // => 0.5
+
+// With skip distance limit
+rougeS(candidate, reference, { maxSkip: 2 }); // considers only nearby word pairs
+```
+
+### Case Sensitivity
+
+All functions are case-sensitive by default. Use `caseSensitive: false` for case-insensitive comparison:
+
+```javascript
+import { n as rougeN } from 'js-rouge';
+
+rougeN('Hello World', 'hello world'); // => 0 (no match)
+rougeN('Hello World', 'hello world', { caseSensitive: false }); // => 1.0
+```
+
+## Options
+
+### ROUGE-N Options
+
+| Option          | Type     | Default       | Description                                            |
+| --------------- | -------- | ------------- | ------------------------------------------------------ |
+| `n`             | number   | `1`           | N-gram size (1 = unigram, 2 = bigram, etc.)            |
+| `beta`          | number   | `1.0`         | F-measure weight (1.0 = F1, balanced precision/recall) |
+| `caseSensitive` | boolean  | `true`        | Whether comparison is case-sensitive                   |
+| `tokenizer`     | function | Penn Treebank | Custom tokenizer function                              |
+| `nGram`         | function | built-in      | Custom n-gram generator                                |
+
+### ROUGE-L Options
+
+| Option          | Type     | Default       | Description                          |
+| --------------- | -------- | ------------- | ------------------------------------ |
+| `beta`          | number   | `1.0`         | F-measure weight                     |
+| `caseSensitive` | boolean  | `true`        | Whether comparison is case-sensitive |
+| `tokenizer`     | function | Penn Treebank | Custom tokenizer function            |
+| `segmenter`     | function | built-in      | Custom sentence segmenter            |
+| `lcs`           | function | built-in      | Custom LCS function                  |
+
+### ROUGE-S Options
+
+| Option          | Type     | Default       | Description                          |
+| --------------- | -------- | ------------- | ------------------------------------ |
+| `beta`          | number   | `1.0`         | F-measure weight                     |
+| `caseSensitive` | boolean  | `true`        | Whether comparison is case-sensitive |
+| `maxSkip`       | number   | `Infinity`    | Maximum skip distance between words  |
+| `tokenizer`     | function | Penn Treebank | Custom tokenizer function            |
+| `skipBigram`    | function | built-in      | Custom skip-bigram generator         |
+
+## Jackknife Resampling
 
 The package also exports utility functions, including jackknife resampling as described in the original paper:
 
@@ -74,16 +142,20 @@ const candidates = ['police kill the gunman', 'the gunman kill police', 'the gun
 // Standard evaluation taking the arithmetic mean
 jackKnife(candidates, reference, rougeN);
 
-// A function that returns the max value in an array
-const distMax = (arr) => Math.max(...arr);
-
 // Modified evaluation taking the distribution maximum
+const distMax = (arr) => Math.max(...arr);
 jackKnife(candidates, reference, rougeN, distMax);
 ```
 
 ## TypeScript
 
 This package is written in TypeScript and includes type definitions. All functions and utilities are fully typed.
+
+```typescript
+import { n, l, s, jackKnife } from 'js-rouge';
+
+const score: number = n('candidate text', 'reference text', { n: 2 });
+```
 
 ## Versioning
 
