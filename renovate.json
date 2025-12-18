@@ -1,5 +1,48 @@
 {
-  "extends": ["config:base", ":disableDependencyDashboard"],
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:base",
+    ":disableDependencyDashboard",
+    ":semanticCommits",
+    "group:allNonMajor"
+  ],
   "pinVersions": false,
-  "rebaseStalePrs": true
+  "rebaseStalePrs": true,
+  "schedule": ["before 9am on monday"],
+  "timezone": "America/Los_Angeles",
+  "automerge": true,
+  "automergeType": "pr",
+  "packageRules": [
+    {
+      "description": "Automerge non-major dev dependency updates",
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
+    },
+    {
+      "description": "Group ESLint packages",
+      "matchPackagePatterns": ["eslint"],
+      "groupName": "eslint"
+    },
+    {
+      "description": "Group TypeScript packages",
+      "matchPackagePatterns": ["typescript", "@typescript-eslint"],
+      "groupName": "typescript"
+    },
+    {
+      "description": "Group Jest packages",
+      "matchPackagePatterns": ["jest", "@types/jest", "@swc/jest"],
+      "groupName": "jest"
+    },
+    {
+      "description": "Group SWC packages",
+      "matchPackagePatterns": ["@swc"],
+      "groupName": "swc"
+    },
+    {
+      "description": "Do not automerge major updates",
+      "matchUpdateTypes": ["major"],
+      "automerge": false
+    }
+  ]
 }
