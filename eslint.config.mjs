@@ -1,7 +1,7 @@
 import eslint from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import eslintConfigPrettier from 'eslint-config-prettier';
-import jest from 'eslint-plugin-jest';
+import vitest from 'eslint-plugin-vitest';
 
 export default tseslint.config(
   eslint.configs.recommended,
@@ -39,7 +39,9 @@ export default tseslint.config(
   eslintConfigPrettier,
   {
     files: ['test/**/*.ts', 'test/**/*.js'],
-    ...jest.configs['flat/recommended'],
+    plugins: {
+      vitest,
+    },
     languageOptions: {
       parser: tseslint.parser,
       parserOptions: {
@@ -47,13 +49,12 @@ export default tseslint.config(
       },
     },
     rules: {
-      ...jest.configs['flat/recommended'].rules,
-      'jest/prefer-expect-assertions': 'off',
+      ...vitest.configs.recommended.rules,
       // Disable rules that require type information for test files
       '@typescript-eslint/explicit-function-return-type': 'off',
     },
   },
   {
-    ignores: ['dist/**', 'jest.config.js', '**/*.d.ts', '**/*.js'],
+    ignores: ['dist/**', '**/*.d.ts', '**/*.js', 'vitest.config.ts'],
   },
 );

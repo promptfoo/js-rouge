@@ -1,3 +1,4 @@
+import { describe, test, expect } from 'vitest';
 import * as rouge from '../src/rouge';
 
 describe('Utility Functions', () => {
