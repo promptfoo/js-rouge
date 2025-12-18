@@ -802,6 +802,18 @@ describe('Core Functions', () => {
       // LCS should find matches from both candidate sentences
       expect(score).toBeGreaterThan(0);
     });
+
+    test('should correctly distinguish precision from recall', () => {
+      // Short candidate, long reference - tests that P and R are not swapped
+      // candidate: "the cat" (2 words), reference: "the cat sat" (3 words)
+      // LCS: "the cat" (2 words)
+      // Correct: Recall = 2/3 (ref coverage), Precision = 2/2 = 1 (candidate precision)
+      const shortCand = 'the cat';
+      const longRef = 'the cat sat';
+      // With beta=Infinity (pure recall), should return recall = 2/3
+      const recallScore = l(shortCand, longRef, { beta: Infinity });
+      expect(recallScore).toBeCloseTo(2 / 3, 5);
+    });
   });
 
   describe('caseSensitive option', () => {
