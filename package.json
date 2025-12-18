@@ -19,8 +19,9 @@
     "build:types": "tsc -p tsconfig.json --emitDeclarationOnly --outDir dist",
     "clean": "rimraf dist",
     "type-check": "tsc --noEmit",
-    "lint": "eslint .",
-    "format": "prettier --write \"**/*.{ts,js,json,md}\"",
+    "lint": "biome lint .",
+    "format": "biome format --write . && prettier --write \"**/*.md\"",
+    "check": "biome check --write . && prettier --write \"**/*.md\"",
     "prepublishOnly": "npm run build",
     "prepare": "husky"
   },
@@ -44,22 +45,17 @@
   },
   "homepage": "https://github.com/promptfoo/js-rouge",
   "devDependencies": {
+    "@biomejs/biome": "2.3.10",
     "@swc/core": "^1.15.5",
     "@swc/jest": "^0.2.39",
     "@types/jest": "^30.0.0",
-    "@typescript-eslint/eslint-plugin": "^8.50.0",
-    "@typescript-eslint/parser": "^8.50.0",
     "esbuild": "^0.27.2",
-    "eslint": "^9.39.2",
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-jest": "^29.5.0",
     "husky": "^9.1.7",
     "jest": "^30.2.0",
     "lint-staged": "^16.2.7",
-    "prettier": "^3.7.4",
+    "prettier": "3.7.4",
     "rimraf": "^6.1.2",
-    "typescript": "^5.9.3",
-    "typescript-eslint": "^8.50.0"
+    "typescript": "^5.9.3"
   },
   "engines": {
     "node": ">=18.0.0"
@@ -74,12 +70,11 @@
     "test": "test"
   },
   "lint-staged": {
-    "*.{ts,js}": [
-      "eslint --fix",
+    "*.md": [
       "prettier --write"
     ],
-    "*.{json,md}": [
-      "prettier --write"
+    "!(*.md)": [
+      "biome check --write --no-errors-on-unmatched"
     ]
   }
 }

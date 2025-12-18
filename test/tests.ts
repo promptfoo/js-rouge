@@ -19,13 +19,13 @@ describe('Utility Functions', () => {
       expect(fact(5)).toBe(120);
     });
     test('should return 3628800 for 10!', () => {
-      expect(fact(10)).toBe(3628800);
+      expect(fact(10)).toBe(3_628_800);
     });
     test('should return 2432902008176640000 for 20!', () => {
-      expect(fact(20)).toBe(2432902008176640000);
+      expect(fact(20)).toBe(2_432_902_008_176_640_000);
     });
     test('should return 2432902008176640000 for 20! using cache', () => {
-      expect(fact(20)).toBe(2432902008176640000);
+      expect(fact(20)).toBe(2_432_902_008_176_640_000);
     });
   });
 
@@ -43,7 +43,7 @@ describe('Utility Functions', () => {
       expect(comb2(10)).toBe(45);
     });
     test('should return 499500 for C(1000,2)', () => {
-      expect(comb2(1000)).toBe(499500);
+      expect(comb2(1000)).toBe(499_500);
     });
   });
 
@@ -207,7 +207,7 @@ describe('Utility Functions', () => {
     });
 
     test('should return all pairs with default maxSkip (Infinity)', () => {
-      expect(sb(data, Infinity)).toEqual(result);
+      expect(sb(data, Number.POSITIVE_INFINITY)).toEqual(result);
     });
 
     test('should return only adjacent pairs with maxSkip=1', () => {
@@ -332,8 +332,8 @@ describe('Utility Functions', () => {
     test('should not split parenthetical inside sentence', () => {
       expect(
         ss(
-          'He teaches science (He previously worked for 5 years as an engineer.) at the local University.'
-        )
+          'He teaches science (He previously worked for 5 years as an engineer.) at the local University.',
+        ),
       ).toEqual([
         'He teaches science (He previously worked for 5 years as an engineer.) at the local University.',
       ]);
@@ -349,8 +349,8 @@ describe('Utility Functions', () => {
     test('should split web addresses as a sentence boundary', () => {
       expect(
         ss(
-          'The site is: https://www.example.50.com/new-site/awesome_content.html. Please check it out.'
-        )
+          'The site is: https://www.example.50.com/new-site/awesome_content.html. Please check it out.',
+        ),
       ).toEqual([
         'The site is: https://www.example.50.com/new-site/awesome_content.html.',
         'Please check it out.',
@@ -422,8 +422,8 @@ describe('Utility Functions', () => {
     test('should not split ellipsis at end of quotation', () => {
       expect(
         ss(
-          'Thoreau argues that by simplifying one\'s life, "the laws of the universe will appear less complex...."'
-        )
+          'Thoreau argues that by simplifying one\'s life, "the laws of the universe will appear less complex...."',
+        ),
       ).toEqual([
         'Thoreau argues that by simplifying one\'s life, "the laws of the universe will appear less complex...."',
       ]);
@@ -441,7 +441,7 @@ describe('Utility Functions', () => {
       const TIMEOUT_MS = 500;
 
       test('should handle long strings without sentence terminators quickly', () => {
-        const input = 'a'.repeat(10000);
+        const input = 'a'.repeat(10_000);
         const start = Date.now();
         ss(input);
         const elapsed = Date.now() - start;
@@ -449,7 +449,7 @@ describe('Utility Functions', () => {
       });
 
       test('should handle many dots quickly', () => {
-        const input = '.'.repeat(10000);
+        const input = '.'.repeat(10_000);
         const start = Date.now();
         ss(input);
         const elapsed = Date.now() - start;
@@ -465,7 +465,7 @@ describe('Utility Functions', () => {
       });
 
       test('should handle long string with many spaces quickly', () => {
-        const input = `${' '.repeat(10000)}text. more text.`;
+        const input = `${' '.repeat(10_000)}text. more text.`;
         const start = Date.now();
         ss(input);
         const elapsed = Date.now() - start;
@@ -474,7 +474,7 @@ describe('Utility Functions', () => {
 
       test('should handle many consecutive exclamation marks quickly', () => {
         // Specifically tests CodeQL alert #1 scenario
-        const input = `${'!'.repeat(10000)}`;
+        const input = `${'!'.repeat(10_000)}`;
         const start = Date.now();
         ss(input);
         const elapsed = Date.now() - start;
@@ -625,7 +625,7 @@ describe('Utility Functions', () => {
     });
 
     test('should return pure recall when beta is Infinity', () => {
-      expect(fm(0.5, 0.75, Infinity)).toBe(0.75);
+      expect(fm(0.5, 0.75, Number.POSITIVE_INFINITY)).toBe(0.75);
     });
     test('should correctly compute F1 score (beta=1)', () => {
       expect(fm(0.5, 0.75, 1)).toBe(0.6);
@@ -744,16 +744,13 @@ describe('Core Functions', () => {
     const cands = ['police kill the gunman', 'the gunman kill police', 'the gunman police killed'];
 
     test('should throw RangeError for empty candidate', () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       expect(() => s('', ref, undefined as any)).toThrow(RangeError);
     });
     test('should throw RangeError for empty ref', () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       expect(() => s(cands[0], '', undefined as any)).toThrow(RangeError);
     });
 
     test('should return 0 for summaries with zero overlap', () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       expect(s('banana yoghurt', ref, undefined as any)).toBe(0);
     });
 
@@ -783,11 +780,9 @@ describe('Core Functions', () => {
     const cands = ['police kill the gunman', 'the gunman kill police', 'the gunman police killed'];
 
     test('should throw RangeError for empty candidate', () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       expect(() => l('', ref, undefined as any)).toThrow(RangeError);
     });
     test('should throw RangeError for empty ref', () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       expect(() => l(cands[0], '', undefined as any)).toThrow(RangeError);
     });
 
@@ -828,7 +823,7 @@ describe('Core Functions', () => {
       const shortCand = 'the cat';
       const longRef = 'the cat sat';
       // With beta=Infinity (pure recall), should return recall = 2/3
-      const recallScore = l(shortCand, longRef, { beta: Infinity });
+      const recallScore = l(shortCand, longRef, { beta: Number.POSITIVE_INFINITY });
       expect(recallScore).toBeCloseTo(2 / 3, 5);
     });
   });

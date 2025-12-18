@@ -1,4 +1,4 @@
-import { GATE_SUBSTITUTIONS, GATE_EXCEPTIONS, TREEBANK_CONTRACTIONS } from './constants';
+import { GATE_EXCEPTIONS, GATE_SUBSTITUTIONS, TREEBANK_CONTRACTIONS } from './constants';
 
 /**
  * Splits a sentence into an array of word tokens
@@ -18,7 +18,9 @@ import { GATE_SUBSTITUTIONS, GATE_EXCEPTIONS, TREEBANK_CONTRACTIONS } from './co
  * @return {Array<string>}              An array of word tokens
  */
 export function treeBankTokenize(input: string): string[] {
-  if (input.length === 0) return [];
+  if (input.length === 0) {
+    return [];
+  }
 
   // Does the following things in order of appearance by line:
   // 1. Replace quotes at the sentence start position with double ticks
@@ -33,13 +35,13 @@ export function treeBankTokenize(input: string): string[] {
   // 7. Wrap spaces around opening and closing brackets
   // 8. Wrap spaces around en and em-dashes
   let parse = input
-    .replace(/^\"/, ' `` ')
-    .replace(/([ (\[{<])"/g, '$1 `` ')
+    .replace(/^"/, ' `` ')
+    .replace(/([ ([{<])"/g, '$1 `` ')
     .replace(/\.\.\.*/g, ' ... ')
     .replace(/[;@#$%&]/g, ' $& ')
-    .replace(/([^\.])(\.)([\]\)}>"\']*)\s*$/g, '$1 $2$3 ')
+    .replace(/([^.])(\.)([\])}>"']*)\s*$/g, '$1 $2$3 ')
     .replace(/[,?!]/g, ' $& ')
-    .replace(/[\]\[\(\)\{\}<>]/g, ' $& ')
+    .replace(/[\][(){}<>]/g, ' $& ')
     .replace(/---*/g, ' -- ');
 
   // Wrap spaces at the start and end of the sentence for consistency
@@ -57,13 +59,13 @@ export function treeBankTokenize(input: string): string[] {
     .replace(/'([sSmMdD]) /g, " '$1 ")
     .replace(/('ll|'LL|'re|'RE|'ve|'VE|n't|N'T) /g, ' $1 ');
 
-  for (let i = 0; i < TREEBANK_CONTRACTIONS.length; i++) {
+  for (const contraction of TREEBANK_CONTRACTIONS) {
     // Break uncommon contractions with a space and wrap-in spaces
-    parse = parse.replace(TREEBANK_CONTRACTIONS[i], ' $1 $2 ');
+    parse = parse.replace(contraction, ' $1 $2 ');
   }
 
   // Concatenate double spaces and remove start/end spaces
-  parse = parse.replace(/\ \ +/g, ' ').replace(/^\ |\ $/g, '');
+  parse = parse.replace(/ {2,}/g, ' ').replace(/^ | $/g, '');
 
   // Split on spaces (original and inserted) to return the tokenized result
   return parse.split(' ');
@@ -80,8 +82,11 @@ export function treeBankTokenize(input: string): string[] {
  * @param  {string}         input     The document to be segmented
  * @return {Array<string>}            An array of sentences
  */
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Sentence segmentation requires complex NLP logic
 export function sentenceSegment(input: string): string[] {
-  if (input.length === 0) return [];
+  if (input.length === 0) {
+    return [];
+  }
 
   const abbrvReg = new RegExp(`\\b(${GATE_SUBSTITUTIONS.join('|')})[.!?] ?$`, 'i');
   const acronymReg = new RegExp(/[ |.][A-Z].?$/, 'i');
@@ -130,13 +135,13 @@ export function sentenceSegment(input: string): string[] {
         }
       } else if (chunks[idx].length > 1 && chunks[idx + 1] && acronymReg.test(chunks[idx])) {
         const words = chunks[idx].split(' ');
-        const lastWord = words[words.length - 1];
+        const lastWord = words.at(-1)!;
 
         if (lastWord === lastWord.toLowerCase()) {
           // Catch small-letter abbreviations and merge them.
           chunks[idx + 1] = `${chunks[idx]} ${chunks[idx + 1].replace(/ +/g, ' ')}`;
         } else if (chunks[idx + 2]) {
-          if (strIsTitleCase(words[words.length - 2]) && strIsTitleCase(chunks[idx + 2])) {
+          if (strIsTitleCase(words.at(-2)!) && strIsTitleCase(chunks[idx + 2])) {
             // Catch name abbreviations (e.g. Albert I. Jones) by checking if
             // the previous and next words are all capitalized.
             chunks[idx + 2] = chunks[idx] + chunks[idx + 1].replace(/ +/g, ' ') + chunks[idx + 2];
@@ -178,7 +183,9 @@ export function strIsTitleCase(input: string): boolean {
  * @return {boolean}            True if the character is uppercase and false otherwise.
  */
 export function charIsUpperCase(input: string): boolean {
-  if (input.length !== 1) throw new RangeError('Input should be a single character');
+  if (input.length !== 1) {
+    throw new RangeError('Input should be a single character');
+  }
 
   // Use locale-aware comparison to support international characters
   return input.toUpperCase() === input && input.toLowerCase() !== input;
@@ -227,8 +234,10 @@ function memoize<T, R>(func: (arg: T) => R, Store: new () => Map<T, R> = Map): (
  * @param  {number} acc   The starting value for the computation. Defaults to 1.
  * @return {number}       The factorial result
  */
-function factRec(x: number, acc: number = 1): number {
-  if (x < 0) throw RangeError('Input must be a positive number');
+function factRec(x: number, acc = 1): number {
+  if (x < 0) {
+    throw new RangeError('Input must be a positive number');
+  }
   return x < 2 ? acc : factRec(x - 1, x * acc);
 }
 
@@ -250,8 +259,10 @@ export const fact = memoize(factRec);
  * @param  {number}           maxSkip     Maximum skip distance between words. Defaults to Infinity (all pairs).
  * @return {Array<string>}                An array of skip bigram strings
  */
-export function skipBigram(tokens: string[], maxSkip: number = Infinity): string[] {
-  if (tokens.length < 2) throw new RangeError('Input must have at least two words');
+export function skipBigram(tokens: string[], maxSkip: number = Number.POSITIVE_INFINITY): string[] {
+  if (tokens.length < 2) {
+    throw new RangeError('Input must have at least two words');
+  }
 
   const acc: string[] = [];
   for (let baseIdx = 0; baseIdx < tokens.length - 1; baseIdx++) {
@@ -285,28 +296,40 @@ export const NGRAM_DEFAULT_OPTS: NGramOptions = {
  * @param  {Object}                 pad       String padding options. See example.
  * @return {Array<string>}                    An array of n-gram strings
  */
-export function nGram(tokens: string[], n: number = 2, pad: Partial<NGramOptions> = {}): string[] {
-  if (n < 1) throw new RangeError('ngram size cannot be smaller than 1');
+export function nGram(tokens: string[], n = 2, pad: Partial<NGramOptions> = {}): string[] {
+  if (n < 1) {
+    throw new RangeError('ngram size cannot be smaller than 1');
+  }
 
   if (tokens.length < n) {
     throw new RangeError('ngram size cannot be larger than the number of tokens available');
   }
 
-  if (Object.keys(pad).length !== 0) {
+  let workingTokens = tokens;
+
+  if (Object.keys(pad).length > 0) {
     const config = { ...NGRAM_DEFAULT_OPTS, ...pad };
 
     // Clone the input token array to avoid mutating the source data
     const tempTokens = tokens.slice(0);
 
-    if (config.start) for (let i = 0; i < n - 1; i++) tempTokens.unshift(config.val);
-    if (config.end) for (let i = 0; i < n - 1; i++) tempTokens.push(config.val);
+    if (config.start) {
+      for (let i = 0; i < n - 1; i++) {
+        tempTokens.unshift(config.val);
+      }
+    }
+    if (config.end) {
+      for (let i = 0; i < n - 1; i++) {
+        tempTokens.push(config.val);
+      }
+    }
 
-    tokens = tempTokens;
+    workingTokens = tempTokens;
   }
 
   const acc: string[] = [];
-  for (let idx = 0; idx < tokens.length - n + 1; idx++) {
-    acc.push(tokens.slice(idx, idx + n).join(' '));
+  for (let idx = 0; idx < workingTokens.length - n + 1; idx++) {
+    acc.push(workingTokens.slice(idx, idx + n).join(' '));
   }
 
   return acc;
@@ -321,7 +344,9 @@ export function nGram(tokens: string[], n: number = 2, pad: Partial<NGramOptions
  * @return {number}         The number of ways in which 2 items can be chosen from `val`
  */
 export function comb2(val: number): number {
-  if (val < 2) throw new RangeError('Input must be greater than 2');
+  if (val < 2) {
+    throw new RangeError('Input must be greater than 2');
+  }
   return 0.5 * val * (val - 1);
 }
 
@@ -332,7 +357,9 @@ export function comb2(val: number): number {
  * @return {number}                   The mean of the distribution
  */
 export function arithmeticMean(input: number[]): number {
-  if (input.length < 1) throw new RangeError('Input array must have at least 1 element');
+  if (input.length === 0) {
+    throw new RangeError('Input array must have at least 1 element');
+  }
   return input.reduce((x, y) => x + y) / input.length;
 }
 
@@ -354,7 +381,7 @@ export function jackKnife(
   cands: string[],
   ref: string,
   func: (x: string, y: string) => number,
-  test: (x: number[]) => number = arithmeticMean
+  test: (x: number[]) => number = arithmeticMean,
 ): number {
   if (cands.length < 2) {
     throw new RangeError('Candidate array must contain more than one element');
@@ -393,18 +420,30 @@ export function jackKnife(
  * @param  {number}     beta    Weighing value (precision vs. recall). Defaults to 1.0 (F1).
  * @return {number}             Computed f-score
  */
-export function fMeasure(p: number, r: number, beta: number = 1.0): number {
-  if (p < 0 || p > 1) throw new RangeError('Precision value p must have bounds 0 ≤ p ≤ 1');
-  if (r < 0 || r > 1) throw new RangeError('Recall value r must have bounds 0 ≤ r ≤ 1');
-  if (beta < 0) throw new RangeError('beta value must be >= 0');
+export function fMeasure(p: number, r: number, beta = 1.0): number {
+  if (p < 0 || p > 1) {
+    throw new RangeError('Precision value p must have bounds 0 ≤ p ≤ 1');
+  }
+  if (r < 0 || r > 1) {
+    throw new RangeError('Recall value r must have bounds 0 ≤ r ≤ 1');
+  }
+  if (beta < 0) {
+    throw new RangeError('beta value must be >= 0');
+  }
 
   // Handle special cases
-  if (p === 0 && r === 0) return 0;
-  if (!Number.isFinite(beta)) return r; // β → ∞ means pure recall
+  if (p === 0 && r === 0) {
+    return 0;
+  }
+  if (!Number.isFinite(beta)) {
+    return r; // β → ∞ means pure recall
+  }
 
   const betaSq = beta * beta;
   const denominator = betaSq * p + r;
-  if (denominator === 0) return 0;
+  if (denominator === 0) {
+    return 0;
+  }
 
   return ((1 + betaSq) * p * r) / denominator;
 }
@@ -439,11 +478,11 @@ export function intersection<T>(a: T[], b: T[]): T[] {
  * @return {Array<string>}          The longest common subsequence between the first and second array
  */
 export function lcs(a: string[], b: string[]): string[] {
-  if (a.length === 0 || b.length === 0) return [];
+  if (a.length === 0 || b.length === 0) {
+    return [];
+  }
 
-  const dp: number[][] = Array(a.length + 1)
-    .fill(0)
-    .map(() => Array(b.length + 1).fill(0));
+  const dp: number[][] = new Array(a.length + 1).fill(0).map(() => new Array(b.length + 1).fill(0));
 
   for (let i = 1; i <= a.length; i++) {
     for (let j = 1; j <= b.length; j++) {

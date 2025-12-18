@@ -55,13 +55,13 @@ This release represents a major modernization of the original [`rouge`](https://
 
 ```javascript
 // Before (rouge 2.x)
-const rouge = require('rouge');
+const rouge = require("rouge");
 rouge.n(candidate, reference);
 
 // After (js-rouge 3.x)
-const { n, l, s } = require('js-rouge');
+const { n, l, s } = require("js-rouge");
 // or
-import { n, l, s } from 'js-rouge';
+import { n, l, s } from "js-rouge";
 n(candidate, reference);
 ```
 

@@ -29,11 +29,11 @@ npm install js-rouge
 To use it:
 
 ```javascript
-import { n, l, s } from 'js-rouge'; // ES Modules
+import { n, l, s } from "js-rouge"; // ES Modules
 
 // OR
 
-const { n, l, s } = require('js-rouge'); // CommonJS
+const { n, l, s } = require("js-rouge"); // CommonJS
 ```
 
 ## Usage
@@ -49,10 +49,10 @@ All functions return an F-score between 0 and 1.
 ### ROUGE-N Example
 
 ```javascript
-import { n as rougeN } from 'js-rouge';
+import { n as rougeN } from "js-rouge";
 
-const candidate = 'the cat sat on the mat';
-const reference = 'the cat sat on the mat';
+const candidate = "the cat sat on the mat";
+const reference = "the cat sat on the mat";
 
 // ROUGE-1 (unigram)
 rougeN(candidate, reference, { n: 1 }); // => 1.0
@@ -61,16 +61,16 @@ rougeN(candidate, reference, { n: 1 }); // => 1.0
 rougeN(candidate, reference, { n: 2 }); // => 1.0
 
 // With partial match
-rougeN('the cat sat', 'the cat sat on the mat', { n: 1 }); // => 0.75
+rougeN("the cat sat", "the cat sat on the mat", { n: 1 }); // => 0.75
 ```
 
 ### ROUGE-L Example
 
 ```javascript
-import { l as rougeL } from 'js-rouge';
+import { l as rougeL } from "js-rouge";
 
-const reference = 'police killed the gunman';
-const candidate = 'police kill the gunman';
+const reference = "police killed the gunman";
+const candidate = "police kill the gunman";
 
 rougeL(candidate, reference); // => 0.75
 ```
@@ -78,10 +78,10 @@ rougeL(candidate, reference); // => 0.75
 ### ROUGE-S Example
 
 ```javascript
-import { s as rougeS } from 'js-rouge';
+import { s as rougeS } from "js-rouge";
 
-const reference = 'police killed the gunman';
-const candidate = 'police kill the gunman';
+const reference = "police killed the gunman";
+const candidate = "police kill the gunman";
 
 // Default: considers all word pairs
 rougeS(candidate, reference); // => 0.5
@@ -95,10 +95,10 @@ rougeS(candidate, reference, { maxSkip: 2 }); // considers only nearby word pair
 All functions are case-sensitive by default. Use `caseSensitive: false` for case-insensitive comparison:
 
 ```javascript
-import { n as rougeN } from 'js-rouge';
+import { n as rougeN } from "js-rouge";
 
-rougeN('Hello World', 'hello world'); // => 0 (no match)
-rougeN('Hello World', 'hello world', { caseSensitive: false }); // => 1.0
+rougeN("Hello World", "hello world"); // => 0 (no match)
+rougeN("Hello World", "hello world", { caseSensitive: false }); // => 1.0
 ```
 
 ## Options
@@ -142,10 +142,14 @@ rougeN('Hello World', 'hello world', { caseSensitive: false }); // => 1.0
 The package also exports utility functions, including jackknife resampling as described in the original paper:
 
 ```javascript
-import { n as rougeN, jackKnife } from 'js-rouge';
+import { n as rougeN, jackKnife } from "js-rouge";
 
-const reference = 'police killed the gunman';
-const candidates = ['police kill the gunman', 'the gunman kill police', 'the gunman police killed'];
+const reference = "police killed the gunman";
+const candidates = [
+  "police kill the gunman",
+  "the gunman kill police",
+  "the gunman police killed",
+];
 
 // Standard evaluation taking the arithmetic mean
 jackKnife(candidates, reference, rougeN);
@@ -160,9 +164,9 @@ jackKnife(candidates, reference, rougeN, distMax);
 This package is written in TypeScript and includes type definitions. All functions and utilities are fully typed.
 
 ```typescript
-import { n, l, s, jackKnife } from 'js-rouge';
+import { n, l, s, jackKnife } from "js-rouge";
 
-const score: number = n('candidate text', 'reference text', { n: 2 });
+const score: number = n("candidate text", "reference text", { n: 2 });
 ```
 
 ### Exported Types
@@ -170,14 +174,18 @@ const score: number = n('candidate text', 'reference text', { n: 2 });
 Option interfaces are exported for typing your own functions and configurations:
 
 ```typescript
-import { n, RougeNOptions, RougeSOptions, RougeLOptions } from 'js-rouge';
+import { n, RougeNOptions, RougeSOptions, RougeLOptions } from "js-rouge";
 
 // Type your options objects
 const opts: RougeNOptions = { n: 2, caseSensitive: false };
-const score = n('candidate', 'reference', opts);
+const score = n("candidate", "reference", opts);
 
 // Type function parameters
-function evaluateSummary(candidate: string, reference: string, opts: RougeNOptions): number {
+function evaluateSummary(
+  candidate: string,
+  reference: string,
+  opts: RougeNOptions,
+): number {
   return n(candidate, reference, opts);
 }
 ```
