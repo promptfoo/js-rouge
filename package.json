@@ -15,7 +15,7 @@
   "scripts": {
     "test": "jest",
     "build": "npm run clean && npm run build:js && npm run build:types",
-    "build:js": "esbuild src/rouge.ts --bundle --minify --sourcemap --platform=node --target=node18 --outfile=dist/rouge.js && esbuild src/rouge.ts --bundle --minify --sourcemap --platform=neutral --format=esm --outfile=dist/rouge.mjs",
+    "build:js": "esbuild src/rouge.ts --bundle --minify --sourcemap --platform=node --target=node20 --outfile=dist/rouge.js && esbuild src/rouge.ts --bundle --minify --sourcemap --platform=neutral --format=esm --outfile=dist/rouge.mjs",
     "build:types": "tsc -p tsconfig.json --emitDeclarationOnly --outDir dist",
     "clean": "rimraf dist",
     "type-check": "tsc --noEmit",
@@ -62,7 +62,7 @@
     "typescript-eslint": "^8.50.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "files": [
     "dist",

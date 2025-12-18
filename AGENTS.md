@@ -139,7 +139,7 @@ F_β = ((1 + β²) × P × R) / (β² × P + R)
 
 GitHub Actions runs on push/PR to main:
 
-1. Matrix test: Node 18, 20, 22
+1. Matrix test: Node 20, 22, 24
 2. Format check
 3. Lint check
 4. Build
