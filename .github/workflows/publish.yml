@@ -70,4 +70,5 @@ jobs:
       # This requires npm 11.5.1+ (Node 24 includes npm 11.6.0) and the package
       # must be configured on npmjs.com to trust this GitHub repository/workflow.
       # See: https://docs.npmjs.com/trusted-publishers/
-      - run: npm publish --access public
+      # The --provenance flag generates SLSA Build Level 3 attestation for supply chain security.
+      - run: npm publish --access public --provenance
