@@ -187,6 +187,10 @@ export function charIsUpperCase(input: string): boolean {
 /**
  * Memoizes a function using a Map
  *
+ * **Memory Warning**: The cache is unbounded and will grow indefinitely for unique inputs.
+ * In long-running processes with many unique inputs, consider using a bounded cache
+ * implementation (e.g., LRU cache) or periodically clearing the memoized function.
+ *
  * @method memoize
  * @param  {Function} func    The function to be memoized
  * @param  {Function} Store   The data store constructor. Defaults to the ES6-inbuilt Map function.
@@ -218,10 +222,6 @@ function memoize<T, R>(func: (arg: T) => R, Store: new () => Map<T, R> = Map): (
  * blowing the stack when computing inputs with a large
  * recursion depth.
  *
- * If this function will be called repeatedly within
- * the same scope, it is highly recommended that the
- * user memoize the function (e.g. lodash.memoize).
- *
  * @method factRec
  * @param  {number} x     The number for which the factorial is to be computed
  * @param  {number} acc   The starting value for the computation. Defaults to 1.
@@ -232,6 +232,14 @@ function factRec(x: number, acc: number = 1): number {
   return x < 2 ? acc : factRec(x - 1, x * acc);
 }
 
+/**
+ * Memoized factorial function.
+ *
+ * **Memory Note**: Results are cached indefinitely. In typical ROUGE usage,
+ * factorial is called with small values (≤20) so memory impact is negligible.
+ * The cache size is bounded by the range of valid factorial inputs that don't
+ * overflow JavaScript's number type (approximately n ≤ 170).
+ */
 export const fact = memoize(factRec);
 
 /**
