@@ -1,4 +1,5 @@
 import * as utils from './utils';
+
 export * from './utils';
 
 /** Options for ROUGE-N evaluation */
@@ -67,8 +68,12 @@ export interface RougeLOptions {
  * @return {number}                 The ROUGE-N F-score
  */
 export function n(cand: string, ref: string, opts?: RougeNOptions): number {
-  if (cand.length === 0) throw new RangeError('Candidate cannot be an empty string');
-  if (ref.length === 0) throw new RangeError('Reference cannot be an empty string');
+  if (cand.length === 0) {
+    throw new RangeError('Candidate cannot be an empty string');
+  }
+  if (ref.length === 0) {
+    throw new RangeError('Reference cannot be an empty string');
+  }
 
   // Merge user-provided configuration with defaults
   const options = {
@@ -122,14 +127,18 @@ export function n(cand: string, ref: string, opts?: RougeNOptions): number {
  * @return {number}                 The ROUGE-S score
  */
 export function s(cand: string, ref: string, opts?: RougeSOptions): number {
-  if (cand.length === 0) throw new RangeError('Candidate cannot be an empty string');
-  if (ref.length === 0) throw new RangeError('Reference cannot be an empty string');
+  if (cand.length === 0) {
+    throw new RangeError('Candidate cannot be an empty string');
+  }
+  if (ref.length === 0) {
+    throw new RangeError('Reference cannot be an empty string');
+  }
 
   // Merge user-provided configuration with defaults
   const options = {
     beta: 1.0,
     caseSensitive: true,
-    maxSkip: Infinity,
+    maxSkip: Number.POSITIVE_INFINITY,
     skipBigram: utils.skipBigram,
     tokenizer: utils.treeBankTokenize,
     ...opts,
@@ -145,12 +154,11 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
 
   if (skip2 === 0) {
     return 0;
-  } else {
-    const skip2Recall = skip2 / refGrams.length;
-    const skip2Prec = skip2 / candGrams.length;
-
-    return utils.fMeasure(skip2Prec, skip2Recall, options.beta);
   }
+  const skip2Recall = skip2 / refGrams.length;
+  const skip2Prec = skip2 / candGrams.length;
+
+  return utils.fMeasure(skip2Prec, skip2Recall, options.beta);
 }
 
 /**
@@ -178,8 +186,12 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
  * @return {number}                 The ROUGE-L score
  */
 export function l(cand: string, ref: string, opts?: RougeLOptions): number {
-  if (cand.length === 0) throw new RangeError('Candidate cannot be an empty string');
-  if (ref.length === 0) throw new RangeError('Reference cannot be an empty string');
+  if (cand.length === 0) {
+    throw new RangeError('Candidate cannot be an empty string');
+  }
+  if (ref.length === 0) {
+    throw new RangeError('Reference cannot be an empty string');
+  }
 
   // Merge user-provided configuration with defaults
   const options = {
@@ -209,7 +221,9 @@ export function l(cand: string, ref: string, opts?: RougeLOptions): number {
 
   // Sum the array as quickly as we can
   let lcsSum = 0;
-  while (lcsAcc.length) lcsSum += lcsAcc.pop() || 0;
+  while (lcsAcc.length > 0) {
+    lcsSum += lcsAcc.pop() || 0;
+  }
 
   if (lcsSum === 0) {
     return 0;

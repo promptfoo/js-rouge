@@ -7,8 +7,8 @@ export const TREEBANK_CONTRACTIONS: RegExp[] = [
   /\b(lem)(me)\b/i,
   /\b(more)('n)\b/i,
   /\b(wan)(na) /i,
-  /\ ('t)(is)\b/i,
-  /\ ('t)(was)\b/i,
+  / ('t)(is)\b/i,
+  / ('t)(was)\b/i,
 ];
 
 export const HONORIFICS: string[] = [

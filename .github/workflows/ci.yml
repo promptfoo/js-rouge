@@ -43,8 +43,8 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
       - run: npm ci
-      - run: npm run format
-      - run: npm run lint
+      - name: Biome CI check
+        run: npx biome ci .
       - run: npm run build
       - name: Verify build artifacts
         run: |
