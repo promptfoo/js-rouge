@@ -1,6 +1,48 @@
 import * as utils from './utils';
 export * from './utils';
 
+/** Options for ROUGE-N evaluation */
+export interface RougeNOptions {
+  /** The size of the ngram used (default: 1) */
+  n?: number;
+  /** The beta value used for the f-measure (default: 1.0) */
+  beta?: number;
+  /** Whether comparison is case-sensitive (default: true) */
+  caseSensitive?: boolean;
+  /** Custom ngram generator function */
+  nGram?: (tokens: string[], n: number) => string[];
+  /** Custom string tokenizer */
+  tokenizer?: (input: string) => string[];
+}
+
+/** Options for ROUGE-S (skip-bigram) evaluation */
+export interface RougeSOptions {
+  /** The beta value used for the f-measure (default: 1.0) */
+  beta?: number;
+  /** Whether comparison is case-sensitive (default: true) */
+  caseSensitive?: boolean;
+  /** Maximum skip distance between words (default: Infinity) */
+  maxSkip?: number;
+  /** Custom skip-bigram generator function */
+  skipBigram?: (tokens: string[], maxSkip?: number) => string[];
+  /** Custom string tokenizer */
+  tokenizer?: (input: string) => string[];
+}
+
+/** Options for ROUGE-L (LCS) evaluation */
+export interface RougeLOptions {
+  /** The beta value used for the f-measure (default: 1.0) */
+  beta?: number;
+  /** Whether comparison is case-sensitive (default: true) */
+  caseSensitive?: boolean;
+  /** Custom LCS function */
+  lcs?: (a: string[], b: string[]) => string[];
+  /** Custom sentence segmenter */
+  segmenter?: (input: string) => string[];
+  /** Custom string tokenizer */
+  tokenizer?: (input: string) => string[];
+}
+
 /**
  * Computes the ROUGE-N score for a candidate summary.
  *
@@ -24,17 +66,7 @@ export * from './utils';
  * @param  {Object}     opts        Configuration options (see example)
  * @return {number}                 The ROUGE-N F-score
  */
-export function n(
-  cand: string,
-  ref: string,
-  opts?: {
-    n?: number;
-    beta?: number;
-    caseSensitive?: boolean;
-    nGram?: (tokens: string[], n: number) => string[];
-    tokenizer?: (input: string) => string[];
-  }
-): number {
+export function n(cand: string, ref: string, opts?: RougeNOptions): number {
   if (cand.length === 0) throw new RangeError('Candidate cannot be an empty string');
   if (ref.length === 0) throw new RangeError('Reference cannot be an empty string');
 
@@ -89,17 +121,7 @@ export function n(
  * @param  {Object}     opts        Configuration options (see example)
  * @return {number}                 The ROUGE-S score
  */
-export function s(
-  cand: string,
-  ref: string,
-  opts?: {
-    beta?: number;
-    caseSensitive?: boolean;
-    maxSkip?: number;
-    skipBigram?: (tokens: string[], maxSkip?: number) => string[];
-    tokenizer?: (input: string) => string[];
-  }
-): number {
+export function s(cand: string, ref: string, opts?: RougeSOptions): number {
   if (cand.length === 0) throw new RangeError('Candidate cannot be an empty string');
   if (ref.length === 0) throw new RangeError('Reference cannot be an empty string');
 
@@ -155,17 +177,7 @@ export function s(
  * @param  {Object}     opts        Configuration options (see example)
  * @return {number}                 The ROUGE-L score
  */
-export function l(
-  cand: string,
-  ref: string,
-  opts?: {
-    beta?: number;
-    caseSensitive?: boolean;
-    lcs?: (a: string[], b: string[]) => string[];
-    segmenter?: (input: string) => string[];
-    tokenizer?: (input: string) => string[];
-  }
-): number {
+export function l(cand: string, ref: string, opts?: RougeLOptions): number {
   if (cand.length === 0) throw new RangeError('Candidate cannot be an empty string');
   if (ref.length === 0) throw new RangeError('Reference cannot be an empty string');
 
