@@ -57,10 +57,9 @@ export function treeBankTokenize(input: string): string[] {
     .replace(/'([sSmMdD]) /g, " '$1 ")
     .replace(/('ll|'LL|'re|'RE|'ve|'VE|n't|N'T) /g, ' $1 ');
 
-  let iterator = -1;
-  while (iterator++ < TREEBANK_CONTRACTIONS.length) {
+  for (let i = 0; i < TREEBANK_CONTRACTIONS.length; i++) {
     // Break uncommon contractions with a space and wrap-in spaces
-    parse = parse.replace(TREEBANK_CONTRACTIONS[iterator], ' $1 $2 ');
+    parse = parse.replace(TREEBANK_CONTRACTIONS[i], ' $1 $2 ');
   }
 
   // Concatenate double spaces and remove start/end spaces
