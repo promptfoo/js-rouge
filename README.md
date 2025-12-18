@@ -133,6 +133,10 @@ rougeN('Hello World', 'hello world', { caseSensitive: false }); // => 1.0
 | `tokenizer`     | function | Penn Treebank | Custom tokenizer function            |
 | `skipBigram`    | function | built-in      | Custom skip-bigram generator         |
 
+### Limitations
+
+- **English-centric tokenizer**: The default Penn Treebank tokenizer is designed for English text. For other languages, provide a custom `tokenizer` function that appropriately segments text in your target language.
+
 ## Jackknife Resampling
 
 The package also exports utility functions, including jackknife resampling as described in the original paper:
@@ -159,6 +163,23 @@ This package is written in TypeScript and includes type definitions. All functio
 import { n, l, s, jackKnife } from 'js-rouge';
 
 const score: number = n('candidate text', 'reference text', { n: 2 });
+```
+
+### Exported Types
+
+Option interfaces are exported for typing your own functions and configurations:
+
+```typescript
+import { n, RougeNOptions, RougeSOptions, RougeLOptions } from 'js-rouge';
+
+// Type your options objects
+const opts: RougeNOptions = { n: 2, caseSensitive: false };
+const score = n('candidate', 'reference', opts);
+
+// Type function parameters
+function evaluateSummary(candidate: string, reference: string, opts: RougeNOptions): number {
+  return n(candidate, reference, opts);
+}
 ```
 
 ## Versioning
