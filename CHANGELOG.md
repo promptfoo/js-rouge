@@ -1,5 +1,23 @@
 # Changelog
 
+## [3.2.0](https://github.com/promptfoo/js-rouge/compare/js-rouge-v3.1.5...js-rouge-v3.2.0) (2026-01-05)
+
+
+### Features
+
+* export TypeScript option types for ROUGE functions ([#63](https://github.com/promptfoo/js-rouge/issues/63)) ([cf203c9](https://github.com/promptfoo/js-rouge/commit/cf203c9bcf50dedcd25fa3b99528b19aa3db12fa))
+
+
+### Bug Fixes
+
+* apply F-beta formula for all non-negative beta values ([#51](https://github.com/promptfoo/js-rouge/issues/51)) ([44f2bf5](https://github.com/promptfoo/js-rouge/commit/44f2bf51e468420d7e50fc28fb25e34d7ffb8fa6))
+* correct off-by-one error in treeBankTokenize loop ([#50](https://github.com/promptfoo/js-rouge/issues/50)) ([1f74053](https://github.com/promptfoo/js-rouge/commit/1f74053a56259d687228dfb3f377285e7dd8f4c6))
+* correct ROUGE-L precision and recall calculation ([#52](https://github.com/promptfoo/js-rouge/issues/52)) ([0c91f4c](https://github.com/promptfoo/js-rouge/commit/0c91f4ccd9b44524f148bf747798c0e68e47961c))
+* remove duplicate 'sep' entry in ABBR_DATES ([#53](https://github.com/promptfoo/js-rouge/issues/53)) ([433a4b5](https://github.com/promptfoo/js-rouge/commit/433a4b5cccea38552e8322104615443cb818a589))
+* resolve CodeQL security alerts for ReDoS and workflow permissions ([#48](https://github.com/promptfoo/js-rouge/issues/48)) ([972808d](https://github.com/promptfoo/js-rouge/commit/972808d4b6f45e5f3cba99526d6c4423937c3c45))
+* resolve CodeQL security alerts for ReDoS vulnerabilities ([#59](https://github.com/promptfoo/js-rouge/issues/59)) ([ad6a930](https://github.com/promptfoo/js-rouge/commit/ad6a93044c2f40900a49cf2888f8e9d8fb1c7c38))
+* **security:** harden CI/CD pipeline and add security tooling ([#68](https://github.com/promptfoo/js-rouge/issues/68)) ([545044a](https://github.com/promptfoo/js-rouge/commit/545044ad14deb270421e65000a3061c0890b9084))
+
 ## [3.1.5](https://github.com/promptfoo/js-rouge/compare/js-rouge-v3.1.0...js-rouge-v3.1.5) (2025-12-17)
 
 ### Bug Fixes
