@@ -52,3 +52,19 @@ jobs:
           test -f dist/rouge.mjs || (echo "Missing dist/rouge.mjs" && exit 1)
           test -f dist/rouge.d.ts || (echo "Missing dist/rouge.d.ts" && exit 1)
       - run: npm test
+
+  ci-success:
+    name: CI Success
+    runs-on: ubuntu-latest
+    needs: [dependency-review, build]
+    if: always()
+    timeout-minutes: 5
+    permissions:
+      checks: read
+      statuses: read
+    steps:
+      - name: Wait for all PR checks to complete
+        uses: promptfoo/.github/.github/actions/ci-success@main
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          timeout-seconds: 300
