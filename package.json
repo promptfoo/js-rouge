@@ -55,7 +55,7 @@
     "lint-staged": "^16.2.7",
     "prettier": "3.8.1",
     "rimraf": "^6.1.2",
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.0"
   },
   "engines": {
     "node": ">=18.0.0"
