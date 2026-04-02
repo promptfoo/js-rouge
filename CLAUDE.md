@@ -1,3 +1,5 @@
-# Claude Code Guidelines
+# Compatibility Note
 
-See [AGENTS.md](./AGENTS.md) for all project guidelines and documentation.
+The canonical repository guide is [AGENTS.md](./AGENTS.md).
+
+This file remains as a compatibility shim for tools that still auto-load `CLAUDE.md`.
