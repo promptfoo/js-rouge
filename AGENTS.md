@@ -74,7 +74,7 @@ refactor: code change that neither fixes bug nor adds feature
 test: adding or correcting tests
 ```
 
-Do NOT include AI attribution in commits.
+Do not include assistant-specific marketing/provenance text in commit subjects or bodies. If your local tooling requires a commit trailer, keep it in the trailer block only.
 
 ### Testing
 
