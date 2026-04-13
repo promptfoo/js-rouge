@@ -45,7 +45,7 @@
   },
   "homepage": "https://github.com/promptfoo/js-rouge",
   "devDependencies": {
-    "@biomejs/biome": "2.4.10",
+    "@biomejs/biome": "2.4.11",
     "@swc/core": "^1.15.5",
     "@swc/jest": "^0.2.39",
     "@types/jest": "^30.0.0",
@@ -53,7 +53,7 @@
     "husky": "^9.1.7",
     "jest": "^30.2.0",
     "lint-staged": "^16.2.7",
-    "prettier": "3.8.1",
+    "prettier": "3.8.2",
     "rimraf": "^6.1.2",
     "typescript": "^6.0.0"
   },
