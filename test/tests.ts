@@ -419,11 +419,14 @@ describe('Utility Functions', () => {
 
     test('should preserve text before an unterminated final fragment', () => {
       expect(ss('We chose option A. Next step')).toEqual(['We chose option A.', 'Next step']);
+      expect(ss('Use Plan A. Next step')).toEqual(['Use Plan A.', 'Next step']);
       expect(ss('We visited D.C. Today')).toEqual(['We visited D.C.', 'Today']);
     });
 
-    test('should preserve a name initial before an unterminated surname', () => {
-      expect(ss('My name is Jonas E. Smith')).toEqual(['My name is Jonas E. Smith']);
+    test.each(lineBreaks)('should join line-wrapped name initials across %j', (lineBreak) => {
+      expect(ss(`Did you see Albert I.${lineBreak}Jones yesterday?`)).toEqual([
+        'Did you see Albert I. Jones yesterday?',
+      ]);
     });
 
     test('should handle a standalone initialism', () => {

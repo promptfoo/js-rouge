@@ -160,19 +160,20 @@ export function sentenceSegment(input: string): string[] {
           // Catch small-letter abbreviations and merge them.
           chunks[idx + 1] = `${chunks[idx]} ${chunks[idx + 1].replace(/ +/g, ' ')}`;
         } else {
-          // The next sentence may be a captured chunk or an unterminated tail.
-          const nextIdx = chunks[idx + 2] ? idx + 2 : idx + 1;
+          const nextSentence = chunks[idx + 2];
           const previousWord = words.at(-2);
-          if (previousWord && strIsTitleCase(previousWord) && strIsTitleCase(chunks[nextIdx])) {
+          if (
+            nextSentence &&
+            previousWord &&
+            strIsTitleCase(previousWord) &&
+            strIsTitleCase(nextSentence)
+          ) {
             // Catch name abbreviations (e.g. Albert I. Jones) by checking if
-            // the previous and next words are all capitalized.
-            const suffix =
-              nextIdx === idx + 2
-                ? chunks[idx + 1].replace(/ +/g, ' ') + chunks[nextIdx]
-                : ` ${chunks[nextIdx].trim()}`;
-            chunks[nextIdx] = chunks[idx] + suffix;
+            // the previous and next words are all capitalized. Normalize line
+            // wrapping in the separator so it cannot split the joined name again.
+            chunks[idx + 2] = chunks[idx] + chunks[idx + 1].replace(/\s+/g, ' ') + nextSentence;
           } else {
-            // Assume that remaining entities are indeed end-of-sentence markers.
+            // Retain a boundary for other entities and unterminated final fragments.
             acc.push(chunks[idx]);
             chunks[idx] = '';
           }
