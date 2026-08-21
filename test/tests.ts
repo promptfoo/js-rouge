@@ -95,6 +95,9 @@ describe('Utility Functions', () => {
     test('should return ["2", "3"] for ["1", "2", "3"] and ["2", "3", "6"]', () => {
       expect(ins(['1', '2', '3'], ['2', '3', '6'])).toEqual(['2', '3']);
     });
+    test('should retain set semantics for repeated elements', () => {
+      expect(ins(['a', 'a', 'b'], ['a', 'a', 'a'])).toEqual(['a']);
+    });
     test('should return ["1", "2", "3"] for ["1", "2", "3"] and ["1", "2", "3", "6"]', () => {
       expect(ins(['1', '2', '3'], ['1', '2', '3', '6'])).toEqual(['1', '2', '3']);
     });
@@ -727,6 +730,32 @@ describe('Core Functions', () => {
       expect(n(cand, refs[1], { n: 2, beta: 1 })).toBe(0);
     });
 
+    test.each<[number, string]>([
+      [1, 'the cat sat on the mat'],
+      [2, 'a b a b'],
+      [3, 'a b a b a'],
+    ])('should give repeated %i-gram identity a perfect score', (size, text) => {
+      expect(n(text, text, { n: size })).toBe(1);
+    });
+
+    test('should count each matching occurrence up to the reference frequency', () => {
+      expect(n('a a a b', 'a a b b')).toBeCloseTo(3 / 4);
+    });
+
+    test.each([
+      [0, 2 / 3],
+      [1, 4 / 5],
+      [Number.POSITIVE_INFINITY, 1],
+    ])('should clip repeated matches with beta=%s', (beta, expected) => {
+      expect(n('a a a', 'a a', { beta })).toBeCloseTo(expected);
+    });
+
+    test('should count repeated grams from custom tokenizer and ngram callbacks', () => {
+      const tokenizer = (text: string): string[] => text.split('');
+      const nGram = (tokens: string[]): string[] => tokens;
+      expect(n('aaa', 'aa', { tokenizer, nGram })).toBeCloseTo(4 / 5);
+    });
+
     test('should correctly compute ROUGE-N score with custom beta', () => {
       // With beta=0, F-score equals precision
       // 3 matching bigrams out of 4 candidate bigrams = 3/4
@@ -762,6 +791,30 @@ describe('Core Functions', () => {
     });
     test('should correctly compute ROUGE-S score for cand 3 with different opts', () => {
       expect(s(cands[2], ref, { beta: 1 })).toBe(1 / 3);
+    });
+
+    test.each([
+      1,
+      2,
+      Number.POSITIVE_INFINITY,
+    ])('should give repeated skip-bigram identity a perfect score with maxSkip=%s', (maxSkip) => {
+      expect(s('a a a', 'a a a', { maxSkip })).toBe(1);
+    });
+
+    test.each([
+      [0, 1 / 2],
+      [1, 2 / 3],
+      [Number.POSITIVE_INFINITY, 1],
+    ])('should clip repeated skip-bigram matches with beta=%s', (beta, expected) => {
+      expect(s('a a a a', 'a a a', { beta })).toBeCloseTo(expected);
+    });
+
+    test('should use the bounded skip-bigram counts as denominators', () => {
+      expect(s('a a a a', 'a a a', { maxSkip: 2 })).toBeCloseTo(3 / 4);
+    });
+
+    test('should preserve the zero-window behavior', () => {
+      expect(s('a b', 'a b', { maxSkip: 0 })).toBe(0);
     });
 
     test('should respect maxSkip option', () => {

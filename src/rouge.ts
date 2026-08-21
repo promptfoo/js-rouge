@@ -22,7 +22,7 @@ export interface RougeSOptions {
   beta?: number;
   /** Whether comparison is case-sensitive (default: true) */
   caseSensitive?: boolean;
-  /** Maximum skip distance between words (default: Infinity) */
+  /** Maximum token index distance (1 includes adjacent words; default: Infinity) */
   maxSkip?: number;
   /** Custom skip-bigram generator function */
   skipBigram?: (tokens: string[], maxSkip?: number) => string[];
@@ -42,6 +42,23 @@ export interface RougeLOptions {
   segmenter?: (input: string) => string[];
   /** Custom string tokenizer */
   tokenizer?: (input: string) => string[];
+}
+
+function countMatchingGrams(candidate: string[], reference: string[]): number {
+  const remaining = new Map<string, number>();
+  for (const gram of reference) {
+    remaining.set(gram, (remaining.get(gram) ?? 0) + 1);
+  }
+
+  let matches = 0;
+  for (const gram of candidate) {
+    const count = remaining.get(gram) ?? 0;
+    if (count > 0) {
+      matches++;
+      remaining.set(gram, count - 1);
+    }
+  }
+  return matches;
 }
 
 /**
@@ -91,14 +108,14 @@ export function n(cand: string, ref: string, opts?: RougeNOptions): number {
   const candGrams = options.nGram(options.tokenizer(candText), options.n);
   const refGrams = options.nGram(options.tokenizer(refText), options.n);
 
-  const match = utils.intersection(candGrams, refGrams);
+  const matches = countMatchingGrams(candGrams, refGrams);
 
-  if (match.length === 0) {
+  if (matches === 0) {
     return 0;
   }
 
-  const precision = match.length / candGrams.length;
-  const recall = match.length / refGrams.length;
+  const precision = matches / candGrams.length;
+  const recall = matches / refGrams.length;
 
   return utils.fMeasure(precision, recall, options.beta);
 }
@@ -111,7 +128,7 @@ export function n(cand: string, ref: string, opts?: RougeNOptions): number {
  * {
  * 	beta: 1.0                           // The beta value used for the f-measure
  * 	caseSensitive: true                 // Whether comparison is case-sensitive
- * 	maxSkip: Infinity                   // Maximum skip distance between words
+ * 	maxSkip: Infinity                   // Maximum token index distance
  * 	skipBigram: <inbuilt function>,     // The skip-bigram generator function
  * 	tokenizer: <inbuilt function>       // The string tokenizer
  * }
@@ -150,7 +167,7 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
   const candGrams = options.skipBigram(options.tokenizer(candText), options.maxSkip);
   const refGrams = options.skipBigram(options.tokenizer(refText), options.maxSkip);
 
-  const skip2 = utils.intersection(candGrams, refGrams).length;
+  const skip2 = countMatchingGrams(candGrams, refGrams);
 
   if (skip2 === 0) {
     return 0;

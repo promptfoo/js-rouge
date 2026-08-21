@@ -256,7 +256,7 @@ export const fact = memoize(factRec);
  *
  * @method skipBigram
  * @param  {Array<string>}    tokens      An array of word tokens
- * @param  {number}           maxSkip     Maximum skip distance between words. Defaults to Infinity (all pairs).
+ * @param  {number}           maxSkip     Maximum token index distance; 1 includes adjacent words. Defaults to Infinity (all pairs).
  * @return {Array<string>}                An array of skip bigram strings
  */
 export function skipBigram(tokens: string[], maxSkip: number = Number.POSITIVE_INFINITY): string[] {
