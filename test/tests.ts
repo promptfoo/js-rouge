@@ -793,11 +793,7 @@ describe('Core Functions', () => {
       expect(s(cands[2], ref, { beta: 1 })).toBe(1 / 3);
     });
 
-    test.each([
-      1,
-      2,
-      Number.POSITIVE_INFINITY,
-    ])('should give repeated skip-bigram identity a perfect score with maxSkip=%s', (maxSkip) => {
+    test.each([1, 2, Number.POSITIVE_INFINITY])('should count repeats at window %s', (maxSkip) => {
       expect(s('a a a', 'a a a', { maxSkip })).toBe(1);
     });
 
