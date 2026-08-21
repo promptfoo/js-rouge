@@ -129,8 +129,8 @@ export function sentenceSegment(input: string): string[] {
         if (chunks[idx + 1] && strIsTitleCase(chunks[idx])) {
           // Catch line breaks embedded within valid sentences
           // i.e. sentences that start with a capital letter
-          // and merge them with a delimiting space
-          chunks[idx + 1] = `${chunks[idx].trim()} ${chunks[idx + 1].replace(/ +/g, ' ')}`;
+          // and normalize every wrap before reprocessing the joined chunk.
+          chunks[idx + 1] = `${chunks[idx]} ${chunks[idx + 1]}`.trim().replace(/\s+/g, ' ');
         } else {
           // Assume that all other embedded line breaks are
           // valid sentence breakpoints

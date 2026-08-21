@@ -412,6 +412,12 @@ describe('Utility Functions', () => {
       expect(ss(`alpha${lineBreak}beta${lineBreak}gamma`)).toEqual(['alpha', 'beta', 'gamma']);
     });
 
+    test.each(lineBreaks)('should join every sentence wrap across %j', (lineBreak) => {
+      expect(ss(`The quick${lineBreak}brown${lineBreak}fox jumps.`)).toEqual([
+        'The quick brown fox jumps.',
+      ]);
+    });
+
     test('should ignore blank separator chunks', () => {
       expect(ss('\nAlpha.\r\n \t\nBeta.\n')).toEqual(['Alpha.', 'Beta.']);
       expect(ss('alpha\n\n \n beta\n')).toEqual(['alpha', 'beta']);
