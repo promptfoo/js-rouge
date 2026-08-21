@@ -122,6 +122,9 @@ describe('Utility Functions', () => {
     test('should return ["2", "3"] for ["1", "2", "3"] and ["2", "3", "5"]', () => {
       expect(lcs(['1', '2', '3'], ['2', '3', '5'])).toEqual(['2', '3']);
     });
+    test('should preserve its choice when multiple longest subsequences exist', () => {
+      expect(lcs(['a', 'b'], ['b', 'a'])).toEqual(['b']);
+    });
     test('should return ["w1", "w3", "w5"] for ["w1", "w2", "w3", "w4", "w5"] and ["w1", "w3", "w8", "w9", "w5"]', () => {
       expect(lcs(['w1', 'w2', 'w3', 'w4', 'w5'], ['w1', 'w3', 'w8', 'w9', 'w5'])).toEqual([
         'w1',
@@ -796,23 +799,79 @@ describe('Core Functions', () => {
       expect(l(cands[2], ref, { beta: 1 })).toBe(2 / 4);
     });
 
+    const identitySummaries = ['a a a', 'the cat sat on the mat', 'Alpha. Beta.'];
+    test.each(identitySummaries)('should give identical summaries a perfect score: %s', (text) => {
+      expect(l(text, text)).toBe(1);
+    });
+
+    test('should union reference positions instead of repeated token values', () => {
+      const tokenizer = (text: string): string[] => text.split(/[| ]+/);
+      const segmenter = (text: string): string[] => text.split('|');
+      expect(l('a b|a', 'a b a', { tokenizer, segmenter })).toBe(1);
+    });
+
+    test('should credit each reference position only once across candidate sentences', () => {
+      const tokenizer = (text: string): string[] => text.split(/[| ]+/);
+      const segmenter = (text: string): string[] => text.split('|');
+      expect(l('a|a', 'a b', { tokenizer, segmenter })).toBeCloseTo(1 / 2);
+    });
+
+    test.each([
+      ['cat dog fish', 2 / 5],
+      ['cat', 2 / 3],
+    ] as const)('should clip candidate reuse: %s', (text, expected) => {
+      const tokenizer = (input: string): string[] => input.match(/[A-Za-z]+/g) || [];
+      expect(l(text, 'cat. cat.', { tokenizer })).toBeCloseTo(expected);
+    });
+
+    test.each([true, false])('keeps boundaries with caseSensitive=%s', (caseSensitive) => {
+      const tokenizer = (text: string): string[] => text.match(/[A-Za-z]+/g) || [];
+      const first = 'Alpha works at Acme Co. Beta sleeps near Luna Inc.';
+      const second = 'Beta sleeps near Luna Inc. Alpha works at Acme Co.';
+      expect(l(first, second, { tokenizer, caseSensitive })).toBe(1);
+    });
+
+    test('should preserve custom callbacks and normalize only after segmentation', () => {
+      const segmenter = jest.fn((text: string): string[] => text.split('|'));
+      const tokenizer = jest.fn((text: string): string[] => text.split(' '));
+      const customLcs = jest.fn((a: string[], b: string[]): string[] => rouge.lcs(a, b));
+      expect(
+        l('A A|B', 'A A B', { segmenter, tokenizer, lcs: customLcs, caseSensitive: false }),
+      ).toBe(1);
+      expect(segmenter).toHaveBeenCalledWith('A A|B');
+      expect(tokenizer).toHaveBeenCalledWith('a a');
+      expect(customLcs).toHaveBeenCalledWith(['a', 'a'], ['a', 'a', 'b']);
+    });
+
+    test('should use the subsequence selected by a custom LCS callback', () => {
+      const customLcs = (): string[] => ['b'];
+      expect(l('a b', 'a b', { lcs: customLcs })).toBeCloseTo(1 / 2);
+    });
+
+    test('should preserve repeated occurrences returned by a custom LCS callback', () => {
+      const customLcs = (): string[] => ['a', 'a'];
+      expect(l('a a a', 'a a', { lcs: customLcs })).toBeCloseTo(4 / 5);
+    });
+
+    test('should return zero when custom tokenization removes every token', () => {
+      expect(l('a', 'b', { tokenizer: () => [] })).toBe(0);
+    });
+
     test('should compute union LCS across all candidate sentences', () => {
-      // This test verifies the fix for the Set spread bug
-      // Multiple candidate sentences should all contribute to the LCS union
       const multiSentCand = 'The cat sat. The dog ran. The bird flew.';
       const multiSentRef = 'The cat sat on the mat.';
       const score = l(multiSentCand, multiSentRef, { beta: 1 });
-      // All three candidate sentences have "The" which should contribute
-      expect(score).toBeGreaterThan(0);
+      // Four matched reference positions, twelve candidate tokens, seven reference tokens.
+      expect(score).toBeCloseTo(8 / 19);
     });
 
     test('should handle multi-sentence summaries correctly', () => {
       // Candidate has words spread across multiple sentences
       const cand = 'Police arrived. They killed the gunman.';
       const reference = 'police killed the gunman';
-      const score = l(cand, reference, { beta: 1 });
+      const score = l(cand, reference, { beta: 1, caseSensitive: false });
       // LCS should find matches from both candidate sentences
-      expect(score).toBeGreaterThan(0);
+      expect(score).toBeCloseTo(2 / 3);
     });
 
     test('should correctly distinguish precision from recall', () => {

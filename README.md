@@ -75,6 +75,12 @@ const candidate = "police kill the gunman";
 rougeL(candidate, reference); // => 0.75
 ```
 
+`l()` computes summary-level union LCS (called `rougeLsum` in Google's ROUGE package). It unions matched reference-token positions across candidate sentences and clips credit to the candidate's token counts. Sentence tokenization supplies both the matches and their denominators. Case-insensitive comparison preserves sentence boundaries by applying case folding after segmentation.
+
+The exported `lcs(a, b)` utility still returns token values. A custom `lcs` callback must return an ordered token subsequence; its values are aligned to successive reference occurrences from left to right. The built-in implementation retains the exact reference positions from its LCS alignment.
+
+These corrections change ROUGE-L scores for repeated words and multi-sentence summaries. Rerun evaluation baselines when comparing versions.
+
 ### ROUGE-S Example
 
 ```javascript

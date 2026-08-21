@@ -1,3 +1,4 @@
+import { lcsIndices } from './lcs';
 import * as utils from './utils';
 
 export * from './utils';
@@ -36,7 +37,7 @@ export interface RougeLOptions {
   beta?: number;
   /** Whether comparison is case-sensitive (default: true) */
   caseSensitive?: boolean;
-  /** Custom LCS function */
+  /** Custom LCS function returning an ordered token subsequence */
   lcs?: (a: string[], b: string[]) => string[];
   /** Custom sentence segmenter */
   segmenter?: (input: string) => string[];
@@ -169,7 +170,7 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
  * {
  * 	beta: 1.0                           // The beta value used for the f-measure
  * 	caseSensitive: true                 // Whether comparison is case-sensitive
- * 	lcs: <inbuilt function>             // The least common subsequence function
+ * 	lcs: <inbuilt function>             // The longest common subsequence function
  * 	segmenter: <inbuilt function>,      // The sentence segmenter
  * 	tokenizer: <inbuilt function>       // The string tokenizer
  * }
@@ -203,36 +204,69 @@ export function l(cand: string, ref: string, opts?: RougeLOptions): number {
     ...opts,
   };
 
-  const candText = options.caseSensitive ? cand : cand.toLowerCase();
-  const refText = options.caseSensitive ? ref : ref.toLowerCase();
+  const tokenizeSentence = (sentence: string): string[] =>
+    options.tokenizer(options.caseSensitive ? sentence : sentence.toLowerCase());
+  const candSents = options.segmenter(cand).map(tokenizeSentence);
+  const refSents = options.segmenter(ref).map(tokenizeSentence);
 
-  const candSents = options.segmenter(candText);
-  const refSents = options.segmenter(refText);
-
-  const candWords = options.tokenizer(candText);
-  const refWords = options.tokenizer(refText);
-
-  const lcsAcc = refSents.map((r) => {
-    const rTokens = options.tokenizer(r);
-    const lcsUnion = new Set(candSents.flatMap((c) => options.lcs(options.tokenizer(c), rTokens)));
-
-    return lcsUnion.size;
-  });
-
-  // Sum the array as quickly as we can
-  let lcsSum = 0;
-  while (lcsAcc.length > 0) {
-    lcsSum += lcsAcc.pop() || 0;
+  const remaining = new Map<string, number>();
+  let candLength = 0;
+  for (const sentence of candSents) {
+    for (const token of sentence) {
+      candLength++;
+      remaining.set(token, (remaining.get(token) ?? 0) + 1);
+    }
   }
+  const refLength = refSents.reduce((total, sentence) => total + sentence.length, 0);
 
-  if (lcsSum === 0) {
+  if (candLength === 0 || refLength === 0) {
     return 0;
   }
 
-  // Recall = LCS / |reference| (how much of reference is captured)
-  // Precision = LCS / |candidate| (how precise is the candidate)
-  const lcsRecall = lcsSum / refWords.length;
-  const lcsPrec = lcsSum / candWords.length;
+  let matches = 0;
+  for (const reference of refSents) {
+    const union = new Set<number>();
+    for (const candidate of candSents) {
+      for (const index of matchedReferenceIndices(candidate, reference, options.lcs)) {
+        union.add(index);
+      }
+    }
 
-  return utils.fMeasure(lcsPrec, lcsRecall, options.beta);
+    // Each reference position counts once, and candidate occurrences cannot be reused.
+    for (const index of union) {
+      const token = reference[index];
+      const count = remaining.get(token) ?? 0;
+      if (count > 0) {
+        matches++;
+        remaining.set(token, count - 1);
+      }
+    }
+  }
+
+  if (matches === 0) {
+    return 0;
+  }
+  return utils.fMeasure(matches / candLength, matches / refLength, options.beta);
+}
+
+function matchedReferenceIndices(
+  candidate: string[],
+  reference: string[],
+  getLcs: (a: string[], b: string[]) => string[],
+): number[] {
+  if (getLcs === utils.lcs) {
+    return lcsIndices(candidate, reference);
+  }
+
+  // The public callback returns values, so align them to successive reference occurrences.
+  const indices: number[] = [];
+  let next = 0;
+  for (const token of getLcs(candidate, reference)) {
+    const index = reference.indexOf(token, next);
+    if (index !== -1) {
+      indices.push(index);
+      next = index + 1;
+    }
+  }
+  return indices;
 }
