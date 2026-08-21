@@ -18,7 +18,9 @@ import { GATE_EXCEPTIONS, GATE_SUBSTITUTIONS, TREEBANK_CONTRACTIONS } from './co
  * @return {Array<string>}              An array of word tokens
  */
 export function treeBankTokenize(input: string): string[] {
-  if (input.length === 0) {
+  // Contraction rules below expect spaces, including at word boundaries.
+  const text = input.trim().replace(/\s+/g, ' ');
+  if (text.length === 0) {
     return [];
   }
 
@@ -34,7 +36,7 @@ export function treeBankTokenize(input: string): string[] {
   // 6. Wrap spaces around all exclamation marks and question marks
   // 7. Wrap spaces around opening and closing brackets
   // 8. Wrap spaces around en and em-dashes
-  let parse = input
+  let parse = text
     .replace(/^"/, ' `` ')
     .replace(/([ ([{<])"/g, '$1 `` ')
     .replace(/\.\.\.*/g, ' ... ')
@@ -71,6 +73,10 @@ export function treeBankTokenize(input: string): string[] {
   return parse.split(' ');
 }
 
+function escapeRegExp(input: string): string {
+  return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 /**
  * Splits a body of text into an array of sentences
  * using a rule-based segmentation approach.
@@ -88,13 +94,16 @@ export function sentenceSegment(input: string): string[] {
     return [];
   }
 
-  const abbrvReg = new RegExp(`\\b(${GATE_SUBSTITUTIONS.join('|')})[.!?] ?$`, 'i');
+  const abbrvReg = new RegExp(
+    `\\b(${GATE_SUBSTITUTIONS.map(escapeRegExp).join('|')})[.!?] ?$`,
+    'i',
+  );
   const acronymReg = new RegExp(/[ |.][A-Z].?$/, 'i');
-  const breakReg = new RegExp(/[\r\n]+/, 'g');
+  const breakReg = /[\r\n]+/;
   // Match 2-10 dots at end of string (ellipsis pattern)
   // Using bounded {2,10} quantifier to avoid ReDoS with extremely long dot sequences
   const ellipseReg = /\.{2,10}$/;
-  const excepReg = new RegExp(`\\b(${GATE_EXCEPTIONS.join('|')})[.!?] ?$`, 'i');
+  const excepReg = new RegExp(`\\b(${GATE_EXCEPTIONS.map(escapeRegExp).join('|')})[.!?] ?$`, 'i');
 
   // Split sentences naively based on common terminals (.?!")
   // Pattern uses a "tempered greedy token" to avoid ReDoS:
@@ -111,6 +120,11 @@ export function sentenceSegment(input: string): string[] {
       // Note: Using separate replacements instead of alternation to avoid ReDoS
       chunks[idx] = chunks[idx].replace(/^ +/, '').replace(/ +$/, '');
 
+      // Separators are not sentences and have no character to test for titlecase.
+      if (chunks[idx].trim().length === 0) {
+        continue;
+      }
+
       if (breakReg.test(chunks[idx])) {
         if (chunks[idx + 1] && strIsTitleCase(chunks[idx])) {
           // Catch line breaks embedded within valid sentences
@@ -120,7 +134,12 @@ export function sentenceSegment(input: string): string[] {
         } else {
           // Assume that all other embedded line breaks are
           // valid sentence breakpoints
-          acc.push(...chunks[idx].trim().split('\n'));
+          for (const line of chunks[idx].split(breakReg)) {
+            const sentence = line.trim();
+            if (sentence.length > 0) {
+              acc.push(sentence);
+            }
+          }
         }
       } else if (chunks[idx + 1] && abbrvReg.test(chunks[idx])) {
         const nextChunk = chunks[idx + 1];
@@ -134,17 +153,24 @@ export function sentenceSegment(input: string): string[] {
           chunks[idx + 1] = `${chunks[idx]} ${nextChunk.replace(/ +/g, ' ')}`;
         }
       } else if (chunks[idx].length > 1 && chunks[idx + 1] && acronymReg.test(chunks[idx])) {
-        const words = chunks[idx].split(' ');
-        const lastWord = words.at(-1)!;
+        const words = chunks[idx].split(/\s+/);
+        const lastWord = words.at(-1) ?? '';
 
         if (lastWord === lastWord.toLowerCase()) {
           // Catch small-letter abbreviations and merge them.
           chunks[idx + 1] = `${chunks[idx]} ${chunks[idx + 1].replace(/ +/g, ' ')}`;
-        } else if (chunks[idx + 2]) {
-          if (strIsTitleCase(words.at(-2)!) && strIsTitleCase(chunks[idx + 2])) {
+        } else {
+          // The next sentence may be a captured chunk or an unterminated tail.
+          const nextIdx = chunks[idx + 2] ? idx + 2 : idx + 1;
+          const previousWord = words.at(-2);
+          if (previousWord && strIsTitleCase(previousWord) && strIsTitleCase(chunks[nextIdx])) {
             // Catch name abbreviations (e.g. Albert I. Jones) by checking if
             // the previous and next words are all capitalized.
-            chunks[idx + 2] = chunks[idx] + chunks[idx + 1].replace(/ +/g, ' ') + chunks[idx + 2];
+            const suffix =
+              nextIdx === idx + 2
+                ? chunks[idx + 1].replace(/ +/g, ' ') + chunks[nextIdx]
+                : ` ${chunks[nextIdx].trim()}`;
+            chunks[nextIdx] = chunks[idx] + suffix;
           } else {
             // Assume that remaining entities are indeed end-of-sentence markers.
             acc.push(chunks[idx]);
@@ -173,7 +199,7 @@ export function sentenceSegment(input: string): string[] {
  */
 export function strIsTitleCase(input: string): boolean {
   const firstChar = input.trim().slice(0, 1);
-  return charIsUpperCase(firstChar);
+  return firstChar.length > 0 && charIsUpperCase(firstChar);
 }
 
 /**

@@ -68,10 +68,10 @@ export interface RougeLOptions {
  * @return {number}                 The ROUGE-N F-score
  */
 export function n(cand: string, ref: string, opts?: RougeNOptions): number {
-  if (cand.length === 0) {
+  if (cand.trim().length === 0) {
     throw new RangeError('Candidate cannot be an empty string');
   }
-  if (ref.length === 0) {
+  if (ref.trim().length === 0) {
     throw new RangeError('Reference cannot be an empty string');
   }
 
@@ -127,10 +127,10 @@ export function n(cand: string, ref: string, opts?: RougeNOptions): number {
  * @return {number}                 The ROUGE-S score
  */
 export function s(cand: string, ref: string, opts?: RougeSOptions): number {
-  if (cand.length === 0) {
+  if (cand.trim().length === 0) {
     throw new RangeError('Candidate cannot be an empty string');
   }
-  if (ref.length === 0) {
+  if (ref.trim().length === 0) {
     throw new RangeError('Reference cannot be an empty string');
   }
 
@@ -186,10 +186,10 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
  * @return {number}                 The ROUGE-L score
  */
 export function l(cand: string, ref: string, opts?: RougeLOptions): number {
-  if (cand.length === 0) {
+  if (cand.trim().length === 0) {
     throw new RangeError('Candidate cannot be an empty string');
   }
-  if (ref.length === 0) {
+  if (ref.trim().length === 0) {
     throw new RangeError('Reference cannot be an empty string');
   }
 

@@ -1,14 +1,14 @@
 export const TREEBANK_CONTRACTIONS: RegExp[] = [
-  /\b(can)(not)\b/i,
-  /\b(d)('ye)\b/i,
-  /\b(gim)(me)\b/i,
-  /\b(gon)(na)\b/i,
-  /\b(got)(ta)\b/i,
-  /\b(lem)(me)\b/i,
-  /\b(more)('n)\b/i,
-  /\b(wan)(na) /i,
-  / ('t)(is)\b/i,
-  / ('t)(was)\b/i,
+  /\b(can)(not)\b/gi,
+  /\b(d)('ye)\b/gi,
+  /\b(gim)(me)\b/gi,
+  /\b(gon)(na)\b/gi,
+  /\b(got)(ta)\b/gi,
+  /\b(lem)(me)\b/gi,
+  /\b(more)('n)\b/gi,
+  /\b(wan)(na) /gi,
+  / ('t)(is)\b/gi,
+  / ('t)(was)\b/gi,
 ];
 
 export const HONORIFICS: string[] = [

@@ -133,6 +133,16 @@ rougeN("Hello World", "hello world", { caseSensitive: false }); // => 1.0
 | `tokenizer`     | function | Penn Treebank | Custom tokenizer function            |
 | `skipBigram`    | function | built-in      | Custom skip-bigram generator         |
 
+### Text Preprocessing
+
+The default tokenizer treats spaces, tabs, line breaks, and other whitespace as word separators. It returns no tokens for whitespace-only text and expands every occurrence of supported contractions. Punctuation remains part of the token stream.
+
+The default sentence segmenter handles LF, CRLF, and CR line endings and ignores blank separator chunks. Abbreviations such as `e.g.` are matched literally, and sentences ending in an initial or acronym are retained even when the following fragment has no punctuation.
+
+The scoring functions reject empty or whitespace-only candidate/reference summaries with `RangeError`. Existing minimum-token requirements still apply: ROUGE-N needs at least `n` tokens, and ROUGE-S needs at least two. The standalone `sentenceSegment` utility retains its single-sentence fallback for whitespace-only input.
+
+These preprocessing corrections can change scores for affected inputs. Keep the same tokenizer and segmenter configuration when comparing evaluation runs across versions.
+
 ### Limitations
 
 - **English-centric tokenizer**: The default Penn Treebank tokenizer is designed for English text. For other languages, provide a custom `tokenizer` function that appropriately segments text in your target language.
