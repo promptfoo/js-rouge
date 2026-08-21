@@ -441,10 +441,20 @@ describe('Utility Functions', () => {
       const TIMEOUT_MS = 500;
 
       test('should handle long strings without sentence terminators quickly', () => {
-        const input = 'a'.repeat(10_000);
+        const input = 'a'.repeat(64_000);
         const start = Date.now();
-        ss(input);
+        const sentences = ss(input);
         const elapsed = Date.now() - start;
+        expect(sentences).toEqual([input]);
+        expect(elapsed).toBeLessThan(TIMEOUT_MS);
+      });
+
+      test('should trim long chunks without rescanning internal spaces', () => {
+        const input = `prefix${' '.repeat(64_000)}suffix.`;
+        const start = Date.now();
+        const sentences = ss(`  ${input}  `);
+        const elapsed = Date.now() - start;
+        expect(sentences).toEqual([input]);
         expect(elapsed).toBeLessThan(TIMEOUT_MS);
       });
 
@@ -496,6 +506,10 @@ describe('Utility Functions', () => {
         expect(ss('just some text without any ending')).toEqual([
           'just some text without any ending',
         ]);
+      });
+
+      test('should retain unmatched fragments around line breaks', () => {
+        expect(ss('intro\nAlpha. Beta.\ntail')).toEqual(['intro', 'Alpha.', 'Beta.', 'tail']);
       });
 
       test('should handle whitespace-only input', () => {
