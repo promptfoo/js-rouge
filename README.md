@@ -61,7 +61,7 @@ rougeN(candidate, reference, { n: 1 }); // => 1.0
 rougeN(candidate, reference, { n: 2 }); // => 1.0
 
 // With partial match
-rougeN("the cat sat", "the cat sat on the mat", { n: 1 }); // => 0.75
+rougeN("the cat sat", "the cat sat on the mat", { n: 1 }); // => 2/3
 ```
 
 ### ROUGE-L Example
@@ -129,9 +129,13 @@ rougeN("Hello World", "hello world", { caseSensitive: false }); // => 1.0
 | --------------- | -------- | ------------- | ------------------------------------ |
 | `beta`          | number   | `1.0`         | F-measure weight                     |
 | `caseSensitive` | boolean  | `true`        | Whether comparison is case-sensitive |
-| `maxSkip`       | number   | `Infinity`    | Maximum skip distance between words  |
+| `maxSkip`       | number   | `Infinity`    | Maximum token index distance         |
 | `tokenizer`     | function | Penn Treebank | Custom tokenizer function            |
 | `skipBigram`    | function | built-in      | Custom skip-bigram generator         |
+
+`maxSkip` measures the distance between token indices: `1` includes adjacent pairs, and `2` allows one intervening token. A value of `0` produces no pairs. To match a maximum gap of `d` intervening words in the ROUGE paper or Perl implementation, use `maxSkip: d + 1`. The default `Infinity` considers all in-order token pairs.
+
+ROUGE-N and ROUGE-S count repeated matching grams up to the smaller of their frequencies in the candidate and reference. Correcting earlier versions' set-based counting changes scores for repeated grams; rerun evaluation baselines when comparing versions.
 
 ### Limitations
 
