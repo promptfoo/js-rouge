@@ -1,5 +1,19 @@
 # Changelog
 
+## [3.2.1](https://github.com/promptfoo/js-rouge/compare/js-rouge-v3.2.0...js-rouge-v3.2.1) (2026-08-22)
+
+
+### Bug Fixes
+
+* correct summary-level ROUGE-L scoring ([#117](https://github.com/promptfoo/js-rouge/issues/117)) ([c67bf3e](https://github.com/promptfoo/js-rouge/commit/c67bf3ef4b5fc3e6ad2423d494e3d8b06146e0e6))
+* correct tokenization and sentence preprocessing ([#118](https://github.com/promptfoo/js-rouge/issues/118)) ([972cf08](https://github.com/promptfoo/js-rouge/commit/972cf08362a33dc2f34238d67b2a550bd8f2d1b4))
+* preserve repeated matches in ROUGE-N and ROUGE-S ([#116](https://github.com/promptfoo/js-rouge/issues/116)) ([39996a9](https://github.com/promptfoo/js-rouge/commit/39996a9aa508a02adfc79ecab2d06f02eea4e45d))
+* preserve token boundaries in internal gram keys ([#125](https://github.com/promptfoo/js-rouge/issues/125)) ([f660f77](https://github.com/promptfoo/js-rouge/commit/f660f7733cf25a957ee08f27d4aceacf560a8947))
+* prevent sentence segmentation heap exhaustion ([#122](https://github.com/promptfoo/js-rouge/issues/122)) ([1a720fd](https://github.com/promptfoo/js-rouge/commit/1a720fdba366d7c37fe8d299342c25317bcebdef))
+* scan sentence boundaries in one pass ([#119](https://github.com/promptfoo/js-rouge/issues/119)) ([1d5aad2](https://github.com/promptfoo/js-rouge/commit/1d5aad25ee109a3f467208a582ef1dc3cd8555ce))
+* tokenize summaries consistently and preserve punctuation boundaries ([#123](https://github.com/promptfoo/js-rouge/issues/123)) ([fb5cb45](https://github.com/promptfoo/js-rouge/commit/fb5cb45dabcc9b9340a1621f8bf6d571898a895a))
+* validate metric options and stabilize F-beta arithmetic ([#124](https://github.com/promptfoo/js-rouge/issues/124)) ([f745365](https://github.com/promptfoo/js-rouge/commit/f74536511ffc466a42d6103ed7dfa6cf5d1cb858))
+
 ## [3.2.0](https://github.com/promptfoo/js-rouge/compare/js-rouge-v3.1.5...js-rouge-v3.2.0) (2026-01-05)
 
 
