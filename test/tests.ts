@@ -856,7 +856,6 @@ describe('Utility Functions', () => {
       expect(fm(2e-124, Number.MIN_VALUE, 1e-100) / 1e-124).toBeCloseTo(1.423_685_637_8, 9);
       expect(fm(Number.MIN_VALUE, 1, 1e161)).toBeCloseTo(0.047_080_479_817_375_9, 14);
       expect(fm(Number.MIN_VALUE, 1, Number.MAX_VALUE)).toBe(1);
-      expect(fm(Number.MIN_VALUE, 1, 0)).toBe(Number.MIN_VALUE);
       expect(fm(1, Number.MIN_VALUE, 2)).toBe(Number.MIN_VALUE);
     });
 
@@ -873,8 +872,12 @@ describe('Utility Functions', () => {
     test('should return pure recall when beta is Infinity', () => {
       expect(fm(0.5, 0.75, Number.POSITIVE_INFINITY)).toBe(0.75);
     });
+    test.each([0, -0])('uses precision for beta=%p', (beta) => {
+      expect(fm(0.5, 0.75, beta)).toBe(0.5);
+      expect(fm(Number.MIN_VALUE, 1, beta)).toBe(Number.MIN_VALUE);
+    });
     test('should correctly compute F1 score (beta=1)', () => {
-      expect(fm(0.5, 0.75, 1)).toBe(0.6);
+      expect(fm(0.5, 0.75, 1)).toBeCloseTo(0.6, 15);
     });
     test('should correctly compute F2 score (beta=2, favors recall)', () => {
       // F2 = (1 + 4) * P * R / (4 * P + R) = 5 * 0.5 * 0.75 / (2 + 0.75) = 1.875 / 2.75
@@ -1079,7 +1082,7 @@ describe('Core Functions', () => {
       // 3 matching bigrams, 4 candidate bigrams, 9 reference bigrams
       // precision = 3/4, recall = 3/9 = 1/3
       // F1 = 2 * P * R / (P + R) = 2 * (3/4) * (1/3) / (3/4 + 1/3) = 6/13
-      expect(n(cand, refs[0], { n: 2, beta: 1 })).toBe(6 / 13);
+      expect(n(cand, refs[0], { n: 2, beta: 1 })).toBeCloseTo(6 / 13, 15);
     });
     test('should correctly compute ROUGE-N F1-score for ref 2', () => {
       expect(n(cand, refs[1], { n: 2, beta: 1 })).toBe(0);

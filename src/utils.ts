@@ -636,30 +636,15 @@ export function fMeasure(p: number, r: number, beta = 1.0): number {
     return 0;
   }
 
-  if (p < 2 ** -1022 || r < 2 ** -1022) {
-    return subnormalFMeasure(p, r, beta);
+  if (beta === 0) {
+    return p;
   }
 
-  // Divide by beta² for large beta, and divide before multiplying P by R.
-  // This avoids overflow of beta² and underflow of the precision-recall product.
-  if (beta > 1) {
-    const inverseBeta = 1 / beta;
-    const inverseBetaSq = inverseBeta * inverseBeta;
-    return (1 + inverseBetaSq) * r * (p / (p + inverseBetaSq * r));
-  }
-  const betaSq = beta * beta;
-  return (1 + betaSq) * p * (r / (betaSq * p + r));
-}
-
-/** Keep subnormal inputs out of products that determine the denominator's ratio. */
-function subnormalFMeasure(p: number, r: number, beta: number): number {
   // F-beta(P, R) = F-(1/beta)(R, P). This keeps the weight at least one.
   if (beta < 1) {
-    return subnormalFMeasure(r, p, 1 / beta);
+    return fMeasure(r, p, 1 / beta);
   }
-  if (beta === Number.POSITIVE_INFINITY) {
-    return r;
-  }
+  // Scale by the smaller score instead of multiplying precision and recall.
   if (p > r) {
     const inverseBeta = 1 / beta;
     const weight = inverseBeta * inverseBeta;
