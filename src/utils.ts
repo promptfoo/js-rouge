@@ -1,5 +1,6 @@
 import { GATE_EXCEPTIONS, GATE_SUBSTITUTIONS, TREEBANK_CONTRACTIONS } from './constants';
 import { lcsIndices } from './lcs';
+import { validateBeta, validateMaxSkip, validateNGramSize } from './validation';
 
 /**
  * Splits a sentence into an array of word tokens
@@ -471,6 +472,7 @@ export const fact = memoize(factRec);
  * @return {Array<string>}                An array of skip bigram strings
  */
 export function skipBigram(tokens: string[], maxSkip: number = Number.POSITIVE_INFINITY): string[] {
+  validateMaxSkip(maxSkip);
   if (tokens.length < 2) {
     throw new RangeError('Input must have at least two words');
   }
@@ -508,9 +510,7 @@ export const NGRAM_DEFAULT_OPTS: NGramOptions = {
  * @return {Array<string>}                    An array of n-gram strings
  */
 export function nGram(tokens: string[], n = 2, pad: Partial<NGramOptions> = {}): string[] {
-  if (n < 1) {
-    throw new RangeError('ngram size cannot be smaller than 1');
-  }
+  validateNGramSize(n);
 
   if (tokens.length < n) {
     throw new RangeError('ngram size cannot be larger than the number of tokens available');
@@ -519,7 +519,11 @@ export function nGram(tokens: string[], n = 2, pad: Partial<NGramOptions> = {}):
   let workingTokens = tokens;
 
   if (Object.keys(pad).length > 0) {
-    const config = { ...NGRAM_DEFAULT_OPTS, ...pad };
+    const config = {
+      start: pad.start ?? NGRAM_DEFAULT_OPTS.start,
+      end: pad.end ?? NGRAM_DEFAULT_OPTS.end,
+      val: pad.val ?? NGRAM_DEFAULT_OPTS.val,
+    };
 
     // Clone the input token array to avoid mutating the source data
     const tempTokens = tokens.slice(0);
@@ -632,31 +636,34 @@ export function jackKnife(
  * @return {number}             Computed f-score
  */
 export function fMeasure(p: number, r: number, beta = 1.0): number {
-  if (p < 0 || p > 1) {
+  if (!Number.isFinite(p) || p < 0 || p > 1) {
     throw new RangeError('Precision value p must have bounds 0 ≤ p ≤ 1');
   }
-  if (r < 0 || r > 1) {
+  if (!Number.isFinite(r) || r < 0 || r > 1) {
     throw new RangeError('Recall value r must have bounds 0 ≤ r ≤ 1');
   }
-  if (beta < 0) {
-    throw new RangeError('beta value must be >= 0');
-  }
+  validateBeta(beta);
 
   // Handle special cases
-  if (p === 0 && r === 0) {
-    return 0;
+  if (p === r) {
+    return p;
   }
-  if (!Number.isFinite(beta)) {
+  if (beta === Number.POSITIVE_INFINITY) {
     return r; // β → ∞ means pure recall
   }
-
-  const betaSq = beta * beta;
-  const denominator = betaSq * p + r;
-  if (denominator === 0) {
+  if (p === 0 || r === 0) {
     return 0;
   }
 
-  return ((1 + betaSq) * p * r) / denominator;
+  // Divide by beta² for large beta, and divide before multiplying P by R.
+  // This avoids overflow of beta² and underflow of the precision-recall product.
+  if (beta > 1) {
+    const inverseBeta = 1 / beta;
+    const inverseBetaSq = inverseBeta * inverseBeta;
+    return (1 + inverseBetaSq) * r * (p / (p + inverseBetaSq * r));
+  }
+  const betaSq = beta * beta;
+  return (1 + betaSq) * p * (r / (betaSq * p + r));
 }
 
 /**

@@ -151,6 +151,15 @@ describe('Utility Functions', () => {
       expect(() => nGram(data, 5)).toThrow(RangeError);
     });
 
+    test.each([
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      1.5,
+    ])('should reject non-integer ngram size %s', (size) => {
+      expect(() => nGram(data, size)).toThrow(RangeError);
+    });
+
     test("should return ['a', 'b', 'c', 'd'] for n = 1", () => {
       expect(nGram(data, 1)).toEqual(['a', 'b', 'c', 'd']);
     });
@@ -199,6 +208,16 @@ describe('Utility Functions', () => {
         'a b c d',
       ]);
     });
+
+    test('should default undefined padding fields without changing false', () => {
+      expect(nGram(data, 2, { start: true, end: false, val: undefined })).toEqual([
+        '<S> a',
+        'a b',
+        'b c',
+        'c d',
+      ]);
+      expect(nGram(data, 2, { start: undefined, end: undefined })).toEqual(nGram(data, 2));
+    });
   });
 
   describe('skipBigram', () => {
@@ -209,6 +228,16 @@ describe('Utility Functions', () => {
 
     test('should throw RangeError for inputs with insufficient words', () => {
       expect(() => sb(['a'])).toThrow(RangeError);
+    });
+
+    test.each([
+      Number.NaN,
+      Number.NEGATIVE_INFINITY,
+      -1,
+      0.5,
+      1.5,
+    ])('should reject invalid maxSkip %s', (maxSkip) => {
+      expect(() => sb(data, maxSkip)).toThrow(RangeError);
     });
 
     test('should return the correct result', () => {
@@ -773,6 +802,40 @@ describe('Utility Functions', () => {
   describe('fMeasure', () => {
     const fm = rouge.fMeasure;
 
+    test.each([
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+    ])('should reject non-finite precision and recall %s', (value) => {
+      expect(() => fm(value, 0.5)).toThrow(RangeError);
+      expect(() => fm(0.5, value)).toThrow(RangeError);
+    });
+
+    test.each([
+      Number.NaN,
+      Number.NEGATIVE_INFINITY,
+      -1,
+    ])('should reject invalid beta %s even with no matches', (beta) => {
+      expect(() => fm(0, 0, beta)).toThrow(RangeError);
+    });
+
+    test.each([
+      1e154,
+      1e200,
+      Number.MAX_VALUE,
+    ])('should stay finite for large finite beta %s', (beta) => {
+      expect(fm(1, 0.5, beta)).toBeCloseTo(0.5);
+      expect(fm(0.5, 1, beta)).toBeCloseTo(1);
+      expect(fm(0, 0.5, beta)).toBe(0);
+      expect(fm(0.5, 0, beta)).toBe(0);
+    });
+
+    test('should not underflow the precision-recall product', () => {
+      expect(fm(1e-200, 2e-200) / 1e-200).toBeCloseTo(4 / 3);
+      expect(fm(1e-200, 1e-200, 2)).toBe(1e-200);
+      expect(fm(1e-300, 0.5, 1e200)).toBe(0.5);
+    });
+
     test('should throw RangeError for OOB precision input', () => {
       expect(() => fm(10, 0.5)).toThrow(RangeError);
     });
@@ -871,6 +934,41 @@ describe('Core Functions', () => {
     ['ROUGE-L', rouge.l],
   ] as const;
   describe.each(metrics)('%s input handling', (_name, score) => {
+    test('should use defaults for explicitly undefined options', () => {
+      const options = {
+        beta: undefined,
+        caseSensitive: undefined,
+        tokenizer: undefined,
+        n: undefined,
+        nGram: undefined,
+        maxSkip: undefined,
+        skipBigram: undefined,
+        segmenter: undefined,
+        lcs: undefined,
+      };
+      expect(score('A B', 'a b', options)).toBe(0);
+      expect(score('a b c', 'a b d', options)).toBe(score('a b c', 'a b d'));
+    });
+
+    test.each([
+      Number.NaN,
+      Number.NEGATIVE_INFINITY,
+      -1,
+    ])('should validate beta %s before tokenization and zero-overlap returns', (beta) => {
+      const tokenizer = jest.fn((input: string): string[] => input.split(' '));
+      expect(() => score('a b', 'a b', { beta, tokenizer })).toThrow(/beta/);
+      expect(() => score('a b', 'c d', { beta, tokenizer })).toThrow(/beta/);
+      expect(tokenizer).not.toHaveBeenCalled();
+    });
+
+    test('should keep finite large-beta scores and explicit recall mode', () => {
+      expect(score('a b', 'a b c', { beta: 1e200 })).toBe(
+        score('a b', 'a b c', { beta: Number.POSITIVE_INFINITY }),
+      );
+      expect(score('A B C', 'a b', { beta: Number.POSITIVE_INFINITY, caseSensitive: false })).toBe(
+        1,
+      );
+    });
     test('should treat word-separating whitespace consistently', () => {
       expect(score('alpha\tbeta', 'alpha beta')).toBe(1);
       expect(score('alpha\nbeta', 'alpha beta')).toBe(1);
@@ -911,6 +1009,19 @@ describe('Core Functions', () => {
 
   describe('ROUGE-N', () => {
     const { n } = rouge;
+
+    test.each([
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      -1,
+      0,
+      1.5,
+    ])('should validate n=%s before invoking custom generators', (size) => {
+      const nGram = jest.fn((): string[] => []);
+      expect(() => n('a b', 'c d', { n: size, nGram })).toThrow(RangeError);
+      expect(nGram).not.toHaveBeenCalled();
+    });
 
     const cand = 'pulses may ease schizophrenic voices';
     const refs = [
@@ -977,6 +1088,18 @@ describe('Core Functions', () => {
 
   describe('ROUGE-S', () => {
     const { s } = rouge;
+
+    test.each([
+      Number.NaN,
+      Number.NEGATIVE_INFINITY,
+      -1,
+      0.5,
+      1.5,
+    ])('should validate maxSkip=%s before invoking custom generators', (maxSkip) => {
+      const skipBigram = jest.fn((): string[] => []);
+      expect(() => s('a b', 'c d', { maxSkip, skipBigram })).toThrow(RangeError);
+      expect(skipBigram).not.toHaveBeenCalled();
+    });
 
     const ref = 'police killed the gunman';
     const cands = ['police kill the gunman', 'the gunman kill police', 'the gunman police killed'];

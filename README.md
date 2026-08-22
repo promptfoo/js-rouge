@@ -121,6 +121,10 @@ These preprocessing corrections can change scores for multi-sentence summaries, 
 
 ## Options
 
+Omitted options and fields explicitly set to `undefined` use the documented defaults. Explicit `false`, `0`, and `Infinity` values are preserved where supported.
+
+`n` must be a positive integer. `maxSkip` must be a non-negative integer or positive `Infinity`. `beta` must be a non-negative finite number or positive `Infinity`; `NaN` is never valid. Invalid numeric options throw `RangeError` before tokenization or a zero-overlap return, including with custom gram generators. The public `nGram`, `skipBigram`, and `fMeasure` utilities enforce the same numeric contracts, and `fMeasure` requires finite precision and recall in `[0, 1]`. Large finite beta values are evaluated without squaring them into overflow.
+
 ### ROUGE-N Options
 
 | Option          | Type     | Default       | Description                                            |
