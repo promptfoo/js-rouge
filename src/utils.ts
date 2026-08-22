@@ -33,12 +33,12 @@ export function treeBankTokenize(input: string): string[] {
     return insideQuotes ? ' `` ' : " '' ";
   });
 
-  // Preserve numeric commas/colons and only split a sentence-final period.
+  // Preserve numeric separators and acronym dots, even at a heuristic sentence boundary.
   parse = parse
     .replace(/\.\.\.*/g, ' ... ')
     .replace(/[:,](?!\d)/g, ' $& ')
     .replace(/[;@#$%&]/g, ' $& ')
-    .replace(/([^.])(\.)([\])}>'\s]*)$/g, '$1 $2$3 ')
+    .replace(/([^.])(?<!\b[A-Za-z]\.[A-Za-z])(\.)([\])}>'\s]*)$/g, '$1 $2$3 ')
     .replace(/[?!]/g, ' $& ')
     .replace(/[\][(){}<>]/g, ' $& ')
     .replace(/---*/g, ' -- ');
@@ -80,20 +80,12 @@ const breakReg = /[\r\n]+/;
 const ellipseReg = /\.{2,10}$/;
 const excepReg = new RegExp(`\\b(${GATE_EXCEPTIONS.map(escapeRegExp).join('|')})[.!?] ?$`, 'i');
 const sentenceSuffixLength = Math.max(10, ...GATE_SUBSTITUTIONS.map((word) => word.length + 2));
-const geographicAcronymReg = /\b(?:U\.S(?:\.A)?|E\.U)\.$/i;
-// Conservative acronym boundaries follow pragmatic_segmenter's sentence-starter approach:
-// https://github.com/diasks2/pragmatic_segmenter/blob/master/lib/pragmatic_segmenter/languages/common.rb
-const sentenceStarterReg =
-  /^(?:A|Being|Did|For|He|How|However|I|In|It|Millions|More|She|That|The|There|They|We|What|When|Where|Who|Why)\b/;
 const closingDelimiterReg = /[\])}>"']/;
+const openingBracketReg = /[([{<]/;
 const closingBracketReg = /[\])}>]/;
 
 function canEndAfterAbbreviation(suffix: string, next: string): boolean {
-  return (
-    strIsTitleCase(next) &&
-    !excepReg.test(suffix) &&
-    (!geographicAcronymReg.test(suffix) || sentenceStarterReg.test(next.trimStart()))
-  );
+  return strIsTitleCase(next) && !excepReg.test(suffix);
 }
 
 /** Keep merged fragments separate; boundary rules only need a suffix and word casing. */
@@ -300,17 +292,23 @@ function sentenceChunks(input: string): string[] {
   let lastEnd = 0;
   let start = -1;
   let insideQuotes = false;
+  const brackets = { depth: 0, standalone: false };
 
   for (let index = 0; index < input.length; index++) {
     const char = input[index];
     if (char === '"') {
       insideQuotes = opensDoubleQuote(input, index, insideQuotes);
     }
-    if (index < lastEnd) {
-      continue;
+    if (openingBracketReg.test(char)) {
+      if (brackets.depth === 0) {
+        brackets.standalone = start === -1;
+      }
+      brackets.depth++;
+    } else if (closingBracketReg.test(char)) {
+      brackets.depth = Math.max(0, brackets.depth - 1);
     }
-    if (char === '\r' || char === '\n') {
-      // A match cannot cross CR/LF; its prefix remains unmatched text.
+    if (index < lastEnd || char === '\r' || char === '\n') {
+      // Only closing-delimiter lookahead can cross CR/LF; other wraps reset the prefix.
       start = -1;
       continue;
     }
@@ -322,11 +320,12 @@ function sentenceChunks(input: string): string[] {
       continue;
     }
     if (char === '.' || char === '?' || char === '!') {
-      const end = sentenceEnd(input, index, insideQuotes);
+      const end = sentenceEnd(input, index, insideQuotes, brackets);
       if (end === -1) {
         continue;
       }
-      chunks.push(input.slice(lastEnd, start), input.slice(start, end));
+      // Captured line wraps can only occur between the terminal and closing delimiters.
+      chunks.push(input.slice(lastEnd, start), input.slice(start, end).replace(/[\r\n]+/g, ' '));
       lastEnd = end;
       start = -1;
     }
@@ -336,8 +335,8 @@ function sentenceChunks(input: string): string[] {
   return chunks;
 }
 
-/** Include closing delimiters, or return -1 when the sentence continues. */
-function sentenceEnd(input: string, index: number, insideQuotes: boolean): number {
+/** Scan closing delimiters, including whitespace before a pending closing quote. */
+function closingDelimiterEnd(input: string, index: number, insideQuotes: boolean): number {
   let end = index + 1;
   let quotePending = insideQuotes;
   while (end < input.length) {
@@ -349,7 +348,7 @@ function sentenceEnd(input: string, index: number, insideQuotes: boolean): numbe
 
     // Only consume a spaced quote when it closes an existing quotation.
     let next = end;
-    while (next < input.length && /[^\S\r\n]/.test(input[next])) {
+    while (next < input.length && /\s/.test(input[next])) {
       next++;
     }
     if (
@@ -362,12 +361,36 @@ function sentenceEnd(input: string, index: number, insideQuotes: boolean): numbe
     }
     break;
   }
+  return end;
+}
 
+/** Include closing delimiters, or return -1 when the sentence continues. */
+function sentenceEnd(
+  input: string,
+  index: number,
+  insideQuotes: boolean,
+  brackets: { depth: number; standalone: boolean },
+): number {
+  const end = closingDelimiterEnd(input, index, insideQuotes);
   if (end < input.length && !/\s/.test(input[end])) {
     return -1;
   }
   if (end === index + 1) {
     return end;
+  }
+
+  let closedBrackets = 0;
+  for (let i = index + 1; i < end; i++) {
+    if (closingBracketReg.test(input[i])) {
+      closedBrackets++;
+    }
+  }
+  const closesQuotation = insideQuotes && input[end - 1] === '"';
+  if (
+    closedBrackets > 0 &&
+    (closedBrackets < brackets.depth || !(brackets.standalone || closesQuotation))
+  ) {
+    return -1;
   }
 
   let next = end;
@@ -383,7 +406,7 @@ function sentenceEnd(input: string, index: number, insideQuotes: boolean): numbe
 
   const suffix = input.slice(Math.max(0, index + 1 - sentenceSuffixLength), index + 1);
   // Keep bracketed ellipses inside the surrounding sentence.
-  if (ellipseReg.test(suffix) && closingBracketReg.test(input.slice(index + 1, end))) {
+  if (ellipseReg.test(suffix) && closedBrackets > 0) {
     return -1;
   }
   if (!abbrvReg.test(suffix)) {
