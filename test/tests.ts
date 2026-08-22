@@ -166,6 +166,11 @@ describe('Utility Functions', () => {
     test("should return ['a b', 'b c', 'c d'] for n = 2", () => {
       expect(nGram(data)).toEqual(['a b', 'b c', 'c d']);
     });
+
+    test('should retain readable public gram strings for multiword tokens', () => {
+      expect(nGram(['new york', 'city'])).toEqual(['new york city']);
+      expect(nGram(['new', 'york city'])).toEqual(['new york city']);
+    });
     test("should return ['a b c', 'b c d'] for n = 3", () => {
       expect(nGram(data, 3)).toEqual(['a b c', 'b c d']);
     });
@@ -242,6 +247,11 @@ describe('Utility Functions', () => {
 
     test('should return the correct result', () => {
       expect(sb(data)).toEqual(result);
+    });
+
+    test('should retain readable public skip-bigram strings for multiword tokens', () => {
+      expect(sb(['new york', 'city'])).toEqual(['new york city']);
+      expect(sb(['new', 'york city'])).toEqual(['new york city']);
     });
 
     test('should return all pairs with default maxSkip (Infinity)', () => {
@@ -1040,6 +1050,45 @@ describe('Core Functions', () => {
     });
   });
 
+  describe.each([
+    ['ROUGE-N', rouge.n],
+    ['ROUGE-S', rouge.s],
+  ] as const)('%s token identity', (_name, score) => {
+    test.each<[string[], string[]]>([
+      [
+        ['new york', 'city'],
+        ['new', 'york city'],
+      ],
+      [
+        ['a ', 'b'],
+        ['a', ' b'],
+      ],
+      [
+        ['', ' a'],
+        [' ', 'a'],
+      ],
+      [
+        ['a|b', 'c'],
+        ['a', 'b|c'],
+      ],
+      [
+        ['a\0b', 'c'],
+        ['a', 'b\0c'],
+      ],
+      [
+        ['a" b', 'c\\d'],
+        ['a"', 'b c\\d'],
+      ],
+    ])('should distinguish token tuples %j and %j', (candidate, reference) => {
+      const tokenizer = (input: string): string[] => JSON.parse(input);
+      const options = { n: 2, tokenizer };
+      const cand = JSON.stringify(candidate);
+      const ref = JSON.stringify(reference);
+      expect(score(cand, ref, options)).toBe(0);
+      expect(score(cand, cand, options)).toBe(1);
+    });
+  });
+
   describe('ROUGE-N', () => {
     const { n } = rouge;
 
@@ -1109,6 +1158,31 @@ describe('Core Functions', () => {
       expect(n('aaa', 'aa', { tokenizer, nGram })).toBeCloseTo(4 / 5);
     });
 
+    test('should encode the explicit built-in generator but not custom generator inputs', () => {
+      const candidate = ['new york', 'city'];
+      const reference = ['new', 'york city'];
+      const tokenizer = (input: string): string[] => JSON.parse(input);
+      const cand = JSON.stringify(candidate);
+      const ref = JSON.stringify(reference);
+      expect(n(cand, ref, { n: 2, tokenizer, nGram: rouge.nGram })).toBe(0);
+      const nGram = jest.fn((): string[] => ['custom gram']);
+      expect(n(cand, ref, { n: 2, tokenizer, nGram })).toBe(1);
+      expect(nGram.mock.calls).toEqual([
+        [candidate, 2],
+        [reference, 2],
+      ]);
+    });
+
+    test('should clip repeated multiword-token grams', () => {
+      const tokenizer = (input: string): string[] => JSON.parse(input);
+      expect(
+        n('["new york","city","new york","city"]', '["new york","city"]', {
+          n: 2,
+          tokenizer,
+        }),
+      ).toBeCloseTo(1 / 2);
+    });
+
     test('should correctly compute ROUGE-N score with custom beta', () => {
       // With beta=0, F-score equals precision
       // 3 matching bigrams out of 4 candidate bigrams = 3/4
@@ -1176,6 +1250,30 @@ describe('Core Functions', () => {
 
     test('should preserve the zero-window behavior', () => {
       expect(s('a b', 'a b', { maxSkip: 0 })).toBe(0);
+    });
+
+    test('should encode the explicit built-in generator but not custom generator inputs', () => {
+      const candidate = ['new york', 'city'];
+      const reference = ['new', 'york city'];
+      const tokenizer = (input: string): string[] => JSON.parse(input);
+      const cand = JSON.stringify(candidate);
+      const ref = JSON.stringify(reference);
+      expect(s(cand, ref, { tokenizer, skipBigram: rouge.skipBigram })).toBe(0);
+      const skipBigram = jest.fn((): string[] => ['custom gram']);
+      expect(s(cand, ref, { maxSkip: 2, tokenizer, skipBigram })).toBe(1);
+      expect(skipBigram.mock.calls).toEqual([
+        [candidate, 2],
+        [reference, 2],
+      ]);
+    });
+
+    test('should clip repeated multiword-token skip-bigrams', () => {
+      const tokenizer = (input: string): string[] => JSON.parse(input);
+      expect(
+        s('["new york","city","new york","city"]', '["new york","city"]', {
+          tokenizer,
+        }),
+      ).toBeCloseTo(2 / 7);
     });
 
     test('should respect maxSkip option', () => {
