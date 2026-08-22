@@ -29,7 +29,7 @@ export function treeBankTokenize(input: string): string[] {
   // 1. Replace quotes at the sentence start position with double ticks
   // 2. Wrap spaces around a double quote preceded by opening brackets
   // 3. Wrap spaces around a non-unicode ellipsis
-  // 4. Wrap spaces around some punctuation signs (,;@#$%&)
+  // 4. Separate commas/colons except before digits, and wrap other punctuation (;@#$%&)
   // 5. Wrap spaces around a period and zero or more closing brackets
   //    (or quotes), when not preceded by a period and when followed
   //    by the end of the string. Only splits final periods because
@@ -41,9 +41,10 @@ export function treeBankTokenize(input: string): string[] {
     .replace(/^"/, ' `` ')
     .replace(/([ ([{<])"/g, '$1 `` ')
     .replace(/\.\.\.*/g, ' ... ')
+    .replace(/[:,](?!\d)/g, ' $& ')
     .replace(/[;@#$%&]/g, ' $& ')
     .replace(/([^.])(\.)([\])}>"']*)\s*$/g, '$1 $2$3 ')
-    .replace(/[,?!]/g, ' $& ')
+    .replace(/[?!]/g, ' $& ')
     .replace(/[\][(){}<>]/g, ' $& ')
     .replace(/---*/g, ' -- ');
 
@@ -303,7 +304,13 @@ export function sentenceSegment(input: string): string[] {
         }
       } else if (chunks[idx + 1] && ellipseReg.test(chunk.suffix)) {
         // Catch mid-sentence ellipses (and their derivatives) and merge them
-        chunk.append(chunks[idx + 1].replace(/ +/g, ' '));
+        const nextChunk = chunks[idx + 1];
+        chunk.append(nextChunk.replace(/ +/g, ' '));
+        if (!nextChunk.trim() && chunks[idx + 2]) {
+          // Keep the separator inside the sentence so the next pass cannot trim it away.
+          chunk.append(chunks[idx + 2].replace(/ +/g, ' '));
+          idx++;
+        }
         pending = chunk;
       } else {
         acc.push(chunk.text());

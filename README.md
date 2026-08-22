@@ -109,13 +109,15 @@ rougeN("Hello World", "hello world", { caseSensitive: false }); // => 1.0
 
 ### Text Preprocessing
 
-The default tokenizer treats spaces, tabs, line breaks, and other whitespace as word separators. It returns no tokens for whitespace-only text and expands every occurrence of supported contractions. Punctuation remains part of the token stream.
+The default Penn Treebank tokenizer expects one sentence at a time. All three metrics segment the original text before applying case folding and tokenizing each sentence. ROUGE-N and ROUGE-S flatten those tokens into one summary-level stream, so grams may still cross sentence boundaries. A custom `tokenizer` supplied to `n()` or `s()` continues to receive each whole summary once; `l()` calls it per sentence.
 
-The default sentence segmenter handles LF, CRLF, and CR line endings and ignores blank separator chunks. Abbreviations such as `e.g.` are matched literally, and sentences ending in an initial or acronym are retained even when the following fragment has no punctuation.
+The tokenizer treats spaces, tabs, line breaks, and other whitespace as word separators. It returns no tokens for whitespace-only text and expands every occurrence of supported contractions. Punctuation remains part of the token stream. Colons and commas are separated unless followed by a digit, preserving numbers such as `12,000` and times such as `12:30`.
+
+The default sentence segmenter handles LF, CRLF, and CR line endings and ignores blank separator chunks. Abbreviations such as `e.g.` are matched literally, and sentences ending in an initial or acronym are retained even when the following fragment has no punctuation. Spaces following a mid-sentence ellipsis are retained instead of joining adjacent words.
 
 The scoring functions reject empty or whitespace-only candidate/reference summaries with `RangeError`. Existing minimum-token requirements still apply: ROUGE-N needs at least `n` tokens, and ROUGE-S needs at least two. The standalone `sentenceSegment` utility retains its single-sentence fallback for whitespace-only input.
 
-These preprocessing corrections can change scores for affected inputs. Keep the same tokenizer and segmenter configuration when comparing evaluation runs across versions.
+These preprocessing corrections can change scores for multi-sentence summaries, colons, numeric commas, and ellipses. For example, `n("Alpha. Beta.", "Beta. Alpha.")` now returns `1` rather than `1/3`. Rerun affected baselines and keep the same tokenizer and segmenter configuration when comparing evaluation runs across versions.
 
 ## Options
 

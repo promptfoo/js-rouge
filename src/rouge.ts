@@ -62,6 +62,19 @@ function countMatchingGrams(candidate: string[], reference: string[]): number {
   return matches;
 }
 
+/** The built-in tokenizer expects sentences; custom tokenizers receive whole summaries. */
+function tokenizeSummary(
+  input: string,
+  caseSensitive: boolean,
+  tokenizer?: (input: string) => string[],
+): string[] {
+  const sentences = tokenizer ? [input] : utils.sentenceSegment(input);
+  const tokenize = tokenizer ?? utils.treeBankTokenize;
+  return sentences.flatMap((sentence) =>
+    tokenize(caseSensitive ? sentence : sentence.toLowerCase()),
+  );
+}
+
 /**
  * Computes the ROUGE-N score for a candidate summary.
  *
@@ -99,15 +112,17 @@ export function n(cand: string, ref: string, opts?: RougeNOptions): number {
     beta: 1.0,
     caseSensitive: true,
     nGram: utils.nGram,
-    tokenizer: utils.treeBankTokenize,
     ...opts,
   };
 
-  const candText = options.caseSensitive ? cand : cand.toLowerCase();
-  const refText = options.caseSensitive ? ref : ref.toLowerCase();
-
-  const candGrams = options.nGram(options.tokenizer(candText), options.n);
-  const refGrams = options.nGram(options.tokenizer(refText), options.n);
+  const candGrams = options.nGram(
+    tokenizeSummary(cand, options.caseSensitive, options.tokenizer),
+    options.n,
+  );
+  const refGrams = options.nGram(
+    tokenizeSummary(ref, options.caseSensitive, options.tokenizer),
+    options.n,
+  );
 
   const matches = countMatchingGrams(candGrams, refGrams);
 
@@ -158,15 +173,17 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
     caseSensitive: true,
     maxSkip: Number.POSITIVE_INFINITY,
     skipBigram: utils.skipBigram,
-    tokenizer: utils.treeBankTokenize,
     ...opts,
   };
 
-  const candText = options.caseSensitive ? cand : cand.toLowerCase();
-  const refText = options.caseSensitive ? ref : ref.toLowerCase();
-
-  const candGrams = options.skipBigram(options.tokenizer(candText), options.maxSkip);
-  const refGrams = options.skipBigram(options.tokenizer(refText), options.maxSkip);
+  const candGrams = options.skipBigram(
+    tokenizeSummary(cand, options.caseSensitive, options.tokenizer),
+    options.maxSkip,
+  );
+  const refGrams = options.skipBigram(
+    tokenizeSummary(ref, options.caseSensitive, options.tokenizer),
+    options.maxSkip,
+  );
 
   const skip2 = countMatchingGrams(candGrams, refGrams);
 

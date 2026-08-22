@@ -630,8 +630,11 @@ describe('Utility Functions', () => {
       });
 
       test('should handle mid-sentence ellipsis', () => {
-        // Tests ellipsis merge branch (line 157)
-        expect(ss('He said.. and then continued.')).toEqual(['He said..and then continued.']);
+        expect(ss('He said.. and then continued.')).toEqual(['He said.. and then continued.']);
+        expect(ss('Wait... what?')).toEqual(['Wait... what?']);
+        expect(ss('Wait...  what?')).toEqual(['Wait... what?']);
+        expect(ss('Wait...\twhat?')).toEqual(['Wait...\twhat?']);
+        expect(ss('Wait...what?')).toEqual(['Wait...what?']);
       });
     });
   });
@@ -715,6 +718,14 @@ describe('Utility Functions', () => {
         'York',
         '.',
       ]);
+    });
+
+    test.each([
+      ['Note: hello, world:', ['Note', ':', 'hello', ',', 'world', ':']],
+      ['12,000 items at 12:30,', ['12,000', 'items', 'at', '12:30', ',']],
+      ['12,000,000 and 3.88.', ['12,000,000', 'and', '3.88', '.']],
+    ])('should apply Treebank comma and colon rules to %s', (input, expected) => {
+      expect(tbt(input)).toEqual(expected);
     });
 
     test('should handle double quotation marks', () => {
@@ -870,6 +881,32 @@ describe('Core Functions', () => {
       expect(() => score(' \t\r\n', 'alpha beta')).toThrow('Candidate cannot be an empty string');
       expect(() => score('alpha beta', ' \t\r\n')).toThrow('Reference cannot be an empty string');
     });
+
+    test('should separate colons without splitting numeric commas', () => {
+      expect(score('Note: 12,000 items', 'Note : 12,000 items')).toBe(1);
+      expect(score('12,000 items', '12 000 items')).toBeLessThan(1);
+    });
+  });
+
+  describe.each([
+    ['ROUGE-N', rouge.n],
+    ['ROUGE-S', rouge.s],
+  ] as const)('%s summary tokenization', (_name, score) => {
+    test('should tokenize each sentence before flattening the token stream', () => {
+      expect(score('Alpha. Beta.', 'Alpha . Beta .')).toBe(1);
+      expect(score('Alpha. Beta.', 'alpha . beta .', { caseSensitive: false })).toBe(1);
+      expect(
+        score('Use etc. Another sentence.', 'use etc . another sentence .', {
+          caseSensitive: false,
+        }),
+      ).toBe(1);
+    });
+
+    test('should pass complete summaries to custom tokenizers', () => {
+      const tokenizer = jest.fn((input: string): string[] => input.split(' '));
+      expect(score('Alpha. Beta.', 'alpha. beta.', { tokenizer, caseSensitive: false })).toBe(1);
+      expect(tokenizer.mock.calls).toEqual([['alpha. beta.'], ['alpha. beta.']]);
+    });
   });
 
   describe('ROUGE-N', () => {
@@ -880,6 +917,10 @@ describe('Core Functions', () => {
       'magnetic pulse series sent through brain may ease schizophrenic voices',
       'yale finds magnetic stimulation some relief to schizophrenics imaginary voices',
     ];
+
+    test('should give reordered sentence unigrams a perfect score', () => {
+      expect(n('Alpha. Beta.', 'Beta. Alpha.')).toBe(1);
+    });
 
     test('should throw RangeError for empty candidate', () => {
       expect(() => n('', refs[0], { n: 2 })).toThrow(RangeError);
@@ -995,6 +1036,11 @@ describe('Core Functions', () => {
 
     const ref = 'police killed the gunman';
     const cands = ['police kill the gunman', 'the gunman kill police', 'the gunman police killed'];
+
+    test('should preserve word separation after an ellipsis for custom tokenizers', () => {
+      const tokenizer = (input: string): string[] => input.split(/\s+/);
+      expect(l('what?', 'Wait... what?', { tokenizer })).toBeCloseTo(2 / 3);
+    });
 
     test('should throw RangeError for empty candidate', () => {
       expect(() => l('', ref, undefined as any)).toThrow(RangeError);
