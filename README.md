@@ -109,11 +109,11 @@ rougeN("Hello World", "hello world", { caseSensitive: false }); // => 1.0
 
 ### Text Preprocessing
 
-The default Penn Treebank tokenizer expects one sentence at a time. All three metrics segment the original text before applying case folding and tokenizing each sentence. ROUGE-N and ROUGE-S flatten those tokens into one summary-level stream, so grams may still cross sentence boundaries. A custom `tokenizer` supplied to `n()` or `s()` continues to receive each whole summary once; `l()` calls it per sentence.
+The default Penn Treebank tokenizer expects one sentence at a time. All three metrics segment the original text before applying case folding and tokenizing each sentence. ROUGE-N and ROUGE-S flatten those tokens into one summary-level stream, so grams may still cross sentence boundaries. Explicitly passing the exported `treeBankTokenize` uses the same default path. Other custom `tokenizer` functions supplied to `n()` or `s()` continue to receive each whole summary once; `l()` calls them per sentence.
 
 The tokenizer treats spaces, tabs, line breaks, and other whitespace as word separators. It returns no tokens for whitespace-only text and expands every occurrence of supported contractions. Punctuation remains part of the token stream. Colons and commas are separated unless followed by a digit, preserving numbers such as `12,000` and times such as `12:30`.
 
-The default sentence segmenter handles LF, CRLF, and CR line endings and ignores blank separator chunks. Abbreviations such as `e.g.` are matched literally, and sentences ending in an initial or acronym are retained even when the following fragment has no punctuation. Spaces following a mid-sentence ellipsis are retained instead of joining adjacent words.
+The default sentence segmenter handles LF, CRLF, and CR line endings and ignores blank separator chunks. Abbreviations such as `e.g.` are matched literally, and sentences ending in an initial or acronym are retained even when the following fragment has no punctuation. Spaces following a mid-sentence ellipsis are retained instead of joining adjacent words. Closing double quotes stay with their preceding sentence. Geographic acronyms such as `U.S.` remain attached to following names unless a recognized sentence starter indicates a boundary.
 
 The scoring functions reject empty or whitespace-only candidate/reference summaries with `RangeError`. Existing minimum-token requirements still apply: ROUGE-N needs at least `n` tokens, and ROUGE-S needs at least two. The standalone `sentenceSegment` utility retains its single-sentence fallback for whitespace-only input.
 
@@ -158,6 +158,7 @@ ROUGE-N and ROUGE-S count repeated matching grams up to the smaller of their fre
 ### Limitations
 
 - **English-centric tokenizer**: The default Penn Treebank tokenizer is designed for English text. For other languages, provide a custom `tokenizer` function that appropriately segments text in your target language.
+- **Heuristic sentence boundaries**: Abbreviations and names can be ambiguous. For domain-specific boundaries, supply a custom tokenizer to ROUGE-N/S or a custom segmenter to ROUGE-L.
 
 ## Jackknife Resampling
 

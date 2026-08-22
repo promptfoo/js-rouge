@@ -68,8 +68,8 @@ function tokenizeSummary(
   caseSensitive: boolean,
   tokenizer?: (input: string) => string[],
 ): string[] {
-  const sentences = tokenizer ? [input] : utils.sentenceSegment(input);
   const tokenize = tokenizer ?? utils.treeBankTokenize;
+  const sentences = tokenize === utils.treeBankTokenize ? utils.sentenceSegment(input) : [input];
   return sentences.flatMap((sentence) =>
     tokenize(caseSensitive ? sentence : sentence.toLowerCase()),
   );

@@ -86,6 +86,11 @@ const breakReg = /[\r\n]+/;
 const ellipseReg = /\.{2,10}$/;
 const excepReg = new RegExp(`\\b(${GATE_EXCEPTIONS.map(escapeRegExp).join('|')})[.!?] ?$`, 'i');
 const sentenceSuffixLength = Math.max(10, ...GATE_SUBSTITUTIONS.map((word) => word.length + 2));
+const geographicAcronymReg = /\b(?:U\.S(?:\.A)?|E\.U)\.$/i;
+// Conservative acronym boundaries follow pragmatic_segmenter's sentence-starter approach:
+// https://github.com/diasks2/pragmatic_segmenter/blob/master/lib/pragmatic_segmenter/languages/common.rb
+const sentenceStarterReg =
+  /^(?:A|Being|Did|For|He|How|However|I|In|It|Millions|More|She|That|The|There|They|We|What|When|Where|Who|Why)\b/;
 
 /** Keep merged fragments separate; boundary rules only need a suffix and word casing. */
 class SentenceBuffer {
@@ -274,13 +279,18 @@ export function sentenceSegment(input: string): string[] {
         }
       } else if (chunks[idx + 1] && abbrvReg.test(chunk.suffix)) {
         const nextChunk = chunks[idx + 1];
-        if (nextChunk.trim() && strIsTitleCase(nextChunk) && !excepReg.test(chunk.suffix)) {
+        if (
+          nextChunk.trim() &&
+          strIsTitleCase(nextChunk) &&
+          !excepReg.test(chunk.suffix) &&
+          (!geographicAcronymReg.test(chunk.suffix) ||
+            sentenceStarterReg.test(nextChunk.trimStart()))
+        ) {
           // Catch abbreviations followed by a capital letter and treat as a boundary.
-          // FIXME: This causes named entities like `Mt. Fuji` or `U.S. Government` to fail.
           acc.push(chunk.text());
         } else {
           // Catch common abbreviations and merge them with a delimiting space
-          chunk.append(` ${nextChunk.replace(/ +/g, ' ')}`);
+          chunk.append(` ${trimSpaces(nextChunk.replace(/ +/g, ' '))}`);
           pending = chunk;
         }
       } else if (chunks[idx + 1] && acronymReg.test(chunk.suffix)) {
@@ -346,8 +356,11 @@ function sentenceChunks(input: string): string[] {
       (char === '.' || char === '?' || char === '!') &&
       (index + 1 === input.length || /[\s"]/.test(input[index + 1]))
     ) {
-      chunks.push(input.slice(lastEnd, start), input.slice(start, index + 1));
-      lastEnd = index + 1;
+      // A closing double quote belongs to the sentence whose punctuation it follows.
+      const end = index + (input[index + 1] === '"' ? 2 : 1);
+      chunks.push(input.slice(lastEnd, start), input.slice(start, end));
+      lastEnd = end;
+      index = end - 1;
       start = -1;
     }
   }
