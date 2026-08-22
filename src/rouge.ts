@@ -1,5 +1,6 @@
 import { lcsIndices } from './lcs';
 import * as utils from './utils';
+import { validateBeta, validateMaxSkip, validateNGramSize } from './validation';
 
 export * from './utils';
 
@@ -106,23 +107,18 @@ export function n(cand: string, ref: string, opts?: RougeNOptions): number {
     throw new RangeError('Reference cannot be an empty string');
   }
 
-  // Merge user-provided configuration with defaults
-  const options = {
-    n: 1,
-    beta: 1.0,
-    caseSensitive: true,
-    nGram: utils.nGram,
-    ...opts,
-  };
+  const {
+    n: size = 1,
+    beta = 1.0,
+    caseSensitive = true,
+    nGram = utils.nGram,
+    tokenizer,
+  } = opts ?? {};
+  validateNGramSize(size);
+  validateBeta(beta);
 
-  const candGrams = options.nGram(
-    tokenizeSummary(cand, options.caseSensitive, options.tokenizer),
-    options.n,
-  );
-  const refGrams = options.nGram(
-    tokenizeSummary(ref, options.caseSensitive, options.tokenizer),
-    options.n,
-  );
+  const candGrams = nGram(tokenizeSummary(cand, caseSensitive, tokenizer), size);
+  const refGrams = nGram(tokenizeSummary(ref, caseSensitive, tokenizer), size);
 
   const matches = countMatchingGrams(candGrams, refGrams);
 
@@ -133,7 +129,7 @@ export function n(cand: string, ref: string, opts?: RougeNOptions): number {
   const precision = matches / candGrams.length;
   const recall = matches / refGrams.length;
 
-  return utils.fMeasure(precision, recall, options.beta);
+  return utils.fMeasure(precision, recall, beta);
 }
 
 /**
@@ -167,23 +163,18 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
     throw new RangeError('Reference cannot be an empty string');
   }
 
-  // Merge user-provided configuration with defaults
-  const options = {
-    beta: 1.0,
-    caseSensitive: true,
-    maxSkip: Number.POSITIVE_INFINITY,
-    skipBigram: utils.skipBigram,
-    ...opts,
-  };
+  const {
+    beta = 1.0,
+    caseSensitive = true,
+    maxSkip = Number.POSITIVE_INFINITY,
+    skipBigram = utils.skipBigram,
+    tokenizer,
+  } = opts ?? {};
+  validateMaxSkip(maxSkip);
+  validateBeta(beta);
 
-  const candGrams = options.skipBigram(
-    tokenizeSummary(cand, options.caseSensitive, options.tokenizer),
-    options.maxSkip,
-  );
-  const refGrams = options.skipBigram(
-    tokenizeSummary(ref, options.caseSensitive, options.tokenizer),
-    options.maxSkip,
-  );
+  const candGrams = skipBigram(tokenizeSummary(cand, caseSensitive, tokenizer), maxSkip);
+  const refGrams = skipBigram(tokenizeSummary(ref, caseSensitive, tokenizer), maxSkip);
 
   const skip2 = countMatchingGrams(candGrams, refGrams);
 
@@ -193,7 +184,7 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
   const skip2Recall = skip2 / refGrams.length;
   const skip2Prec = skip2 / candGrams.length;
 
-  return utils.fMeasure(skip2Prec, skip2Recall, options.beta);
+  return utils.fMeasure(skip2Prec, skip2Recall, beta);
 }
 
 /**
@@ -228,20 +219,19 @@ export function l(cand: string, ref: string, opts?: RougeLOptions): number {
     throw new RangeError('Reference cannot be an empty string');
   }
 
-  // Merge user-provided configuration with defaults
-  const options = {
-    beta: 1.0,
-    caseSensitive: true,
-    lcs: utils.lcs,
-    segmenter: utils.sentenceSegment,
-    tokenizer: utils.treeBankTokenize,
-    ...opts,
-  };
+  const {
+    beta = 1.0,
+    caseSensitive = true,
+    lcs: getLcs = utils.lcs,
+    segmenter = utils.sentenceSegment,
+    tokenizer = utils.treeBankTokenize,
+  } = opts ?? {};
+  validateBeta(beta);
 
   const tokenizeSentence = (sentence: string): string[] =>
-    options.tokenizer(options.caseSensitive ? sentence : sentence.toLowerCase());
-  const candSents = options.segmenter(cand).map(tokenizeSentence);
-  const refSents = options.segmenter(ref).map(tokenizeSentence);
+    tokenizer(caseSensitive ? sentence : sentence.toLowerCase());
+  const candSents = segmenter(cand).map(tokenizeSentence);
+  const refSents = segmenter(ref).map(tokenizeSentence);
 
   const remaining = new Map<string, number>();
   let candLength = 0;
@@ -261,7 +251,7 @@ export function l(cand: string, ref: string, opts?: RougeLOptions): number {
   for (const reference of refSents) {
     const union = new Set<number>();
     for (const candidate of candSents) {
-      for (const index of matchedReferenceIndices(candidate, reference, options.lcs)) {
+      for (const index of matchedReferenceIndices(candidate, reference, getLcs)) {
         union.add(index);
       }
     }
@@ -280,7 +270,7 @@ export function l(cand: string, ref: string, opts?: RougeLOptions): number {
   if (matches === 0) {
     return 0;
   }
-  return utils.fMeasure(matches / candLength, matches / refLength, options.beta);
+  return utils.fMeasure(matches / candLength, matches / refLength, beta);
 }
 
 function matchedReferenceIndices(

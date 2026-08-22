@@ -10,6 +10,10 @@ const bracketPairs = [
   ['<', '>'],
 ] as const;
 const geographicAcronyms = ['U.S.', 'U.S.A.', 'E.U.'];
+const nonFiniteNumbers = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
+const invalidNGramSizes = [...nonFiniteNumbers, -1, 0, 1.5];
+const invalidMaxSkips = [Number.NaN, Number.NEGATIVE_INFINITY, -1, 0.5, 1.5];
+const invalidBetas = [Number.NaN, Number.NEGATIVE_INFINITY, -1];
 
 describe('Utility Functions', () => {
   describe('fact', () => {
@@ -152,11 +156,12 @@ describe('Utility Functions', () => {
     const { nGram } = rouge;
     const data = ['a', 'b', 'c', 'd'];
 
-    test('should throw RangeError for ngram size < 1', () => {
-      expect(() => nGram(data, 0)).toThrow(RangeError);
-    });
     test('should throw RangeError for invalid ngram size', () => {
       expect(() => nGram(data, 5)).toThrow(RangeError);
+    });
+
+    test.each(invalidNGramSizes)('should reject invalid ngram size %s', (size) => {
+      expect(() => nGram(data, size)).toThrow(RangeError);
     });
 
     test("should return ['a', 'b', 'c', 'd'] for n = 1", () => {
@@ -207,6 +212,16 @@ describe('Utility Functions', () => {
         'a b c d',
       ]);
     });
+
+    test('should default undefined padding fields without changing false', () => {
+      expect(nGram(data, 2, { start: true, end: false, val: undefined })).toEqual([
+        '<S> a',
+        'a b',
+        'b c',
+        'c d',
+      ]);
+      expect(nGram(data, 2, { start: undefined, end: undefined })).toEqual(nGram(data, 2));
+    });
   });
 
   describe('skipBigram', () => {
@@ -217,6 +232,10 @@ describe('Utility Functions', () => {
 
     test('should throw RangeError for inputs with insufficient words', () => {
       expect(() => sb(['a'])).toThrow(RangeError);
+    });
+
+    test.each(invalidMaxSkips)('should reject invalid maxSkip %s', (maxSkip) => {
+      expect(() => sb(data, maxSkip)).toThrow(RangeError);
     });
 
     test('should return the correct result', () => {
@@ -887,6 +906,48 @@ describe('Utility Functions', () => {
   describe('fMeasure', () => {
     const fm = rouge.fMeasure;
 
+    test.each(nonFiniteNumbers)('should reject non-finite precision and recall %s', (value) => {
+      expect(() => fm(value, 0.5)).toThrow(RangeError);
+      expect(() => fm(0.5, value)).toThrow(RangeError);
+    });
+
+    test.each(invalidBetas)('should reject invalid beta %s even with no matches', (beta) => {
+      expect(() => fm(0, 0, beta)).toThrow(RangeError);
+    });
+
+    const largeBetas = [1e154, 1e200, Number.MAX_VALUE];
+    test.each(largeBetas)('should stay finite for large finite beta %s', (beta) => {
+      expect(fm(1, 0.5, beta)).toBeCloseTo(0.5);
+      expect(fm(0.5, 1, beta)).toBeCloseTo(1);
+      expect(fm(0, 0.5, beta)).toBe(0);
+      expect(fm(0.5, 0, beta)).toBe(0);
+    });
+
+    test('should not underflow the precision-recall product', () => {
+      expect(fm(1e-200, 2e-200) / 1e-200).toBeCloseTo(4 / 3);
+      expect(fm(1e-200, 1e-200, 2)).toBe(1e-200);
+      expect(fm(1e-300, 0.5, 1e200)).toBe(0.5);
+    });
+
+    test('should preserve denominator ratios involving subnormal inputs', () => {
+      expect(fm(Number.MIN_VALUE, 2e-124, 1e100) / 1e-124).toBeCloseTo(1.423_685_637_8, 9);
+      expect(fm(2e-124, Number.MIN_VALUE, 1e-100) / 1e-124).toBeCloseTo(1.423_685_637_8, 9);
+      expect(fm(Number.MIN_VALUE, 1, 1e161)).toBeCloseTo(0.047_080_479_817_375_9, 14);
+      expect(fm(Number.MIN_VALUE, 1, Number.MAX_VALUE)).toBe(1);
+      expect(fm(1, Number.MIN_VALUE, 2)).toBe(Number.MIN_VALUE);
+    });
+
+    const scoreBoundsCases = [
+      [1.737_610_985_955_693e-134, 1, 1.884_479_164_656_194_7e105],
+      [0.8, 0.799_999_999_999_999_9, 2.5],
+    ];
+    test.each(scoreBoundsCases)('bounds F-beta (%p, %p, %p)', (p, r, beta) => {
+      for (const score of [fm(p, r, beta), fm(r, p, 1 / beta)]) {
+        expect(score).toBeGreaterThanOrEqual(Math.min(p, r));
+        expect(score).toBeLessThanOrEqual(Math.max(p, r));
+      }
+    });
+
     test('should throw RangeError for OOB precision input', () => {
       expect(() => fm(10, 0.5)).toThrow(RangeError);
     });
@@ -900,8 +961,12 @@ describe('Utility Functions', () => {
     test('should return pure recall when beta is Infinity', () => {
       expect(fm(0.5, 0.75, Number.POSITIVE_INFINITY)).toBe(0.75);
     });
+    test.each([0, -0])('uses precision for beta=%p', (beta) => {
+      expect(fm(0.5, 0.75, beta)).toBe(0.5);
+      expect(fm(Number.MIN_VALUE, 1, beta)).toBe(Number.MIN_VALUE);
+    });
     test('should correctly compute F1 score (beta=1)', () => {
-      expect(fm(0.5, 0.75, 1)).toBe(0.6);
+      expect(fm(0.5, 0.75, 1)).toBeCloseTo(0.6, 15);
     });
     test('should correctly compute F2 score (beta=2, favors recall)', () => {
       // F2 = (1 + 4) * P * R / (4 * P + R) = 5 * 0.5 * 0.75 / (2 + 0.75) = 1.875 / 2.75
@@ -990,6 +1055,38 @@ describe('Core Functions', () => {
       expect(score(`He said "Stop.${lineBreak}"`, 'He said "Stop."')).toBe(1);
     });
 
+    test('should use defaults for explicitly undefined options', () => {
+      const options = {
+        beta: undefined,
+        caseSensitive: undefined,
+        tokenizer: undefined,
+        n: undefined,
+        nGram: undefined,
+        maxSkip: undefined,
+        skipBigram: undefined,
+        segmenter: undefined,
+        lcs: undefined,
+      };
+      expect(score('A B', 'a b', options)).toBe(0);
+      expect(score('a b c', 'a b d', options)).toBe(score('a b c', 'a b d'));
+    });
+
+    test.each(invalidBetas)('rejects beta=%s before callbacks', (beta) => {
+      const tokenizer = jest.fn((input: string): string[] => input.split(' '));
+      expect(() => score('a b', 'a b', { beta, tokenizer })).toThrow(/beta/);
+      expect(() => score('a b', 'c d', { beta, tokenizer })).toThrow(/beta/);
+      expect(tokenizer).not.toHaveBeenCalled();
+    });
+
+    test('should keep finite large-beta scores and explicit recall mode', () => {
+      expect(score('a b', 'a b c', { beta: 1e200 })).toBe(
+        score('a b', 'a b c', { beta: Number.POSITIVE_INFINITY }),
+      );
+      expect(score('A B C', 'a b', { beta: Number.POSITIVE_INFINITY, caseSensitive: false })).toBe(
+        1,
+      );
+    });
+
     test('should treat word-separating whitespace consistently', () => {
       expect(score('alpha\tbeta', 'alpha beta')).toBe(1);
       expect(score('alpha\nbeta', 'alpha beta')).toBe(1);
@@ -1064,6 +1161,12 @@ describe('Core Functions', () => {
   describe('ROUGE-N', () => {
     const { n } = rouge;
 
+    test.each(invalidNGramSizes)('rejects n=%s before callbacks', (size) => {
+      const nGram = jest.fn((): string[] => []);
+      expect(() => n('a b', 'c d', { n: size, nGram })).toThrow(RangeError);
+      expect(nGram).not.toHaveBeenCalled();
+    });
+
     const cand = 'pulses may ease schizophrenic voices';
     const refs = [
       'magnetic pulse series sent through brain may ease schizophrenic voices',
@@ -1085,7 +1188,7 @@ describe('Core Functions', () => {
       // 3 matching bigrams, 4 candidate bigrams, 9 reference bigrams
       // precision = 3/4, recall = 3/9 = 1/3
       // F1 = 2 * P * R / (P + R) = 2 * (3/4) * (1/3) / (3/4 + 1/3) = 6/13
-      expect(n(cand, refs[0], { n: 2, beta: 1 })).toBe(6 / 13);
+      expect(n(cand, refs[0], { n: 2, beta: 1 })).toBeCloseTo(6 / 13, 15);
     });
     test('should correctly compute ROUGE-N F1-score for ref 2', () => {
       expect(n(cand, refs[1], { n: 2, beta: 1 })).toBe(0);
@@ -1129,6 +1232,12 @@ describe('Core Functions', () => {
 
   describe('ROUGE-S', () => {
     const { s } = rouge;
+
+    test.each(invalidMaxSkips)('rejects maxSkip=%s before callbacks', (maxSkip) => {
+      const skipBigram = jest.fn((): string[] => []);
+      expect(() => s('a b', 'c d', { maxSkip, skipBigram })).toThrow(RangeError);
+      expect(skipBigram).not.toHaveBeenCalled();
+    });
 
     const ref = 'police killed the gunman';
     const cands = ['police kill the gunman', 'the gunman kill police', 'the gunman police killed'];

@@ -1,5 +1,6 @@
 import { GATE_EXCEPTIONS, GATE_SUBSTITUTIONS, TREEBANK_CONTRACTIONS } from './constants';
 import { lcsIndices } from './lcs';
+import { validateBeta, validateMaxSkip, validateNGramSize } from './validation';
 
 /**
  * Splits a sentence into an array of word tokens
@@ -517,6 +518,7 @@ export const fact = memoize(factRec);
  * @return {Array<string>}                An array of skip bigram strings
  */
 export function skipBigram(tokens: string[], maxSkip: number = Number.POSITIVE_INFINITY): string[] {
+  validateMaxSkip(maxSkip);
   if (tokens.length < 2) {
     throw new RangeError('Input must have at least two words');
   }
@@ -554,9 +556,7 @@ export const NGRAM_DEFAULT_OPTS: NGramOptions = {
  * @return {Array<string>}                    An array of n-gram strings
  */
 export function nGram(tokens: string[], n = 2, pad: Partial<NGramOptions> = {}): string[] {
-  if (n < 1) {
-    throw new RangeError('ngram size cannot be smaller than 1');
-  }
+  validateNGramSize(n);
 
   if (tokens.length < n) {
     throw new RangeError('ngram size cannot be larger than the number of tokens available');
@@ -565,23 +565,25 @@ export function nGram(tokens: string[], n = 2, pad: Partial<NGramOptions> = {}):
   let workingTokens = tokens;
 
   if (Object.keys(pad).length > 0) {
-    const config = { ...NGRAM_DEFAULT_OPTS, ...pad };
+    const config = {
+      start: pad.start ?? NGRAM_DEFAULT_OPTS.start,
+      end: pad.end ?? NGRAM_DEFAULT_OPTS.end,
+      val: pad.val ?? NGRAM_DEFAULT_OPTS.val,
+    };
 
     // Clone the input token array to avoid mutating the source data
-    const tempTokens = tokens.slice(0);
+    workingTokens = tokens.slice();
 
     if (config.start) {
       for (let i = 0; i < n - 1; i++) {
-        tempTokens.unshift(config.val);
+        workingTokens.unshift(config.val);
       }
     }
     if (config.end) {
       for (let i = 0; i < n - 1; i++) {
-        tempTokens.push(config.val);
+        workingTokens.push(config.val);
       }
     }
-
-    workingTokens = tempTokens;
   }
 
   const acc: string[] = [];
@@ -678,31 +680,50 @@ export function jackKnife(
  * @return {number}             Computed f-score
  */
 export function fMeasure(p: number, r: number, beta = 1.0): number {
-  if (p < 0 || p > 1) {
+  if (!Number.isFinite(p) || p < 0 || p > 1) {
     throw new RangeError('Precision value p must have bounds 0 ≤ p ≤ 1');
   }
-  if (r < 0 || r > 1) {
+  if (!Number.isFinite(r) || r < 0 || r > 1) {
     throw new RangeError('Recall value r must have bounds 0 ≤ r ≤ 1');
   }
-  if (beta < 0) {
-    throw new RangeError('beta value must be >= 0');
-  }
+  validateBeta(beta);
 
   // Handle special cases
-  if (p === 0 && r === 0) {
+  if (p === r) {
+    return p;
+  }
+  if (beta === Number.POSITIVE_INFINITY) {
+    return r; // β → ∞ means pure recall
+  }
+  if (p === 0 || r === 0) {
     return 0;
   }
-  if (!Number.isFinite(beta)) {
-    return r; // β → ∞ means pure recall
+
+  if (beta === 0) {
+    return p;
+  }
+
+  // F-beta(P, R) = F-(1/beta)(R, P). This keeps the weight at least one.
+  if (beta < 1) {
+    return fMeasure(r, p, 1 / beta);
+  }
+  // Scale by the smaller score instead of multiplying precision and recall.
+  // Roundoff can overshoot the larger score, so bound each scaled result.
+  if (p > r) {
+    const inverseBeta = 1 / beta;
+    const weight = inverseBeta * inverseBeta;
+    return Math.min(p, r * ((1 + weight) / (1 + weight * (r / p))));
   }
 
   const betaSq = beta * beta;
-  const denominator = betaSq * p + r;
-  if (denominator === 0) {
-    return 0;
+  if (Number.isFinite(betaSq)) {
+    return Math.min(r, p * ((1 + betaSq) / (1 + betaSq * (p / r))));
   }
 
-  return ((1 + betaSq) * p * r) / denominator;
+  // Multiplying precision by beta first rescales even the smallest subnormal.
+  // Here 1 / beta² is too small to affect the rounded numerator weight.
+  const ratio = ((p * beta) / r) * beta;
+  return ratio === Number.POSITIVE_INFINITY ? r : r * (ratio / (1 + ratio));
 }
 
 /**
