@@ -83,10 +83,6 @@ const closingDelimiterReg = /[\])}>"']/;
 const openingBracketReg = /[([{<]/;
 const closingBracketReg = /[\])}>]/;
 
-function canEndAfterAbbreviation(suffix: string, next: string): boolean {
-  return strIsTitleCase(next) && !excepReg.test(suffix);
-}
-
 /** Keep merged fragments separate; boundary rules only need a suffix and word casing. */
 class SentenceBuffer {
   #parts: string[] = [];
@@ -237,7 +233,7 @@ export function sentenceSegment(input: string): string[] {
         }
       } else if (chunks[idx + 1] && abbrvReg.test(chunk.suffix)) {
         const nextChunk = chunks[idx + 1];
-        if (canEndAfterAbbreviation(chunk.suffix, nextChunk)) {
+        if (strIsTitleCase(nextChunk) && !excepReg.test(chunk.suffix)) {
           // Catch abbreviations followed by a capital letter and treat as a boundary.
           acc.push(chunk.text());
         } else {
@@ -407,14 +403,7 @@ function sentenceEnd(
   if (ellipseReg.test(suffix) && closedBrackets > 0) {
     return -1;
   }
-  if (!abbrvReg.test(suffix)) {
-    return end;
-  }
-  let wordEnd = next + 1;
-  while (wordEnd < input.length && !/\s/.test(input[wordEnd])) {
-    wordEnd++;
-  }
-  return canEndAfterAbbreviation(suffix, input.slice(next, wordEnd)) ? end : -1;
+  return abbrvReg.test(suffix) && excepReg.test(suffix) ? -1 : end;
 }
 
 function trimSpaces(input: string): string {
