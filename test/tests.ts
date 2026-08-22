@@ -448,7 +448,7 @@ describe('Utility Functions', () => {
       ]);
     });
 
-    const quotedContinuations = [
+    const sentenceContinuations = [
       'Use "e.g." here.',
       '"Dr." is a title.',
       '"U.S." is an abbreviation.',
@@ -458,8 +458,15 @@ describe('Utility Functions', () => {
       'She wrote "etc.": more would follow.',
       'She wrote "hello." then left.',
       'The label was "Hello!" 100 times larger.',
+      'The result was (surprisingly!) 100% accurate.',
+      'The result was (surprisingly!) -- completely accurate.',
+      'The result was (surprisingly!) $100.',
+      'The winner was (surprisingly!) Alice Smith.',
+      'The winner was (Surprisingly!) Alice Smith.',
+      'The winner was ((surprisingly!)) Alice Smith.',
+      'The winner was (she said "Wow!") Alice Smith.',
     ];
-    test.each(quotedContinuations)('keeps quoted continuations in %s', (input) => {
+    test.each(sentenceContinuations)('keeps continuations in %s', (input) => {
       expect(ss(input)).toEqual([input]);
     });
 
@@ -472,19 +479,6 @@ describe('Utility Functions', () => {
       expect(ss(`${spaced} then left.`)).toEqual([`${spaced} then left.`]);
       const nested = `He said "${open}Stop. ${close} "`;
       expect(ss(`${nested} Next.`)).toEqual([nested, 'Next.']);
-    });
-
-    const parentheticalContinuations = [
-      'The result was (surprisingly!) 100% accurate.',
-      'The result was (surprisingly!) -- completely accurate.',
-      'The result was (surprisingly!) $100.',
-      'The winner was (surprisingly!) Alice Smith.',
-      'The winner was (Surprisingly!) Alice Smith.',
-      'The winner was ((surprisingly!)) Alice Smith.',
-      'The winner was (she said "Wow!") Alice Smith.',
-    ];
-    test.each(parentheticalContinuations)('keeps the continuation in %s', (input) => {
-      expect(ss(input)).toEqual([input]);
     });
 
     test('should split double exclamation points', () => {
@@ -775,22 +769,9 @@ describe('Utility Functions', () => {
     });
 
     test.each(bracketPairs)('splits final periods through %s%s spacing', (open, close) => {
-      expect(tbt(`${open} Nobody noticed. ${close}`)).toEqual([
-        open,
-        'Nobody',
-        'noticed',
-        '.',
-        close,
-      ]);
-      expect(tbt(`"${open} Nobody noticed. ${close} "`)).toEqual([
-        '``',
-        open,
-        'Nobody',
-        'noticed',
-        '.',
-        close,
-        "''",
-      ]);
+      const tokens = [open, 'Nobody', 'noticed', '.', close];
+      expect(tbt(`${open} Nobody noticed. ${close}`)).toEqual(tokens);
+      expect(tbt(`"${open} Nobody noticed. ${close} "`)).toEqual(['``', ...tokens, "''"]);
     });
 
     test('should return empty array for empty input', () => {

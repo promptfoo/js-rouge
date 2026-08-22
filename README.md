@@ -109,7 +109,7 @@ rougeN("Hello World", "hello world", { caseSensitive: false }); // => 1.0
 
 ### Text Preprocessing
 
-The default Penn Treebank tokenizer expects one sentence at a time. All three metrics segment the original text before applying case folding and tokenizing each sentence. ROUGE-N and ROUGE-S flatten those tokens into one summary-level stream, so grams may still cross sentence boundaries. Explicitly passing the exported `treeBankTokenize` uses the same default path. Other custom `tokenizer` functions supplied to `n()` or `s()` continue to receive each whole summary once; `l()` calls them per sentence.
+By default, all three metrics segment the original text before case folding and per-sentence Penn Treebank tokenization. ROUGE-N/S flatten the tokens, so grams can cross sentence boundaries. Explicitly passing `treeBankTokenize` behaves the same. Custom tokenizers receive each whole summary once in `n()`/`s()` and individual sentences in `l()`.
 
 The tokenizer treats spaces, tabs, line breaks, and other whitespace as word separators. It returns no tokens for whitespace-only text and expands every occurrence of supported contractions. Punctuation remains part of the token stream. Colons and commas are separated unless followed by a digit, preserving numbers such as `12,000` and times such as `12:30`. Multi-initial acronyms such as `U.S.` keep their final dot, including at sentence boundaries, so a heuristic boundary cannot change the acronym's token identity.
 

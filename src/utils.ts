@@ -84,10 +84,6 @@ const closingDelimiterReg = /[\])}>"']/;
 const openingBracketReg = /[([{<]/;
 const closingBracketReg = /[\])}>]/;
 
-function canEndAfterAbbreviation(suffix: string, next: string): boolean {
-  return strIsTitleCase(next) && !excepReg.test(suffix);
-}
-
 /** Keep merged fragments separate; boundary rules only need a suffix and word casing. */
 class SentenceBuffer {
   #parts: string[] = [];
@@ -130,7 +126,7 @@ class SentenceBuffer {
     for (const match of text.matchAll(/\S+/g)) {
       const word = match[0];
       const lowerCase = word === word.toLowerCase();
-      if (match.index === 0 && previous && !/\s/.test(this.suffix.at(-1) ?? '')) {
+      if (match.index === 0 && previous && !/\s/.test(this.#parts.at(-1)?.at(-1) ?? '')) {
         previous.lowerCase = previous.lowerCase && lowerCase;
       } else {
         const titleCase = strIsTitleCase(word);
@@ -148,11 +144,10 @@ class SentenceBuffer {
     this.#parts.push(text);
   }
 
-  trimEnd(allWhitespace = false): void {
+  trimEnd(): void {
     while (this.#parts.length > 0) {
       const index = this.#parts.length - 1;
-      const part = this.#parts[index];
-      const trimmed = allWhitespace ? part.trimEnd() : trimEndSpaces(part);
+      const trimmed = trimEndSpaces(this.#parts[index]);
       if (trimmed.length > 0) {
         this.#parts[index] = trimmed;
         break;
@@ -175,7 +170,7 @@ class SentenceBuffer {
       }
     }
     this.#parts.length = write;
-    this.trimEnd(true);
+    this.trimEnd();
     this.#normalizedThrough = this.#parts.length;
     this.hasLineBreaks = false;
   }
@@ -239,7 +234,7 @@ export function sentenceSegment(input: string): string[] {
         }
       } else if (chunks[idx + 1] && abbrvReg.test(chunk.suffix)) {
         const nextChunk = chunks[idx + 1];
-        if (canEndAfterAbbreviation(chunk.suffix, nextChunk)) {
+        if (strIsTitleCase(nextChunk) && !excepReg.test(chunk.suffix)) {
           // Catch abbreviations followed by a capital letter and treat as a boundary.
           acc.push(chunk.text());
         } else {
@@ -409,26 +404,15 @@ function sentenceEnd(
   if (ellipseReg.test(suffix) && closedBrackets > 0) {
     return -1;
   }
-  if (!abbrvReg.test(suffix)) {
-    return end;
-  }
-  let wordEnd = next + 1;
-  while (wordEnd < input.length && !/\s/.test(input[wordEnd])) {
-    wordEnd++;
-  }
-  return canEndAfterAbbreviation(suffix, input.slice(next, wordEnd)) ? end : -1;
+  return abbrvReg.test(suffix) && excepReg.test(suffix) ? -1 : end;
 }
 
 function trimSpaces(input: string): string {
   let start = 0;
-  let end = input.length;
-  while (start < end && input[start] === ' ') {
+  while (start < input.length && input[start] === ' ') {
     start++;
   }
-  while (end > start && input[end - 1] === ' ') {
-    end--;
-  }
-  return input.slice(start, end);
+  return trimEndSpaces(input.slice(start));
 }
 
 function trimEndSpaces(input: string): string {
@@ -588,20 +572,18 @@ export function nGram(tokens: string[], n = 2, pad: Partial<NGramOptions> = {}):
     };
 
     // Clone the input token array to avoid mutating the source data
-    const tempTokens = tokens.slice(0);
+    workingTokens = tokens.slice();
 
     if (config.start) {
       for (let i = 0; i < n - 1; i++) {
-        tempTokens.unshift(config.val);
+        workingTokens.unshift(config.val);
       }
     }
     if (config.end) {
       for (let i = 0; i < n - 1; i++) {
-        tempTokens.push(config.val);
+        workingTokens.push(config.val);
       }
     }
-
-    workingTokens = tempTokens;
   }
 
   const acc: string[] = [];
