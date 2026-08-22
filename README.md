@@ -187,13 +187,13 @@ The procedure in [Lin (2004), Section 2.1](https://aclanthology.org/W04-1013.pdf
 import { n as rougeN, jackKnife } from "js-rouge";
 
 const candidate = "a";
-const references = ["a b", "a c d"];
+const references = ["a b", "a c d", "a b c d e"];
 const recall = (candidate, reference) =>
   rougeN(candidate, reference, { beta: Infinity });
 
 jackKnife(references, candidate, (reference, systemSummary) =>
   recall(systemSummary, reference),
-); // => 5/12, the mean of recall scores 1/2 and 1/3
+); // => 4/9, the mean of leave-one-out maxima 1/3, 1/2, and 1/2
 ```
 
 The adapter matters for asymmetric scorers such as recall. Passing `recall` directly in this example reverses the comparison and returns `1`. The existing argument order is unchanged; `jackKnife` does not infer which strings are references.
