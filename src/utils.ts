@@ -31,10 +31,8 @@ export function treeBankTokenize(input: string): string[] {
   // 2. Wrap spaces around a double quote preceded by opening brackets
   // 3. Wrap spaces around a non-unicode ellipsis
   // 4. Separate commas/colons except before digits, and wrap other punctuation (;@#$%&)
-  // 5. Wrap spaces around a period and zero or more closing brackets
-  //    (or quotes), when not preceded by a period and when followed
-  //    by the end of the string. Only splits final periods because
-  //    sentence tokenization is assumed as a preprocessing step
+  // 5. Split a final period, allowing closing brackets, quotes, and whitespace after it.
+  //    Do not split ellipses. Sentence tokenization is assumed as a preprocessing step.
   // 6. Wrap spaces around all exclamation marks and question marks
   // 7. Wrap spaces around opening and closing brackets
   // 8. Wrap spaces around en and em-dashes
@@ -44,7 +42,7 @@ export function treeBankTokenize(input: string): string[] {
     .replace(/\.\.\.*/g, ' ... ')
     .replace(/[:,](?!\d)/g, ' $& ')
     .replace(/[;@#$%&]/g, ' $& ')
-    .replace(/([^.])(\.)([\])}>"']*)\s*$/g, '$1 $2$3 ')
+    .replace(/([^.])(\.)([\])}>"'\s]*)$/g, '$1 $2$3 ')
     .replace(/[?!]/g, ' $& ')
     .replace(/[\][(){}<>]/g, ' $& ')
     .replace(/---*/g, ' -- ');
@@ -80,22 +78,28 @@ function escapeRegExp(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-const abbrvReg = new RegExp(
-  `\\b(${GATE_SUBSTITUTIONS.map(escapeRegExp).join('|')})[.!?]"? ?$`,
-  'i',
-);
+const abbrvReg = new RegExp(`\\b(${GATE_SUBSTITUTIONS.map(escapeRegExp).join('|')})[.!?] ?$`, 'i');
 const acronymReg = /[ |.][A-Z].?$/i;
 const breakReg = /[\r\n]+/;
 // Match a bounded ellipsis suffix to avoid excessive backtracking.
 const ellipseReg = /\.{2,10}$/;
-const excepReg = new RegExp(`\\b(${GATE_EXCEPTIONS.map(escapeRegExp).join('|')})[.!?]"? ?$`, 'i');
-// Retain the preceding character, punctuation, and optional closing quote.
-const sentenceSuffixLength = Math.max(10, ...GATE_SUBSTITUTIONS.map((word) => word.length + 3));
-const geographicAcronymReg = /\b(?:U\.S(?:\.A)?|E\.U)\."?$/i;
+const excepReg = new RegExp(`\\b(${GATE_EXCEPTIONS.map(escapeRegExp).join('|')})[.!?] ?$`, 'i');
+const sentenceSuffixLength = Math.max(10, ...GATE_SUBSTITUTIONS.map((word) => word.length + 2));
+const geographicAcronymReg = /\b(?:U\.S(?:\.A)?|E\.U)\.$/i;
 // Conservative acronym boundaries follow pragmatic_segmenter's sentence-starter approach:
 // https://github.com/diasks2/pragmatic_segmenter/blob/master/lib/pragmatic_segmenter/languages/common.rb
 const sentenceStarterReg =
   /^(?:A|Being|Did|For|He|How|However|I|In|It|Millions|More|She|That|The|There|They|We|What|When|Where|Who|Why)\b/;
+const closingDelimiterReg = /[\])}>"']/;
+const closingBracketReg = /[\])}>]/;
+
+function canEndAfterAbbreviation(suffix: string, next: string): boolean {
+  return (
+    strIsTitleCase(next) &&
+    !excepReg.test(suffix) &&
+    (!geographicAcronymReg.test(suffix) || sentenceStarterReg.test(next.trimStart()))
+  );
+}
 
 /** Keep merged fragments separate; boundary rules only need a suffix and word casing. */
 class SentenceBuffer {
@@ -248,13 +252,7 @@ export function sentenceSegment(input: string): string[] {
         }
       } else if (chunks[idx + 1] && abbrvReg.test(chunk.suffix)) {
         const nextChunk = chunks[idx + 1];
-        if (
-          nextChunk.trim() &&
-          strIsTitleCase(nextChunk) &&
-          !excepReg.test(chunk.suffix) &&
-          (!geographicAcronymReg.test(chunk.suffix) ||
-            sentenceStarterReg.test(nextChunk.trimStart()))
-        ) {
+        if (canEndAfterAbbreviation(chunk.suffix, nextChunk)) {
           // Catch abbreviations followed by a capital letter and treat as a boundary.
           acc.push(chunk.text());
         } else {
@@ -321,12 +319,11 @@ function sentenceChunks(input: string): string[] {
       // A terminal must follow the initial character, even if it is punctuation.
       continue;
     }
-    if (
-      (char === '.' || char === '?' || char === '!') &&
-      (index + 1 === input.length || /[\s"]/.test(input[index + 1]))
-    ) {
-      // A closing double quote belongs to the sentence whose punctuation it follows.
-      const end = index + (input[index + 1] === '"' ? 2 : 1);
+    if (char === '.' || char === '?' || char === '!') {
+      const end = sentenceEnd(input, index);
+      if (end === -1) {
+        continue;
+      }
       chunks.push(input.slice(lastEnd, start), input.slice(start, end));
       lastEnd = end;
       index = end - 1;
@@ -336,6 +333,63 @@ function sentenceChunks(input: string): string[] {
 
   chunks.push(input.slice(lastEnd));
   return chunks;
+}
+
+/** Include closing delimiters, or return -1 when the sentence continues. */
+function sentenceEnd(input: string, index: number): number {
+  let end = index + 1;
+  let closed = false;
+  while (end < input.length) {
+    if (closingDelimiterReg.test(input[end])) {
+      closed = true;
+      end++;
+      continue;
+    }
+
+    // A bracket can follow spaces; a quote after spaces may open the next sentence.
+    let next = end;
+    while (next < input.length && /[^\S\r\n]/.test(input[next])) {
+      next++;
+    }
+    if (next > end && next < input.length && closingBracketReg.test(input[next])) {
+      end = next;
+      continue;
+    }
+    break;
+  }
+
+  if (end < input.length && !/\s/.test(input[end])) {
+    return -1;
+  }
+  if (!closed) {
+    return end;
+  }
+
+  let next = end;
+  while (next < input.length && /\s/.test(input[next])) {
+    next++;
+  }
+  if (next === input.length) {
+    return end;
+  }
+  const initial = input[next];
+  if (/[,;:]/.test(initial) || initial.toUpperCase() !== initial) {
+    return -1;
+  }
+
+  const suffix = input.slice(Math.max(0, index + 1 - sentenceSuffixLength), index + 1);
+  // Keep bracketed ellipses inside the surrounding sentence.
+  if (ellipseReg.test(suffix) && closingBracketReg.test(input.slice(index + 1, end))) {
+    return -1;
+  }
+  if (!abbrvReg.test(suffix)) {
+    return end;
+  }
+  let wordEnd = next + 1;
+  while (wordEnd < input.length && !/\s/.test(input[wordEnd])) {
+    wordEnd++;
+  }
+  return canEndAfterAbbreviation(suffix, input.slice(next, wordEnd)) ? end : -1;
 }
 
 function trimSpaces(input: string): string {
