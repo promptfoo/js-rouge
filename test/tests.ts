@@ -356,6 +356,16 @@ describe('Utility Functions', () => {
       ]);
     });
 
+    test.each([
+      'U.S. Government',
+      'The U.S. Government policy.',
+      'E.U. Commission',
+      'U.S.A. Today',
+      'Mt. Fuji',
+    ])('should retain abbreviated names in %s', (input) => {
+      expect(ss(input)).toEqual([input]);
+    });
+
     test('should not split numbers as a non-sentence boundary', () => {
       expect(ss('She has $100.00 in her bag.')).toEqual(['She has $100.00 in her bag.']);
     });
@@ -399,6 +409,12 @@ describe('Utility Functions', () => {
       expect(ss("She turned to him, 'This is great.' she said.")).toEqual([
         "She turned to him, 'This is great.' she said.",
       ]);
+    });
+
+    test('should keep closing double quotes with their sentence', () => {
+      expect(ss('He said... "what?" Next.')).toEqual(['He said... "what?"', 'Next.']);
+      expect(ss('He said "hello." Then left.')).toEqual(['He said "hello."', 'Then left.']);
+      expect(ss('"Hello!" "Goodbye!"')).toEqual(['"Hello!"', '"Goodbye!"']);
     });
 
     test('should split double exclamation points', () => {
@@ -984,6 +1000,10 @@ describe('Core Functions', () => {
       expect(score('Note: 12,000 items', 'Note : 12,000 items')).toBe(1);
       expect(score('12,000 items', '12 000 items')).toBeLessThan(1);
     });
+
+    test('should preserve opening and closing quote token identities', () => {
+      expect(score('He said... "what?" Next.', "He said ... `` what ? '' Next .")).toBe(1);
+    });
   });
 
   describe.each([
@@ -1004,6 +1024,19 @@ describe('Core Functions', () => {
       const tokenizer = jest.fn((input: string): string[] => input.split(' '));
       expect(score('Alpha. Beta.', 'alpha. beta.', { tokenizer, caseSensitive: false })).toBe(1);
       expect(tokenizer.mock.calls).toEqual([['alpha. beta.'], ['alpha. beta.']]);
+    });
+
+    test('should use sentence tokenization for the explicitly supplied built-in tokenizer', () => {
+      expect(score('Alpha. Beta.', 'Alpha . Beta .', { tokenizer: rouge.treeBankTokenize })).toBe(
+        1,
+      );
+    });
+
+    test('should not split a period off an acronym inside a name', () => {
+      const tokenizer = (input: string): string[] => rouge.treeBankTokenize(input);
+      expect(score('U.S. Government', 'U.S Government')).toBe(
+        score('U.S. Government', 'U.S Government', { tokenizer }),
+      );
     });
   });
 
