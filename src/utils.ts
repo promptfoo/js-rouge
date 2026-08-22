@@ -96,7 +96,7 @@ export function sentenceSegment(input: string): string[] {
   const ellipseReg = /\.{2,10}$/;
   const excepReg = new RegExp(`\\b(${GATE_EXCEPTIONS.join('|')})[.!?] ?$`, 'i');
 
-  // Keep captured sentences and unmatched separators for the rules below.
+  // Split sentences naively based on common terminals (.?!")
   const chunks = sentenceChunks(input);
 
   const acc: string[] = [];
