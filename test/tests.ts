@@ -386,6 +386,19 @@ describe('Utility Functions', () => {
       expect(ss('He said... "what?" Next.')).toEqual(['He said... "what?"', 'Next.']);
       expect(ss('He said "hello." Then left.')).toEqual(['He said "hello."', 'Then left.']);
       expect(ss('"Hello!" "Goodbye!"')).toEqual(['"Hello!"', '"Goodbye!"']);
+      expect(ss('He moved to the "U.S." How about you?')).toEqual([
+        'He moved to the "U.S."',
+        'How about you?',
+      ]);
+    });
+
+    const quotedAbbreviations = [
+      'Use "e.g." here.',
+      '"Dr." is a title.',
+      '"U.S." is an abbreviation.',
+    ];
+    test.each(quotedAbbreviations)('keeps quoted abbreviations in %s', (input) => {
+      expect(ss(input)).toEqual([input]);
     });
 
     test('should split double exclamation points', () => {
@@ -653,6 +666,11 @@ describe('Utility Functions', () => {
         expect(ss('Wait...\twhat?')).toEqual(['Wait...\twhat?']);
         expect(ss('Wait...what?')).toEqual(['Wait...what?']);
       });
+
+      test.each(lineBreaks)('joins wrapped ellipses across %j', (lineBreak) => {
+        expect(ss(`Wait...${lineBreak}what?`)).toEqual(['Wait... what?']);
+        expect(ss(`Wait...${lineBreak}what? Next step`)).toEqual(['Wait... what?', 'Next step']);
+      });
     });
   });
 
@@ -904,8 +922,13 @@ describe('Core Functions', () => {
       expect(score('12,000 items', '12 000 items')).toBeLessThan(1);
     });
 
-    test('should preserve opening and closing quote token identities', () => {
-      expect(score('He said... "what?" Next.', "He said ... `` what ? '' Next .")).toBe(1);
+    test.each([
+      ['He said... "what?" Next.', "He said ... `` what ? '' Next ."],
+      ['Use "e.g." here.', "Use `` e.g. '' here ."],
+      ['"Dr." is a title.', "`` Dr. '' is a title ."],
+      ['"U.S." is an abbreviation.', "`` U.S. '' is an abbreviation ."],
+    ])('preserves quoted token identities in %s', (input, tokens) => {
+      expect(score(input, tokens)).toBe(1);
     });
   });
 
@@ -1074,6 +1097,10 @@ describe('Core Functions', () => {
     test('should preserve word separation after an ellipsis for custom tokenizers', () => {
       const tokenizer = (input: string): string[] => input.split(/\s+/);
       expect(l('what?', 'Wait... what?', { tokenizer })).toBeCloseTo(2 / 3);
+    });
+
+    test('should preserve word order across wrapped ellipses', () => {
+      expect(l('what Wait', 'Wait...\nwhat?')).toBeCloseTo(1 / 3, 15);
     });
 
     test('should throw RangeError for empty candidate', () => {

@@ -79,14 +79,18 @@ function escapeRegExp(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-const abbrvReg = new RegExp(`\\b(${GATE_SUBSTITUTIONS.map(escapeRegExp).join('|')})[.!?] ?$`, 'i');
+const abbrvReg = new RegExp(
+  `\\b(${GATE_SUBSTITUTIONS.map(escapeRegExp).join('|')})[.!?]"? ?$`,
+  'i',
+);
 const acronymReg = /[ |.][A-Z].?$/i;
 const breakReg = /[\r\n]+/;
 // Match a bounded ellipsis suffix to avoid excessive backtracking.
 const ellipseReg = /\.{2,10}$/;
-const excepReg = new RegExp(`\\b(${GATE_EXCEPTIONS.map(escapeRegExp).join('|')})[.!?] ?$`, 'i');
-const sentenceSuffixLength = Math.max(10, ...GATE_SUBSTITUTIONS.map((word) => word.length + 2));
-const geographicAcronymReg = /\b(?:U\.S(?:\.A)?|E\.U)\.$/i;
+const excepReg = new RegExp(`\\b(${GATE_EXCEPTIONS.map(escapeRegExp).join('|')})[.!?]"? ?$`, 'i');
+// Retain the preceding character, punctuation, and optional closing quote.
+const sentenceSuffixLength = Math.max(10, ...GATE_SUBSTITUTIONS.map((word) => word.length + 3));
+const geographicAcronymReg = /\b(?:U\.S(?:\.A)?|E\.U)\."?$/i;
 // Conservative acronym boundaries follow pragmatic_segmenter's sentence-starter approach:
 // https://github.com/diasks2/pragmatic_segmenter/blob/master/lib/pragmatic_segmenter/languages/common.rb
 const sentenceStarterReg =
@@ -280,8 +284,8 @@ export function sentenceSegment(input: string): string[] {
         // Catch mid-sentence ellipses (and their derivatives) and merge them
         const nextChunk = chunks[idx + 1];
         chunk.append(nextChunk.replace(/ +/g, ' '));
-        if (!nextChunk.trim() && chunks[idx + 2]) {
-          // Keep the separator inside the sentence so the next pass cannot trim it away.
+        if (!(nextChunk.trim() || breakReg.test(nextChunk)) && chunks[idx + 2]) {
+          // Keep the separator inside the sentence; leave line breaks to the newline rule.
           chunk.append(chunks[idx + 2].replace(/ +/g, ' '));
           idx++;
         }
