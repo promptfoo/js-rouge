@@ -44,7 +44,7 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - run: npm ci
       - name: Biome CI check
-        run: npx biome ci .
+        run: npx biome ci . --error-on-warnings
       - run: npm run build
       - name: Verify build artifacts
         run: |
