@@ -3,6 +3,13 @@ import { join } from 'node:path';
 import { buildSync } from 'esbuild';
 import * as rouge from '../src/rouge';
 
+const bracketPairs = [
+  ['(', ')'],
+  ['[', ']'],
+  ['{', '}'],
+  ['<', '>'],
+] as const;
+
 describe('Utility Functions', () => {
   describe('fact', () => {
     const { fact } = rouge;
@@ -319,6 +326,10 @@ describe('Utility Functions', () => {
         'I live in the U.S.',
         'How about you?',
       ]);
+      expect(ss('I live in the (U.S.) How about you?')).toEqual([
+        'I live in the (U.S.)',
+        'How about you?',
+      ]);
     });
 
     test('should not split U.S. as non-sentence boundary', () => {
@@ -333,6 +344,7 @@ describe('Utility Functions', () => {
       'E.U. Commission',
       'U.S.A. Today',
       'Mt. Fuji',
+      'The (U.S.) Government issued a statement.',
     ])('should retain abbreviated names in %s', (input) => {
       expect(ss(input)).toEqual([input]);
     });
@@ -390,15 +402,33 @@ describe('Utility Functions', () => {
         'He moved to the "U.S."',
         'How about you?',
       ]);
+      expect(ss('(He said "Stop.") Next came rain.')).toEqual([
+        '(He said "Stop.")',
+        'Next came rain.',
+      ]);
     });
 
-    const quotedAbbreviations = [
+    const quotedContinuations = [
       'Use "e.g." here.',
       '"Dr." is a title.',
       '"U.S." is an abbreviation.',
+      'She wrote "etc.", then left.',
+      'She wrote "etc." , then left.',
+      'She wrote "etc."; then left.',
+      'She wrote "etc.": more would follow.',
+      'She wrote "hello." then left.',
     ];
-    test.each(quotedAbbreviations)('keeps quoted abbreviations in %s', (input) => {
+    test.each(quotedContinuations)('keeps quoted continuations in %s', (input) => {
       expect(ss(input)).toEqual([input]);
+    });
+
+    test.each(bracketPairs)('keeps closing %s%s with its sentence', (open, close) => {
+      const sentence = `${open}Nobody noticed.${close}`;
+      const spaced = `${open} Nobody noticed. ${close}`;
+      expect(ss(`${sentence} Next came rain.`)).toEqual([sentence, 'Next came rain.']);
+      expect(ss(`${spaced} Next came rain.`)).toEqual([spaced, 'Next came rain.']);
+      expect(ss(`${sentence} then left.`)).toEqual([`${sentence} then left.`]);
+      expect(ss(`${spaced} then left.`)).toEqual([`${spaced} then left.`]);
     });
 
     test('should split double exclamation points', () => {
@@ -677,6 +707,16 @@ describe('Utility Functions', () => {
   describe('treeBankTokenize', () => {
     const tbt = rouge.treeBankTokenize;
 
+    test.each(bracketPairs)('splits final periods through %s%s spacing', (open, close) => {
+      expect(tbt(`${open} Nobody noticed. ${close}`)).toEqual([
+        open,
+        'Nobody',
+        'noticed',
+        '.',
+        close,
+      ]);
+    });
+
     test('should return empty array for empty input', () => {
       expect(tbt('')).toEqual([]);
     });
@@ -927,8 +967,16 @@ describe('Core Functions', () => {
       ['Use "e.g." here.', "Use `` e.g. '' here ."],
       ['"Dr." is a title.', "`` Dr. '' is a title ."],
       ['"U.S." is an abbreviation.', "`` U.S. '' is an abbreviation ."],
+      ['She wrote "etc.", then left.', "She wrote `` etc. '' , then left ."],
     ])('preserves quoted token identities in %s', (input, tokens) => {
       expect(score(input, tokens)).toBe(1);
+    });
+
+    test.each(bracketPairs)('keeps %s%s spacing equivalent', (open, close) => {
+      const sentence = `${open}Nobody noticed.${close}`;
+      const spaced = `${open} Nobody noticed. ${close}`;
+      expect(score(`${sentence} Next came rain.`, `${spaced} Next came rain.`)).toBe(1);
+      expect(score(`${sentence} then left.`, `${spaced} then left.`)).toBe(1);
     });
   });
 
