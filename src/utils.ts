@@ -128,7 +128,7 @@ class SentenceBuffer {
     for (const match of text.matchAll(/\S+/g)) {
       const word = match[0];
       const lowerCase = word === word.toLowerCase();
-      if (match.index === 0 && previous && !/\s/.test(this.suffix.at(-1) ?? '')) {
+      if (match.index === 0 && previous && !/\s/.test(this.#parts.at(-1)?.at(-1) ?? '')) {
         previous.lowerCase = previous.lowerCase && lowerCase;
       } else {
         const titleCase = strIsTitleCase(word);
@@ -146,11 +146,10 @@ class SentenceBuffer {
     this.#parts.push(text);
   }
 
-  trimEnd(allWhitespace = false): void {
+  trimEnd(): void {
     while (this.#parts.length > 0) {
       const index = this.#parts.length - 1;
-      const part = this.#parts[index];
-      const trimmed = allWhitespace ? part.trimEnd() : trimEndSpaces(part);
+      const trimmed = trimEndSpaces(this.#parts[index]);
       if (trimmed.length > 0) {
         this.#parts[index] = trimmed;
         break;
@@ -173,7 +172,7 @@ class SentenceBuffer {
       }
     }
     this.#parts.length = write;
-    this.trimEnd(true);
+    this.trimEnd();
     this.#normalizedThrough = this.#parts.length;
     this.hasLineBreaks = false;
   }
@@ -315,14 +314,10 @@ function sentenceChunks(input: string): string[] {
 
 function trimSpaces(input: string): string {
   let start = 0;
-  let end = input.length;
-  while (start < end && input[start] === ' ') {
+  while (start < input.length && input[start] === ' ') {
     start++;
   }
-  while (end > start && input[end - 1] === ' ') {
-    end--;
-  }
-  return input.slice(start, end);
+  return trimEndSpaces(input.slice(start));
 }
 
 function trimEndSpaces(input: string): string {
