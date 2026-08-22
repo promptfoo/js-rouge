@@ -572,20 +572,18 @@ export function nGram(tokens: string[], n = 2, pad: Partial<NGramOptions> = {}):
     };
 
     // Clone the input token array to avoid mutating the source data
-    const tempTokens = tokens.slice(0);
+    workingTokens = tokens.slice();
 
     if (config.start) {
       for (let i = 0; i < n - 1; i++) {
-        tempTokens.unshift(config.val);
+        workingTokens.unshift(config.val);
       }
     }
     if (config.end) {
       for (let i = 0; i < n - 1; i++) {
-        tempTokens.push(config.val);
+        workingTokens.push(config.val);
       }
     }
-
-    workingTokens = tempTokens;
   }
 
   const acc: string[] = [];

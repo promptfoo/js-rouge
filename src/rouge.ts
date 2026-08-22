@@ -107,7 +107,6 @@ export function n(cand: string, ref: string, opts?: RougeNOptions): number {
     throw new RangeError('Reference cannot be an empty string');
   }
 
-  // Undefined optional fields use the same defaults as omitted fields.
   const {
     n: size = 1,
     beta = 1.0,
@@ -164,7 +163,6 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
     throw new RangeError('Reference cannot be an empty string');
   }
 
-  // Undefined optional fields use the same defaults as omitted fields.
   const {
     beta = 1.0,
     caseSensitive = true,
@@ -221,7 +219,6 @@ export function l(cand: string, ref: string, opts?: RougeLOptions): number {
     throw new RangeError('Reference cannot be an empty string');
   }
 
-  // Undefined optional fields use the same defaults as omitted fields.
   const {
     beta = 1.0,
     caseSensitive = true,
