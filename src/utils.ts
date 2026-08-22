@@ -699,15 +699,16 @@ export function fMeasure(p: number, r: number, beta = 1.0): number {
     return fMeasure(r, p, 1 / beta);
   }
   // Scale by the smaller score instead of multiplying precision and recall.
+  // Roundoff can overshoot the larger score, so bound each scaled result.
   if (p > r) {
     const inverseBeta = 1 / beta;
     const weight = inverseBeta * inverseBeta;
-    return r * ((1 + weight) / (1 + weight * (r / p)));
+    return Math.min(p, r * ((1 + weight) / (1 + weight * (r / p))));
   }
 
   const betaSq = beta * beta;
   if (Number.isFinite(betaSq)) {
-    return p * ((1 + betaSq) / (1 + betaSq * (p / r)));
+    return Math.min(r, p * ((1 + betaSq) / (1 + betaSq * (p / r))));
   }
 
   // Multiplying precision by beta first rescales even the smallest subnormal.

@@ -898,6 +898,17 @@ describe('Utility Functions', () => {
       expect(fm(1, Number.MIN_VALUE, 2)).toBe(Number.MIN_VALUE);
     });
 
+    const scoreBoundsCases = [
+      [1.737_610_985_955_693e-134, 1, 1.884_479_164_656_194_7e105],
+      [0.8, 0.799_999_999_999_999_9, 2.5],
+    ];
+    test.each(scoreBoundsCases)('bounds F-beta (%p, %p, %p)', (p, r, beta) => {
+      for (const score of [fm(p, r, beta), fm(r, p, 1 / beta)]) {
+        expect(score).toBeGreaterThanOrEqual(Math.min(p, r));
+        expect(score).toBeLessThanOrEqual(Math.max(p, r));
+      }
+    });
+
     test('should throw RangeError for OOB precision input', () => {
       expect(() => fm(10, 0.5)).toThrow(RangeError);
     });
