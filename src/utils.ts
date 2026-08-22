@@ -25,25 +25,20 @@ export function treeBankTokenize(input: string): string[] {
     return [];
   }
 
-  // Does the following things in order of appearance by line:
-  // 1. Replace quotes at the sentence start position with double ticks
-  // 2. Wrap spaces around a double quote preceded by opening brackets
-  // 3. Wrap spaces around a non-unicode ellipsis
-  // 4. Wrap spaces around some punctuation signs (,;@#$%&)
-  // 5. Wrap spaces around a period and zero or more closing brackets
-  //    (or quotes), when not preceded by a period and when followed
-  //    by the end of the string. Only splits final periods because
-  //    sentence tokenization is assumed as a preprocessing step
-  // 6. Wrap spaces around all exclamation marks and question marks
-  // 7. Wrap spaces around opening and closing brackets
-  // 8. Wrap spaces around en and em-dashes
-  let parse = text
-    .replace(/^"/, ' `` ')
-    .replace(/([ ([{<])"/g, '$1 `` ')
+  // Classify paired quotes before inserting spaces around punctuation.
+  let insideQuotes = false;
+  let parse = text.replace(/"/g, (_quote: string, index: number): string => {
+    insideQuotes = opensDoubleQuote(text, index, insideQuotes);
+    return insideQuotes ? ' `` ' : " '' ";
+  });
+
+  // Preserve numeric separators and acronym dots, even at a heuristic sentence boundary.
+  parse = parse
     .replace(/\.\.\.*/g, ' ... ')
+    .replace(/[:,](?!\d)/g, ' $& ')
     .replace(/[;@#$%&]/g, ' $& ')
-    .replace(/([^.])(\.)([\])}>"']*)\s*$/g, '$1 $2$3 ')
-    .replace(/[,?!]/g, ' $& ')
+    .replace(/([^.])(?<!\b[A-Za-z]\.[A-Za-z])(\.)([\])}>'\s]*)$/g, '$1 $2$3 ')
+    .replace(/[?!]/g, ' $& ')
     .replace(/[\][(){}<>]/g, ' $& ')
     .replace(/---*/g, ' -- ');
 
@@ -51,13 +46,8 @@ export function treeBankTokenize(input: string): string[] {
   // i.e. reduce the number of Regex matches required
   parse = ` ${parse} `;
 
-  // Does the following things in order of appearance by line:
-  // 1. Replace double quotes with a pair of single quotes wrapped with spaces
-  // 2. Wrap possessive or closing single quotes
-  // 3. Add a space before single quotes followed by `s`, `m`, or `d` and a space
-  // 4. Add a space before occurrences of `'ll`, `'re`, `'ve` or `n't`
+  // Split possessive/closing apostrophes and common contractions.
   parse = parse
-    .replace(/"/g, " '' ")
     .replace(/([^'])' /g, "$1 ' ")
     .replace(/'([sSmMdD]) /g, " '$1 ")
     .replace(/('ll|'LL|'re|'RE|'ve|'VE|n't|N'T) /g, ' $1 ');
@@ -74,6 +64,10 @@ export function treeBankTokenize(input: string): string[] {
   return parse.split(' ');
 }
 
+function opensDoubleQuote(input: string, index: number, insideQuotes: boolean): boolean {
+  return !insideQuotes && (index === 0 || /[\s([{<]/.test(input[index - 1]));
+}
+
 function escapeRegExp(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -85,6 +79,9 @@ const breakReg = /[\r\n]+/;
 const ellipseReg = /\.{2,10}$/;
 const excepReg = new RegExp(`\\b(${GATE_EXCEPTIONS.map(escapeRegExp).join('|')})[.!?] ?$`, 'i');
 const sentenceSuffixLength = Math.max(10, ...GATE_SUBSTITUTIONS.map((word) => word.length + 2));
+const closingDelimiterReg = /[\])}>"']/;
+const openingBracketReg = /[([{<]/;
+const closingBracketReg = /[\])}>]/;
 
 /** Keep merged fragments separate; boundary rules only need a suffix and word casing. */
 class SentenceBuffer {
@@ -199,7 +196,7 @@ export function sentenceSegment(input: string): string[] {
     return [];
   }
 
-  // Split sentences naively based on common terminals (.?!")
+  // Scan terminals before applying abbreviation and line-wrap rules.
   const chunks = sentenceChunks(input);
 
   const acc: string[] = [];
@@ -236,13 +233,12 @@ export function sentenceSegment(input: string): string[] {
         }
       } else if (chunks[idx + 1] && abbrvReg.test(chunk.suffix)) {
         const nextChunk = chunks[idx + 1];
-        if (nextChunk.trim() && strIsTitleCase(nextChunk) && !excepReg.test(chunk.suffix)) {
+        if (strIsTitleCase(nextChunk) && !excepReg.test(chunk.suffix)) {
           // Catch abbreviations followed by a capital letter and treat as a boundary.
-          // FIXME: This causes named entities like `Mt. Fuji` or `U.S. Government` to fail.
           acc.push(chunk.text());
         } else {
           // Catch common abbreviations and merge them with a delimiting space
-          chunk.append(` ${nextChunk.replace(/ +/g, ' ')}`);
+          chunk.append(` ${trimSpaces(nextChunk.replace(/ +/g, ' '))}`);
           pending = chunk;
         }
       } else if (chunks[idx + 1] && acronymReg.test(chunk.suffix)) {
@@ -266,7 +262,13 @@ export function sentenceSegment(input: string): string[] {
         }
       } else if (chunks[idx + 1] && ellipseReg.test(chunk.suffix)) {
         // Catch mid-sentence ellipses (and their derivatives) and merge them
-        chunk.append(chunks[idx + 1].replace(/ +/g, ' '));
+        const nextChunk = chunks[idx + 1];
+        chunk.append(nextChunk.replace(/ +/g, ' '));
+        if (!(nextChunk.trim() || breakReg.test(nextChunk)) && chunks[idx + 2]) {
+          // Keep the separator inside the sentence; leave line breaks to the newline rule.
+          chunk.append(chunks[idx + 2].replace(/ +/g, ' '));
+          idx++;
+        }
         pending = chunk;
       } else {
         acc.push(chunk.text());
@@ -283,11 +285,24 @@ function sentenceChunks(input: string): string[] {
   const chunks: string[] = [];
   let lastEnd = 0;
   let start = -1;
+  let insideQuotes = false;
+  const brackets = { depth: 0, standalone: false };
 
   for (let index = 0; index < input.length; index++) {
     const char = input[index];
-    if (char === '\r' || char === '\n') {
-      // A match cannot cross CR/LF; its prefix remains unmatched text.
+    if (char === '"') {
+      insideQuotes = opensDoubleQuote(input, index, insideQuotes);
+    }
+    if (openingBracketReg.test(char)) {
+      if (brackets.depth === 0) {
+        brackets.standalone = start === -1;
+      }
+      brackets.depth++;
+    } else if (closingBracketReg.test(char)) {
+      brackets.depth = Math.max(0, brackets.depth - 1);
+    }
+    if (index < lastEnd || char === '\r' || char === '\n') {
+      // Only closing-delimiter lookahead can cross CR/LF; other wraps reset the prefix.
       start = -1;
       continue;
     }
@@ -298,18 +313,97 @@ function sentenceChunks(input: string): string[] {
       // A terminal must follow the initial character, even if it is punctuation.
       continue;
     }
-    if (
-      (char === '.' || char === '?' || char === '!') &&
-      (index + 1 === input.length || /[\s"]/.test(input[index + 1]))
-    ) {
-      chunks.push(input.slice(lastEnd, start), input.slice(start, index + 1));
-      lastEnd = index + 1;
+    if (char === '.' || char === '?' || char === '!') {
+      const end = sentenceEnd(input, index, insideQuotes, brackets);
+      if (end === -1) {
+        continue;
+      }
+      // Captured line wraps can only occur between the terminal and closing delimiters.
+      chunks.push(input.slice(lastEnd, start), input.slice(start, end).replace(/[\r\n]+/g, ' '));
+      lastEnd = end;
       start = -1;
     }
   }
 
   chunks.push(input.slice(lastEnd));
   return chunks;
+}
+
+/** Scan closing delimiters, including whitespace before a pending closing quote. */
+function closingDelimiterEnd(input: string, index: number, insideQuotes: boolean): number {
+  let end = index + 1;
+  let quotePending = insideQuotes;
+  while (end < input.length) {
+    if (closingDelimiterReg.test(input[end])) {
+      quotePending &&= input[end] !== '"';
+      end++;
+      continue;
+    }
+
+    // Only consume a spaced quote when it closes an existing quotation.
+    let next = end;
+    while (next < input.length && /\s/.test(input[next])) {
+      next++;
+    }
+    if (
+      next > end &&
+      next < input.length &&
+      (closingBracketReg.test(input[next]) || (quotePending && input[next] === '"'))
+    ) {
+      end = next;
+      continue;
+    }
+    break;
+  }
+  return end;
+}
+
+/** Include closing delimiters, or return -1 when the sentence continues. */
+function sentenceEnd(
+  input: string,
+  index: number,
+  insideQuotes: boolean,
+  brackets: { depth: number; standalone: boolean },
+): number {
+  const end = closingDelimiterEnd(input, index, insideQuotes);
+  if (end < input.length && !/\s/.test(input[end])) {
+    return -1;
+  }
+  if (end === index + 1) {
+    return end;
+  }
+
+  let closedBrackets = 0;
+  for (let i = index + 1; i < end; i++) {
+    if (closingBracketReg.test(input[i])) {
+      closedBrackets++;
+    }
+  }
+  const closesQuotation = insideQuotes && input[end - 1] === '"';
+  if (
+    closedBrackets > 0 &&
+    (closedBrackets < brackets.depth || !(brackets.standalone || closesQuotation))
+  ) {
+    return -1;
+  }
+
+  let next = end;
+  while (next < input.length && /[\s"'([{<]/.test(input[next])) {
+    next++;
+  }
+  if (next === input.length) {
+    return end;
+  }
+  if (!charIsUpperCase(input[next])) {
+    return -1;
+  }
+
+  const suffix = input.slice(Math.max(0, index + 1 - sentenceSuffixLength), index + 1);
+  // Keep bracketed ellipses inside the surrounding sentence.
+  if (ellipseReg.test(suffix) && closedBrackets > 0) {
+    return -1;
+  }
+  return abbrvReg.test(suffix) && excepReg.test(suffix) ? -1 : end;
 }
 
 function trimSpaces(input: string): string {

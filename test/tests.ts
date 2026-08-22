@@ -3,6 +3,14 @@ import { join } from 'node:path';
 import { buildSync } from 'esbuild';
 import * as rouge from '../src/rouge';
 
+const bracketPairs = [
+  ['(', ')'],
+  ['[', ']'],
+  ['{', '}'],
+  ['<', '>'],
+] as const;
+const geographicAcronyms = ['U.S.', 'U.S.A.', 'E.U.'];
+
 describe('Utility Functions', () => {
   describe('fact', () => {
     const { fact } = rouge;
@@ -319,12 +327,36 @@ describe('Utility Functions', () => {
         'I live in the U.S.',
         'How about you?',
       ]);
+      expect(ss('(I live in the U.S.) How about you?')).toEqual([
+        '(I live in the U.S.)',
+        'How about you?',
+      ]);
+    });
+
+    test.each(geographicAcronyms)('allows a proper name after %s', (acronym) => {
+      const first = `I live in the ${acronym}`;
+      const second = 'Alice lives in Canada.';
+      expect(ss(`${first} ${second}`)).toEqual([first, second]);
     });
 
     test('should not split U.S. as non-sentence boundary', () => {
       expect(ss('I have lived in the U.S. for 20 years.')).toEqual([
         'I have lived in the U.S. for 20 years.',
       ]);
+    });
+
+    test.each([
+      'U.S. Government',
+      'The U.S. Government policy.',
+      'E.U. Commission',
+      'U.S.A. Today',
+    ])('preserves acronym tokens across boundaries in %s', (input) => {
+      expect(ss(input).flatMap(rouge.treeBankTokenize)).toEqual(rouge.treeBankTokenize(input));
+    });
+
+    const abbreviatedNames = ['Mt. Fuji', 'The (U.S.) Government issued a statement.'];
+    test.each(abbreviatedNames)('keeps abbreviated names in %s', (input) => {
+      expect(ss(input)).toEqual([input]);
     });
 
     test('should not split numbers as a non-sentence boundary', () => {
@@ -370,6 +402,54 @@ describe('Utility Functions', () => {
       expect(ss("She turned to him, 'This is great.' she said.")).toEqual([
         "She turned to him, 'This is great.' she said.",
       ]);
+    });
+
+    test('should keep closing double quotes with their sentence', () => {
+      expect(ss('He said... "what?" Next.')).toEqual(['He said... "what?"', 'Next.']);
+      expect(ss('He said "hello." Then left.')).toEqual(['He said "hello."', 'Then left.']);
+      expect(ss('"Hello!" "Goodbye!"')).toEqual(['"Hello!"', '"Goodbye!"']);
+      expect(ss('(Stop.) "Next."')).toEqual(['(Stop.)', '"Next."']);
+      expect(ss('He moved to the "U.S." How about you?')).toEqual([
+        'He moved to the "U.S."',
+        'How about you?',
+      ]);
+      expect(ss('(He said "Stop.") Next came rain.')).toEqual([
+        '(He said "Stop.")',
+        'Next came rain.',
+      ]);
+    });
+
+    const sentenceContinuations = [
+      'Use "e.g." here.',
+      '"Dr." is a title.',
+      '"U.S." is an abbreviation.',
+      'She wrote "etc.", then left.',
+      'She wrote "etc." , then left.',
+      'She wrote "etc."; then left.',
+      'She wrote "etc.": more would follow.',
+      'She wrote "hello." then left.',
+      'The label was "Hello!" 100 times larger.',
+      'The result was (surprisingly!) 100% accurate.',
+      'The result was (surprisingly!) -- completely accurate.',
+      'The result was (surprisingly!) $100.',
+      'The winner was (surprisingly!) Alice Smith.',
+      'The winner was (Surprisingly!) Alice Smith.',
+      'The winner was ((surprisingly!)) Alice Smith.',
+      'The winner was (she said "Wow!") Alice Smith.',
+    ];
+    test.each(sentenceContinuations)('keeps continuations in %s', (input) => {
+      expect(ss(input)).toEqual([input]);
+    });
+
+    test.each(bracketPairs)('keeps closing %s%s with its sentence', (open, close) => {
+      const sentence = `${open}Nobody noticed.${close}`;
+      const spaced = `${open} Nobody noticed. ${close}`;
+      expect(ss(`${sentence} Next came rain.`)).toEqual([sentence, 'Next came rain.']);
+      expect(ss(`${spaced} Next came rain.`)).toEqual([spaced, 'Next came rain.']);
+      expect(ss(`${sentence} then left.`)).toEqual([`${sentence} then left.`]);
+      expect(ss(`${spaced} then left.`)).toEqual([`${spaced} then left.`]);
+      const nested = `He said "${open}Stop. ${close} "`;
+      expect(ss(`${nested} Next.`)).toEqual([nested, 'Next.']);
     });
 
     test('should split double exclamation points', () => {
@@ -631,14 +711,39 @@ describe('Utility Functions', () => {
       });
 
       test('should handle mid-sentence ellipsis', () => {
-        // Tests ellipsis merge branch (line 157)
-        expect(ss('He said.. and then continued.')).toEqual(['He said..and then continued.']);
+        expect(ss('He said.. and then continued.')).toEqual(['He said.. and then continued.']);
+        expect(ss('Wait... what?')).toEqual(['Wait... what?']);
+        expect(ss('Wait...  what?')).toEqual(['Wait... what?']);
+        expect(ss('Wait...\twhat?')).toEqual(['Wait...\twhat?']);
+        expect(ss('Wait...what?')).toEqual(['Wait...what?']);
+      });
+
+      test.each(lineBreaks)('joins wrapped ellipses across %j', (lineBreak) => {
+        expect(ss(`Wait...${lineBreak}what?`)).toEqual(['Wait... what?']);
+        expect(ss(`Wait...${lineBreak}what? Next step`)).toEqual(['Wait... what?', 'Next step']);
+      });
+
+      test.each(lineBreaks)('keeps wrapped closing quotes (%j)', (lineBreak) => {
+        expect(ss(`He said "Stop.${lineBreak}" Next.`)).toEqual(['He said "Stop. "', 'Next.']);
+        expect(ss(`He said "Stop.${lineBreak}"`)).toEqual(['He said "Stop. "']);
+        expect(ss(`(He said "Stop.${lineBreak}") Next.`)).toEqual(['(He said "Stop. ")', 'Next.']);
       });
     });
   });
 
   describe('treeBankTokenize', () => {
     const tbt = rouge.treeBankTokenize;
+
+    test.each(geographicAcronyms)('retains the final dot in %s', (acronym) => {
+      expect(tbt(acronym)).toEqual([acronym]);
+      expect(tbt(`"${acronym}"`)).toEqual(['``', acronym, "''"]);
+    });
+
+    test.each(bracketPairs)('splits final periods through %s%s spacing', (open, close) => {
+      const tokens = [open, 'Nobody', 'noticed', '.', close];
+      expect(tbt(`${open} Nobody noticed. ${close}`)).toEqual(tokens);
+      expect(tbt(`"${open} Nobody noticed. ${close} "`)).toEqual(['``', ...tokens, "''"]);
+    });
 
     test('should return empty array for empty input', () => {
       expect(tbt('')).toEqual([]);
@@ -718,6 +823,14 @@ describe('Utility Functions', () => {
       ]);
     });
 
+    test.each([
+      ['Note: hello, world:', ['Note', ':', 'hello', ',', 'world', ':']],
+      ['12,000 items at 12:30,', ['12,000', 'items', 'at', '12:30', ',']],
+      ['12,000,000 and 3.88.', ['12,000,000', 'and', '3.88', '.']],
+    ])('should apply Treebank comma and colon rules to %s', (input, expected) => {
+      expect(tbt(input)).toEqual(expected);
+    });
+
     test('should handle double quotation marks', () => {
       expect(tbt('"We beat some pretty good teams to get here," Slocum said.')).toEqual([
         '``',
@@ -734,6 +847,17 @@ describe('Utility Functions', () => {
         "''",
         'Slocum',
         'said',
+        '.',
+      ]);
+      expect(tbt('5" nails and "wide" boards.')).toEqual([
+        '5',
+        "''",
+        'nails',
+        'and',
+        '``',
+        'wide',
+        "''",
+        'boards',
         '.',
       ]);
     });
@@ -861,6 +985,11 @@ describe('Core Functions', () => {
     ['ROUGE-L', rouge.l],
   ] as const;
   describe.each(metrics)('%s input handling', (_name, score) => {
+    test.each(['\n', '\r\n', '\r'])('keeps wrapped quotes (%j)', (lineBreak) => {
+      expect(score(`He said "Stop.${lineBreak}" Next.`, 'He said "Stop." Next.')).toBe(1);
+      expect(score(`He said "Stop.${lineBreak}"`, 'He said "Stop."')).toBe(1);
+    });
+
     test('should treat word-separating whitespace consistently', () => {
       expect(score('alpha\tbeta', 'alpha beta')).toBe(1);
       expect(score('alpha\nbeta', 'alpha beta')).toBe(1);
@@ -870,6 +999,65 @@ describe('Core Functions', () => {
     test('should reject whitespace-only summaries like empty strings', () => {
       expect(() => score(' \t\r\n', 'alpha beta')).toThrow('Candidate cannot be an empty string');
       expect(() => score('alpha beta', ' \t\r\n')).toThrow('Reference cannot be an empty string');
+    });
+
+    test('should separate colons without splitting numeric commas', () => {
+      expect(score('Note: 12,000 items', 'Note : 12,000 items')).toBe(1);
+      expect(score('12,000 items', '12 000 items')).toBeLessThan(1);
+    });
+
+    test.each([
+      ['He said... "what?" Next.', "He said ... `` what ? '' Next ."],
+      ['Use "e.g." here.', "Use `` e.g. '' here ."],
+      ['"Dr." is a title.', "`` Dr. '' is a title ."],
+      ['"U.S." is an abbreviation.', "`` U.S. '' is an abbreviation ."],
+      ['She wrote "etc.", then left.', "She wrote `` etc. '' , then left ."],
+    ])('preserves quoted token identities in %s', (input, tokens) => {
+      expect(score(input, tokens)).toBe(1);
+    });
+
+    test.each(bracketPairs)('keeps %s%s spacing equivalent', (open, close) => {
+      const sentence = `${open}Nobody noticed.${close}`;
+      const spaced = `${open} Nobody noticed. ${close}`;
+      expect(score(`${sentence} Next came rain.`, `${spaced} Next came rain.`)).toBe(1);
+      expect(score(`${sentence} then left.`, `${spaced} then left.`)).toBe(1);
+      expect(
+        score(`He said "${open}Stop.${close}" Next.`, `He said "${open}Stop. ${close} " Next.`),
+      ).toBe(1);
+    });
+  });
+
+  describe.each([
+    ['ROUGE-N', rouge.n],
+    ['ROUGE-S', rouge.s],
+  ] as const)('%s summary tokenization', (_name, score) => {
+    test('should tokenize each sentence before flattening the token stream', () => {
+      expect(score('Alpha. Beta.', 'Alpha . Beta .')).toBe(1);
+      expect(score('Alpha. Beta.', 'alpha . beta .', { caseSensitive: false })).toBe(1);
+      expect(
+        score('Use etc. Another sentence.', 'use etc . another sentence .', {
+          caseSensitive: false,
+        }),
+      ).toBe(1);
+    });
+
+    test('should pass complete summaries to custom tokenizers', () => {
+      const tokenizer = jest.fn((input: string): string[] => input.split(' '));
+      expect(score('Alpha. Beta.', 'alpha. beta.', { tokenizer, caseSensitive: false })).toBe(1);
+      expect(tokenizer.mock.calls).toEqual([['alpha. beta.'], ['alpha. beta.']]);
+    });
+
+    test('should use sentence tokenization for the explicitly supplied built-in tokenizer', () => {
+      expect(score('Alpha. Beta.', 'Alpha . Beta .', { tokenizer: rouge.treeBankTokenize })).toBe(
+        1,
+      );
+    });
+
+    test('should not split a period off an acronym inside a name', () => {
+      const tokenizer = (input: string): string[] => rouge.treeBankTokenize(input);
+      expect(score('U.S. Government', 'U.S Government')).toBe(
+        score('U.S. Government', 'U.S Government', { tokenizer }),
+      );
     });
   });
 
@@ -881,6 +1069,10 @@ describe('Core Functions', () => {
       'magnetic pulse series sent through brain may ease schizophrenic voices',
       'yale finds magnetic stimulation some relief to schizophrenics imaginary voices',
     ];
+
+    test('should give reordered sentence unigrams a perfect score', () => {
+      expect(n('Alpha. Beta.', 'Beta. Alpha.')).toBe(1);
+    });
 
     test('should throw RangeError for empty candidate', () => {
       expect(() => n('', refs[0], { n: 2 })).toThrow(RangeError);
@@ -996,6 +1188,33 @@ describe('Core Functions', () => {
 
     const ref = 'police killed the gunman';
     const cands = ['police kill the gunman', 'the gunman kill police', 'the gunman police killed'];
+
+    test('should preserve word separation after an ellipsis for custom tokenizers', () => {
+      const tokenizer = (input: string): string[] => input.split(/\s+/);
+      expect(l('what?', 'Wait... what?', { tokenizer })).toBeCloseTo(2 / 3);
+    });
+
+    test('should preserve word order across wrapped ellipses', () => {
+      expect(l('what Wait', 'Wait...\nwhat?')).toBeCloseTo(1 / 3, 15);
+    });
+
+    test('should preserve word order through a parenthetical continuation', () => {
+      expect(
+        l(
+          '100 accurate The result was surprisingly',
+          'The result was (surprisingly!) 100% accurate.',
+        ),
+      ).toBeCloseTo(8 / 17, 15);
+      expect(
+        l('Alice Smith The winner was surprisingly', 'The winner was (surprisingly!) Alice Smith.'),
+      ).toBeCloseTo(1 / 2, 15);
+    });
+
+    test.each(geographicAcronyms)('recognizes reordered sentences ending in %s', (acronym) => {
+      const first = `I live in the ${acronym}`;
+      const second = 'Alice lives in Canada.';
+      expect(l(`${first} ${second}`, `${second} ${first}`)).toBe(1);
+    });
 
     test('should throw RangeError for empty candidate', () => {
       expect(() => l('', ref, undefined as any)).toThrow(RangeError);
