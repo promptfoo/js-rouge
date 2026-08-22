@@ -3,6 +3,11 @@ import { join } from 'node:path';
 import { buildSync } from 'esbuild';
 import * as rouge from '../src/rouge';
 
+const nonFiniteNumbers = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
+const invalidNGramSizes = [...nonFiniteNumbers, -1, 0, 1.5];
+const invalidMaxSkips = [Number.NaN, Number.NEGATIVE_INFINITY, -1, 0.5, 1.5];
+const invalidBetas = [Number.NaN, Number.NEGATIVE_INFINITY, -1];
+
 describe('Utility Functions', () => {
   describe('fact', () => {
     const { fact } = rouge;
@@ -144,19 +149,11 @@ describe('Utility Functions', () => {
     const { nGram } = rouge;
     const data = ['a', 'b', 'c', 'd'];
 
-    test('should throw RangeError for ngram size < 1', () => {
-      expect(() => nGram(data, 0)).toThrow(RangeError);
-    });
     test('should throw RangeError for invalid ngram size', () => {
       expect(() => nGram(data, 5)).toThrow(RangeError);
     });
 
-    test.each([
-      Number.NaN,
-      Number.POSITIVE_INFINITY,
-      Number.NEGATIVE_INFINITY,
-      1.5,
-    ])('should reject non-integer ngram size %s', (size) => {
+    test.each(invalidNGramSizes)('should reject invalid ngram size %s', (size) => {
       expect(() => nGram(data, size)).toThrow(RangeError);
     });
 
@@ -230,13 +227,7 @@ describe('Utility Functions', () => {
       expect(() => sb(['a'])).toThrow(RangeError);
     });
 
-    test.each([
-      Number.NaN,
-      Number.NEGATIVE_INFINITY,
-      -1,
-      0.5,
-      1.5,
-    ])('should reject invalid maxSkip %s', (maxSkip) => {
+    test.each(invalidMaxSkips)('should reject invalid maxSkip %s', (maxSkip) => {
       expect(() => sb(data, maxSkip)).toThrow(RangeError);
     });
 
@@ -818,28 +809,17 @@ describe('Utility Functions', () => {
   describe('fMeasure', () => {
     const fm = rouge.fMeasure;
 
-    test.each([
-      Number.NaN,
-      Number.POSITIVE_INFINITY,
-      Number.NEGATIVE_INFINITY,
-    ])('should reject non-finite precision and recall %s', (value) => {
+    test.each(nonFiniteNumbers)('should reject non-finite precision and recall %s', (value) => {
       expect(() => fm(value, 0.5)).toThrow(RangeError);
       expect(() => fm(0.5, value)).toThrow(RangeError);
     });
 
-    test.each([
-      Number.NaN,
-      Number.NEGATIVE_INFINITY,
-      -1,
-    ])('should reject invalid beta %s even with no matches', (beta) => {
+    test.each(invalidBetas)('should reject invalid beta %s even with no matches', (beta) => {
       expect(() => fm(0, 0, beta)).toThrow(RangeError);
     });
 
-    test.each([
-      1e154,
-      1e200,
-      Number.MAX_VALUE,
-    ])('should stay finite for large finite beta %s', (beta) => {
+    const largeBetas = [1e154, 1e200, Number.MAX_VALUE];
+    test.each(largeBetas)('should stay finite for large finite beta %s', (beta) => {
       expect(fm(1, 0.5, beta)).toBeCloseTo(0.5);
       expect(fm(0.5, 1, beta)).toBeCloseTo(1);
       expect(fm(0, 0.5, beta)).toBe(0);
@@ -966,11 +946,9 @@ describe('Core Functions', () => {
       expect(score('a b c', 'a b d', options)).toBe(score('a b c', 'a b d'));
     });
 
-    test.each([
-      Number.NaN,
-      Number.NEGATIVE_INFINITY,
-      -1,
-    ])('should validate beta %s before tokenization and zero-overlap returns', (beta) => {
+    test.each(
+      invalidBetas,
+    )('should validate beta %s before tokenization and zero-overlap returns', (beta) => {
       const tokenizer = jest.fn((input: string): string[] => input.split(' '));
       expect(() => score('a b', 'a b', { beta, tokenizer })).toThrow(/beta/);
       expect(() => score('a b', 'c d', { beta, tokenizer })).toThrow(/beta/);
@@ -1043,14 +1021,9 @@ describe('Core Functions', () => {
   describe('ROUGE-N', () => {
     const { n } = rouge;
 
-    test.each([
-      Number.NaN,
-      Number.POSITIVE_INFINITY,
-      Number.NEGATIVE_INFINITY,
-      -1,
-      0,
-      1.5,
-    ])('should validate n=%s before invoking custom generators', (size) => {
+    test.each(
+      invalidNGramSizes,
+    )('should validate n=%s before invoking custom generators', (size) => {
       const nGram = jest.fn((): string[] => []);
       expect(() => n('a b', 'c d', { n: size, nGram })).toThrow(RangeError);
       expect(nGram).not.toHaveBeenCalled();
@@ -1122,13 +1095,9 @@ describe('Core Functions', () => {
   describe('ROUGE-S', () => {
     const { s } = rouge;
 
-    test.each([
-      Number.NaN,
-      Number.NEGATIVE_INFINITY,
-      -1,
-      0.5,
-      1.5,
-    ])('should validate maxSkip=%s before invoking custom generators', (maxSkip) => {
+    test.each(
+      invalidMaxSkips,
+    )('should validate maxSkip=%s before invoking custom generators', (maxSkip) => {
       const skipBigram = jest.fn((): string[] => []);
       expect(() => s('a b', 'c d', { maxSkip, skipBigram })).toThrow(RangeError);
       expect(skipBigram).not.toHaveBeenCalled();
