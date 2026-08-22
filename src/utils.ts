@@ -668,6 +668,10 @@ export function fMeasure(p: number, r: number, beta = 1.0): number {
     return 0;
   }
 
+  if (p < 2 ** -1022 || r < 2 ** -1022) {
+    return subnormalFMeasure(p, r, beta);
+  }
+
   // Divide by beta² for large beta, and divide before multiplying P by R.
   // This avoids overflow of beta² and underflow of the precision-recall product.
   if (beta > 1) {
@@ -677,6 +681,32 @@ export function fMeasure(p: number, r: number, beta = 1.0): number {
   }
   const betaSq = beta * beta;
   return (1 + betaSq) * p * (r / (betaSq * p + r));
+}
+
+/** Keep subnormal inputs out of products that determine the denominator's ratio. */
+function subnormalFMeasure(p: number, r: number, beta: number): number {
+  // F-beta(P, R) = F-(1/beta)(R, P). This keeps the weight at least one.
+  if (beta < 1) {
+    return subnormalFMeasure(r, p, 1 / beta);
+  }
+  if (beta === Number.POSITIVE_INFINITY) {
+    return r;
+  }
+  if (p > r) {
+    const inverseBeta = 1 / beta;
+    const weight = inverseBeta * inverseBeta;
+    return r * ((1 + weight) / (1 + weight * (r / p)));
+  }
+
+  const betaSq = beta * beta;
+  if (Number.isFinite(betaSq)) {
+    return p * ((1 + betaSq) / (1 + betaSq * (p / r)));
+  }
+
+  // Multiplying precision by beta first rescales even the smallest subnormal.
+  // Here 1 / beta² is too small to affect the rounded numerator weight.
+  const ratio = ((p * beta) / r) * beta;
+  return ratio === Number.POSITIVE_INFINITY ? r : r * (ratio / (1 + ratio));
 }
 
 /**
