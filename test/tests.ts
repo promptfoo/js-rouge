@@ -170,6 +170,11 @@ describe('Utility Functions', () => {
     test("should return ['a b', 'b c', 'c d'] for n = 2", () => {
       expect(nGram(data)).toEqual(['a b', 'b c', 'c d']);
     });
+
+    test('should retain readable public gram strings for multiword tokens', () => {
+      expect(nGram(['new york', 'city'])).toEqual(['new york city']);
+      expect(nGram(['new', 'york city'])).toEqual(['new york city']);
+    });
     test("should return ['a b c', 'b c d'] for n = 3", () => {
       expect(nGram(data, 3)).toEqual(['a b c', 'b c d']);
     });
@@ -240,6 +245,11 @@ describe('Utility Functions', () => {
 
     test('should return the correct result', () => {
       expect(sb(data)).toEqual(result);
+    });
+
+    test('should retain readable public skip-bigram strings for multiword tokens', () => {
+      expect(sb(['new york', 'city'])).toEqual(['new york city']);
+      expect(sb(['new', 'york city'])).toEqual(['new york city']);
     });
 
     test('should return all pairs with default maxSkip (Infinity)', () => {
@@ -1155,6 +1165,66 @@ describe('Core Functions', () => {
       expect(score('U.S. Government', 'U.S Government')).toBe(
         score('U.S. Government', 'U.S Government', { tokenizer }),
       );
+    });
+  });
+
+  describe.each([
+    ['ROUGE-N', rouge.n, 'nGram', rouge.nGram, 1 / 2],
+    ['ROUGE-S', rouge.s, 'skipBigram', rouge.skipBigram, 2 / 7],
+  ] as const)('%s token identity', (_name, score, gramOption, builtIn, repeatedScore) => {
+    const tokenizer = (input: string): string[] => JSON.parse(input);
+    const options = { n: 2, tokenizer };
+
+    test.each<[string[], string[]]>([
+      [
+        ['new york', 'city'],
+        ['new', 'york city'],
+      ],
+      [
+        ['a ', 'b'],
+        ['a', ' b'],
+      ],
+      [
+        ['', ' a'],
+        [' ', 'a'],
+      ],
+      [
+        ['a|b', 'c'],
+        ['a', 'b|c'],
+      ],
+      [
+        ['a\0b', 'c'],
+        ['a', 'b\0c'],
+      ],
+      [
+        ['a" b', 'c\\d'],
+        ['a"', 'b c\\d'],
+      ],
+    ])('should distinguish token tuples %j and %j', (candidate, reference) => {
+      const cand = JSON.stringify(candidate);
+      const ref = JSON.stringify(reference);
+      expect(score(cand, ref, options)).toBe(0);
+      expect(score(cand, cand, options)).toBe(1);
+    });
+
+    test('should encode built-in grams but pass raw tokens to custom generators', () => {
+      const candidate = ['new york', 'city'];
+      const reference = ['new', 'york city'];
+      const cand = JSON.stringify(candidate);
+      const ref = JSON.stringify(reference);
+      expect(score(cand, ref, { ...options, [gramOption]: builtIn })).toBe(0);
+      const generator = jest.fn((): string[] => ['custom gram']);
+      expect(score(cand, ref, { ...options, maxSkip: 2, [gramOption]: generator })).toBe(1);
+      expect(generator.mock.calls).toEqual([
+        [candidate, 2],
+        [reference, 2],
+      ]);
+    });
+
+    test('should clip repeated multiword-token grams', () => {
+      expect(
+        score('["new york","city","new york","city"]', '["new york","city"]', options),
+      ).toBeCloseTo(repeatedScore);
     });
   });
 

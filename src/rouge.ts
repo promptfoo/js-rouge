@@ -76,6 +76,11 @@ function tokenizeSummary(
   );
 }
 
+/** JSON string tokens remain unambiguous when the built-in gram utilities join them. */
+function encodeTokens(tokens: string[]): string[] {
+  return tokens.map((token) => JSON.stringify(token));
+}
+
 /**
  * Computes the ROUGE-N score for a candidate summary.
  *
@@ -117,8 +122,12 @@ export function n(cand: string, ref: string, opts?: RougeNOptions): number {
   validateNGramSize(size);
   validateBeta(beta);
 
-  const candGrams = nGram(tokenizeSummary(cand, caseSensitive, tokenizer), size);
-  const refGrams = nGram(tokenizeSummary(ref, caseSensitive, tokenizer), size);
+  const getGrams = (input: string): string[] => {
+    const tokens = tokenizeSummary(input, caseSensitive, tokenizer);
+    return nGram(nGram === utils.nGram ? encodeTokens(tokens) : tokens, size);
+  };
+  const candGrams = getGrams(cand);
+  const refGrams = getGrams(ref);
 
   const matches = countMatchingGrams(candGrams, refGrams);
 
@@ -173,8 +182,12 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
   validateMaxSkip(maxSkip);
   validateBeta(beta);
 
-  const candGrams = skipBigram(tokenizeSummary(cand, caseSensitive, tokenizer), maxSkip);
-  const refGrams = skipBigram(tokenizeSummary(ref, caseSensitive, tokenizer), maxSkip);
+  const getGrams = (input: string): string[] => {
+    const tokens = tokenizeSummary(input, caseSensitive, tokenizer);
+    return skipBigram(skipBigram === utils.skipBigram ? encodeTokens(tokens) : tokens, maxSkip);
+  };
+  const candGrams = getGrams(cand);
+  const refGrams = getGrams(ref);
 
   const skip2 = countMatchingGrams(candGrams, refGrams);
 
