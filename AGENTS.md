@@ -15,6 +15,7 @@ js-rouge is a TypeScript implementation of ROUGE (Recall-Oriented Understudy for
 ```
 src/
 ├── rouge.ts      # Main API: n(), s(), l() functions
+├── lcs.ts        # Internal position-aware LCS implementation
 ├── utils.ts      # Utility functions: tokenization, LCS, n-grams, etc.
 └── constants.ts  # NLP constants: abbreviations, contractions, etc.
 
@@ -95,13 +96,7 @@ Returns F-score using precision and recall:
 
 ### ROUGE-L
 
-Uses summary-level LCS with union across sentence pairs:
-
-```typescript
-const lcsUnion = new Set(
-  candSents.flatMap((c) => options.lcs(options.tokenizer(c), rTokens)),
-);
-```
+Uses summary-level LCS with a union of matched reference-token positions across candidate sentences. Each reference position counts once, and a remaining candidate-token budget prevents reuse across reference sentences. Compute match counts and denominators from the same sentence-token arrays, and apply case folding only after sentence segmentation. The public `lcs()` utility continues to return token values.
 
 ### ROUGE-S
 

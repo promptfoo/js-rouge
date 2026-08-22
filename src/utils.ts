@@ -1,4 +1,5 @@
 import { GATE_EXCEPTIONS, GATE_SUBSTITUTIONS, TREEBANK_CONTRACTIONS } from './constants';
+import { lcsIndices } from './lcs';
 
 /**
  * Splits a sentence into an array of word tokens
@@ -469,46 +470,11 @@ export function intersection<T>(a: T[], b: T[]): T[] {
  * This function returns the elements from the two arrays
  * that form the LCS, in order of their appearance.
  *
- * For speed, the search-space is pruned by eliminating
- * common entities at the start and end of both input arrays.
- *
  * @method lcs
  * @param  {Array<string>}    a     The first array
  * @param  {Array<string>}    b     The second array
  * @return {Array<string>}          The longest common subsequence between the first and second array
  */
 export function lcs(a: string[], b: string[]): string[] {
-  if (a.length === 0 || b.length === 0) {
-    return [];
-  }
-
-  const dp: number[][] = new Array(a.length + 1).fill(0).map(() => new Array(b.length + 1).fill(0));
-
-  for (let i = 1; i <= a.length; i++) {
-    for (let j = 1; j <= b.length; j++) {
-      if (a[i - 1] === b[j - 1]) {
-        dp[i][j] = dp[i - 1][j - 1] + 1;
-      } else {
-        dp[i][j] = Math.max(dp[i - 1][j], dp[i][j - 1]);
-      }
-    }
-  }
-
-  const lcsResult: string[] = [];
-  let i = a.length;
-  let j = b.length;
-
-  while (i > 0 && j > 0) {
-    if (a[i - 1] === b[j - 1]) {
-      lcsResult.unshift(a[i - 1]);
-      i--;
-      j--;
-    } else if (dp[i - 1][j] > dp[i][j - 1]) {
-      i--;
-    } else {
-      j--;
-    }
-  }
-
-  return lcsResult;
+  return lcsIndices(a, b).map((index) => b[index]);
 }
