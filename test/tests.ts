@@ -911,6 +911,22 @@ describe('Utility Functions', () => {
     test('should return the correct result using alternative test', () => {
       expect(jk(cands, ref, evalFunc, statTest)).toBe(31);
     });
+
+    test('should adapt multiple references without reversing an asymmetric scorer', () => {
+      const candidate = 'a';
+      const references = ['a b', 'a c d', 'a b c d e'];
+      const recall = jest.fn((summary: string, reference: string): number =>
+        rouge.n(summary, reference, { beta: Number.POSITIVE_INFINITY }),
+      );
+
+      expect(
+        jk(references, candidate, (reference, summary) => recall(summary, reference)),
+      ).toBeCloseTo(4 / 9, 15);
+      expect(recall.mock.calls).toEqual(references.map((reference) => [candidate, reference]));
+
+      // Direct callbacks retain the documented candidate-first orientation.
+      expect(jk(references, candidate, recall)).toBe(1);
+    });
   });
 
   describe('fMeasure', () => {

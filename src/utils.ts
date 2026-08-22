@@ -623,8 +623,12 @@ export function arithmeticMean(input: number[]): number {
 }
 
 /**
- * Evaluates the jackknife resampling result for a set of
- * candidate summaries vs. a reference summary.
+ * Scores each candidate against a fixed reference, then applies test to the
+ * leave-one-out maxima (arithmetic mean by default). Requires at least two candidates.
+ * Calls func(candidate, ref) once per candidate.
+ *
+ * For reference resampling, preserve scorer argument order with
+ * jackKnife(references, candidate, (reference, summary) => scorer(summary, reference)).
  *
  * @method jackKnife
  * @param  {Array<string>}  cands      An array of candidate summaries to be evaluated
