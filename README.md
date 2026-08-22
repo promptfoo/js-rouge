@@ -113,11 +113,11 @@ The default Penn Treebank tokenizer expects one sentence at a time. All three me
 
 The tokenizer treats spaces, tabs, line breaks, and other whitespace as word separators. It returns no tokens for whitespace-only text and expands every occurrence of supported contractions. Punctuation remains part of the token stream. Colons and commas are separated unless followed by a digit, preserving numbers such as `12,000` and times such as `12:30`.
 
-The default sentence segmenter handles LF, CRLF, and CR line endings and ignores blank separator chunks. Abbreviations such as `e.g.` are matched literally, and sentences ending in an initial or acronym are retained even when the following fragment has no punctuation. Spaces and line wraps after a mid-sentence ellipsis preserve word separation. Closing double quotes stay with their preceding sentence, and known abbreviations are recognized inside quotes. Geographic acronyms such as `U.S.` remain attached to following names unless a recognized sentence starter indicates a boundary.
+The default sentence segmenter handles LF, CRLF, and CR line endings and ignores blank separator chunks. Abbreviations such as `e.g.` are matched literally, and sentences ending in an initial or acronym are retained even when the following fragment has no punctuation. Spaces and line wraps after a mid-sentence ellipsis preserve word separation. Closing quotes and brackets stay with their sentence, while quoted and parenthetical continuations remain intact. Geographic acronyms such as `U.S.` remain attached to following names unless a recognized sentence starter indicates a boundary.
 
 The scoring functions reject empty or whitespace-only candidate/reference summaries with `RangeError`. Existing minimum-token requirements still apply: ROUGE-N needs at least `n` tokens, and ROUGE-S needs at least two. The standalone `sentenceSegment` utility retains its single-sentence fallback for whitespace-only input.
 
-These preprocessing corrections can change scores for multi-sentence summaries, colons, numeric commas, ellipses, and quoted abbreviations. For example, `n("Alpha. Beta.", "Beta. Alpha.")` now returns `1` rather than `1/3`. Rerun affected baselines and keep the same tokenizer and segmenter configuration when comparing evaluation runs across versions.
+These preprocessing corrections can change scores for multi-sentence summaries, colons, numeric commas, ellipses, and punctuation inside quotes or brackets. For example, `n("Alpha. Beta.", "Beta. Alpha.")` now returns `1` rather than `1/3`. Rerun affected baselines and keep the same tokenizer and segmenter configuration when comparing evaluation runs across versions.
 
 ## Options
 
