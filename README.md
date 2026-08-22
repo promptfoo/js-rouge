@@ -159,7 +159,7 @@ ROUGE-N and ROUGE-S count repeated matching grams up to the smaller of their fre
 
 ## Jackknife Resampling
 
-The package also exports utility functions, including jackknife resampling as described in the original paper:
+`jackKnife(candidates, reference, scorer, statistic?)` scores each candidate against one fixed reference. It omits each candidate in turn, takes the maximum remaining score, then applies `statistic` to those leave-one-out maxima (the arithmetic mean by default). At least two candidates are required. The callback is always called as `scorer(candidate, reference)`.
 
 ```javascript
 import { n as rougeN, jackKnife } from "js-rouge";
@@ -171,13 +171,32 @@ const candidates = [
   "the gunman police killed",
 ];
 
-// Standard evaluation taking the arithmetic mean
+// Mean of the leave-one-candidate-out maximum scores
 jackKnife(candidates, reference, rougeN);
 
-// Modified evaluation taking the distribution maximum
+// Maximum of the leave-one-candidate-out maximum scores
 const distMax = (arr) => Math.max(...arr);
 jackKnife(candidates, reference, rougeN, distMax);
 ```
+
+### One Candidate, Multiple References
+
+The procedure in [Lin (2004), Section 2.1](https://aclanthology.org/W04-1013.pdf) instead keeps the candidate fixed and resamples the reference set, averaging the best pairwise score in each leave-one-reference-out set. Use an adapter to preserve candidate/reference orientation with the existing API:
+
+```javascript
+import { n as rougeN, jackKnife } from "js-rouge";
+
+const candidate = "a";
+const references = ["a b", "a c d"];
+const recall = (candidate, reference) =>
+  rougeN(candidate, reference, { beta: Infinity });
+
+jackKnife(references, candidate, (reference, systemSummary) =>
+  recall(systemSummary, reference),
+); // => 5/12, the mean of recall scores 1/2 and 1/3
+```
+
+The adapter matters for asymmetric scorers such as recall. Passing `recall` directly in this example reverses the comparison and returns `1`. The existing argument order is unchanged; `jackKnife` does not infer which strings are references.
 
 ## TypeScript
 
