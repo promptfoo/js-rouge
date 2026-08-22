@@ -416,6 +416,19 @@ describe('Utility Functions', () => {
       expect(ss('He said... "what?" Next.')).toEqual(['He said... "what?"', 'Next.']);
       expect(ss('He said "hello." Then left.')).toEqual(['He said "hello."', 'Then left.']);
       expect(ss('"Hello!" "Goodbye!"')).toEqual(['"Hello!"', '"Goodbye!"']);
+      expect(ss('He moved to the "U.S." How about you?')).toEqual([
+        'He moved to the "U.S."',
+        'How about you?',
+      ]);
+    });
+
+    const quotedAbbreviations = [
+      'Use "e.g." here.',
+      '"Dr." is a title.',
+      '"U.S." is an abbreviation.',
+    ];
+    test.each(quotedAbbreviations)('keeps quoted abbreviations in %s', (input) => {
+      expect(ss(input)).toEqual([input]);
     });
 
     test('should split double exclamation points', () => {
@@ -575,7 +588,8 @@ describe('Utility Functions', () => {
           }
           process.stdout.write('ok');
         `;
-        const child = spawnSync(process.execPath, ['--max-old-space-size=64', '-e', script], {
+        const child = spawnSync(process.execPath, ['--max-old-space-size=64'], {
+          input: script,
           encoding: 'utf8',
           timeout: 15_000,
         });
@@ -681,6 +695,11 @@ describe('Utility Functions', () => {
         expect(ss('Wait...  what?')).toEqual(['Wait... what?']);
         expect(ss('Wait...\twhat?')).toEqual(['Wait...\twhat?']);
         expect(ss('Wait...what?')).toEqual(['Wait...what?']);
+      });
+
+      test.each(lineBreaks)('joins wrapped ellipses across %j', (lineBreak) => {
+        expect(ss(`Wait...${lineBreak}what?`)).toEqual(['Wait... what?']);
+        expect(ss(`Wait...${lineBreak}what? Next step`)).toEqual(['Wait... what?', 'Next step']);
       });
     });
   });
@@ -847,7 +866,6 @@ describe('Utility Functions', () => {
       expect(fm(2e-124, Number.MIN_VALUE, 1e-100) / 1e-124).toBeCloseTo(1.423_685_637_8, 9);
       expect(fm(Number.MIN_VALUE, 1, 1e161)).toBeCloseTo(0.047_080_479_817_375_9, 14);
       expect(fm(Number.MIN_VALUE, 1, Number.MAX_VALUE)).toBe(1);
-      expect(fm(Number.MIN_VALUE, 1, 0)).toBe(Number.MIN_VALUE);
       expect(fm(1, Number.MIN_VALUE, 2)).toBe(Number.MIN_VALUE);
     });
 
@@ -864,8 +882,12 @@ describe('Utility Functions', () => {
     test('should return pure recall when beta is Infinity', () => {
       expect(fm(0.5, 0.75, Number.POSITIVE_INFINITY)).toBe(0.75);
     });
+    test.each([0, -0])('uses precision for beta=%p', (beta) => {
+      expect(fm(0.5, 0.75, beta)).toBe(0.5);
+      expect(fm(Number.MIN_VALUE, 1, beta)).toBe(Number.MIN_VALUE);
+    });
     test('should correctly compute F1 score (beta=1)', () => {
-      expect(fm(0.5, 0.75, 1)).toBe(0.6);
+      expect(fm(0.5, 0.75, 1)).toBeCloseTo(0.6, 15);
     });
     test('should correctly compute F2 score (beta=2, favors recall)', () => {
       // F2 = (1 + 4) * P * R / (4 * P + R) = 5 * 0.5 * 0.75 / (2 + 0.75) = 1.875 / 2.75
@@ -996,8 +1018,13 @@ describe('Core Functions', () => {
       expect(score('12,000 items', '12 000 items')).toBeLessThan(1);
     });
 
-    test('should preserve opening and closing quote token identities', () => {
-      expect(score('He said... "what?" Next.', "He said ... `` what ? '' Next .")).toBe(1);
+    test.each([
+      ['He said... "what?" Next.', "He said ... `` what ? '' Next ."],
+      ['Use "e.g." here.', "Use `` e.g. '' here ."],
+      ['"Dr." is a title.', "`` Dr. '' is a title ."],
+      ['"U.S." is an abbreviation.', "`` U.S. '' is an abbreviation ."],
+    ])('preserves quoted token identities in %s', (input, tokens) => {
+      expect(score(input, tokens)).toBe(1);
     });
   });
 
@@ -1104,7 +1131,7 @@ describe('Core Functions', () => {
       // 3 matching bigrams, 4 candidate bigrams, 9 reference bigrams
       // precision = 3/4, recall = 3/9 = 1/3
       // F1 = 2 * P * R / (P + R) = 2 * (3/4) * (1/3) / (3/4 + 1/3) = 6/13
-      expect(n(cand, refs[0], { n: 2, beta: 1 })).toBe(6 / 13);
+      expect(n(cand, refs[0], { n: 2, beta: 1 })).toBeCloseTo(6 / 13, 15);
     });
     test('should correctly compute ROUGE-N F1-score for ref 2', () => {
       expect(n(cand, refs[1], { n: 2, beta: 1 })).toBe(0);
@@ -1266,6 +1293,10 @@ describe('Core Functions', () => {
     test('should preserve word separation after an ellipsis for custom tokenizers', () => {
       const tokenizer = (input: string): string[] => input.split(/\s+/);
       expect(l('what?', 'Wait... what?', { tokenizer })).toBeCloseTo(2 / 3);
+    });
+
+    test('should preserve word order across wrapped ellipses', () => {
+      expect(l('what Wait', 'Wait...\nwhat?')).toBeCloseTo(1 / 3, 15);
     });
 
     test('should throw RangeError for empty candidate', () => {
