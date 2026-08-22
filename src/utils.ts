@@ -96,13 +96,7 @@ const sentenceStarterReg =
 class SentenceBuffer {
   #parts: string[] = [];
   #normalizedThrough = 0;
-  #length = 0;
-  #normalizedLength = 0;
-  #normalizedSuffix = '';
-  #nonSpaceSuffix = '';
-  #nonWhitespaceSuffix = '';
   #words: { titleCase: boolean; lowerCase: boolean }[] = [];
-  suffix = '';
   hasLineBreaks = false;
   startsWithTitleCase = false;
 
@@ -120,6 +114,14 @@ class SentenceBuffer {
 
   get previousWordIsTitleCase(): boolean {
     return this.#words.at(-2)?.titleCase ?? false;
+  }
+
+  get suffix(): string {
+    let suffix = '';
+    for (let i = this.#parts.length - 1; i >= 0 && suffix.length < sentenceSuffixLength; i--) {
+      suffix = `${this.#parts[i].slice(suffix.length - sentenceSuffixLength)}${suffix}`;
+    }
+    return suffix;
   }
 
   append(text: string): void {
@@ -146,82 +148,44 @@ class SentenceBuffer {
       }
     }
 
-    const noSpaces = trimEndSpaces(text);
-    const noWhitespace = text.trimEnd();
-    if (noSpaces.length > 0) {
-      this.#nonSpaceSuffix = (this.suffix + noSpaces).slice(-sentenceSuffixLength);
-    }
-    if (noWhitespace.length > 0) {
-      this.#nonWhitespaceSuffix = (this.suffix + noWhitespace).slice(-sentenceSuffixLength);
-    }
-    this.suffix = (this.suffix + text).slice(-sentenceSuffixLength);
-
-    let normalized = text.replace(/\s+/g, ' ');
-    if (this.#normalizedSuffix.endsWith(' ') && normalized.startsWith(' ')) {
-      normalized = normalized.slice(1);
-    }
-    this.#normalizedLength += normalized.length;
-    this.#normalizedSuffix = (this.#normalizedSuffix + normalized).slice(-sentenceSuffixLength);
-    this.#length += text.length;
     this.hasLineBreaks = this.hasLineBreaks || breakReg.test(text);
     this.#parts.push(text);
   }
 
   trimEnd(allWhitespace = false): void {
-    let removed = 0;
     while (this.#parts.length > 0) {
       const index = this.#parts.length - 1;
       const part = this.#parts[index];
       const trimmed = allWhitespace ? part.trimEnd() : trimEndSpaces(part);
-      removed += part.length - trimmed.length;
       if (trimmed.length > 0) {
         this.#parts[index] = trimmed;
         break;
       }
       this.#parts.pop();
     }
-    if (removed === 0) {
-      return;
-    }
-
-    this.#length -= removed;
     this.#normalizedThrough = Math.min(this.#normalizedThrough, this.#parts.length);
-    this.suffix = allWhitespace ? this.#nonWhitespaceSuffix : this.#nonSpaceSuffix;
-    if (this.#length === 0) {
-      this.suffix = '';
-    } else if (this.#length < sentenceSuffixLength) {
-      this.suffix = this.suffix.slice(-this.#length);
-    }
-    if (!/\s$/.test(this.suffix) && this.#normalizedSuffix.endsWith(' ')) {
-      this.#normalizedLength--;
-      this.#normalizedSuffix = this.#normalizedSuffix.slice(0, -1);
-    }
   }
 
   normalizeWhitespace(): void {
-    this.trimEnd(true);
-    const first = this.#parts[0];
-    const trimmed = first.trimStart();
-    if (trimmed.length < first.length) {
-      this.#parts[0] = trimmed;
-      this.#normalizedLength--;
-      if (this.#normalizedLength < sentenceSuffixLength) {
-        this.#normalizedSuffix = this.#normalizedSuffix.slice(-this.#normalizedLength);
+    // Normalize each fragment once, including whitespace at fragment boundaries.
+    let write = this.#normalizedThrough;
+    for (let read = write; read < this.#parts.length; read++) {
+      let part = this.#parts[read].replace(/\s+/g, ' ');
+      if ((write === 0 || this.#parts[write - 1].endsWith(' ')) && part.startsWith(' ')) {
+        part = part.slice(1);
+      }
+      if (part.length > 0) {
+        this.#parts[write++] = part;
       }
     }
-
-    // Repeated normalization is idempotent: apply it once to the longest prefix on output.
+    this.#parts.length = write;
+    this.trimEnd(true);
     this.#normalizedThrough = this.#parts.length;
-    this.#length = this.#normalizedLength;
-    this.suffix = this.#normalizedSuffix;
-    this.#nonSpaceSuffix = this.suffix;
-    this.#nonWhitespaceSuffix = this.suffix;
     this.hasLineBreaks = false;
   }
 
   text(): string {
-    const prefix = this.#parts.slice(0, this.#normalizedThrough).join('').replace(/\s+/g, ' ');
-    return prefix + this.#parts.slice(this.#normalizedThrough).join('');
+    return this.#parts.join('');
   }
 }
 

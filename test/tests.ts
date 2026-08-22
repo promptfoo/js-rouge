@@ -545,7 +545,8 @@ describe('Utility Functions', () => {
           }
           process.stdout.write('ok');
         `;
-        const child = spawnSync(process.execPath, ['--max-old-space-size=64', '-e', script], {
+        const child = spawnSync(process.execPath, ['--max-old-space-size=64'], {
+          input: script,
           encoding: 'utf8',
           timeout: 15_000,
         });
