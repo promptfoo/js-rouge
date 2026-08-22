@@ -427,6 +427,7 @@ describe('Utility Functions', () => {
       expect(ss('He said... "what?" Next.')).toEqual(['He said... "what?"', 'Next.']);
       expect(ss('He said "hello." Then left.')).toEqual(['He said "hello."', 'Then left.']);
       expect(ss('"Hello!" "Goodbye!"')).toEqual(['"Hello!"', '"Goodbye!"']);
+      expect(ss('(Stop.) "Next."')).toEqual(['(Stop.)', '"Next."']);
       expect(ss('He moved to the "U.S." How about you?')).toEqual([
         'He moved to the "U.S."',
         'How about you?',
@@ -446,6 +447,7 @@ describe('Utility Functions', () => {
       'She wrote "etc."; then left.',
       'She wrote "etc.": more would follow.',
       'She wrote "hello." then left.',
+      'The label was "Hello!" 100 times larger.',
     ];
     test.each(quotedContinuations)('keeps quoted continuations in %s', (input) => {
       expect(ss(input)).toEqual([input]);
@@ -458,6 +460,17 @@ describe('Utility Functions', () => {
       expect(ss(`${spaced} Next came rain.`)).toEqual([spaced, 'Next came rain.']);
       expect(ss(`${sentence} then left.`)).toEqual([`${sentence} then left.`]);
       expect(ss(`${spaced} then left.`)).toEqual([`${spaced} then left.`]);
+      const nested = `He said "${open}Stop. ${close} "`;
+      expect(ss(`${nested} Next.`)).toEqual([nested, 'Next.']);
+    });
+
+    const uncasedContinuations = [
+      'The result was (surprisingly!) 100% accurate.',
+      'The result was (surprisingly!) -- completely accurate.',
+      'The result was (surprisingly!) $100.',
+    ];
+    test.each(uncasedContinuations)('keeps the continuation in %s', (input) => {
+      expect(ss(input)).toEqual([input]);
     });
 
     test('should split double exclamation points', () => {
@@ -744,6 +757,15 @@ describe('Utility Functions', () => {
         '.',
         close,
       ]);
+      expect(tbt(`"${open} Nobody noticed. ${close} "`)).toEqual([
+        '``',
+        open,
+        'Nobody',
+        'noticed',
+        '.',
+        close,
+        "''",
+      ]);
     });
 
     test('should return empty array for empty input', () => {
@@ -848,6 +870,17 @@ describe('Utility Functions', () => {
         "''",
         'Slocum',
         'said',
+        '.',
+      ]);
+      expect(tbt('5" nails and "wide" boards.')).toEqual([
+        '5',
+        "''",
+        'nails',
+        'and',
+        '``',
+        'wide',
+        "''",
+        'boards',
         '.',
       ]);
     });
@@ -1083,6 +1116,9 @@ describe('Core Functions', () => {
       const spaced = `${open} Nobody noticed. ${close}`;
       expect(score(`${sentence} Next came rain.`, `${spaced} Next came rain.`)).toBe(1);
       expect(score(`${sentence} then left.`, `${spaced} then left.`)).toBe(1);
+      expect(
+        score(`He said "${open}Stop.${close}" Next.`, `He said "${open}Stop. ${close} " Next.`),
+      ).toBe(1);
     });
   });
 
@@ -1355,6 +1391,15 @@ describe('Core Functions', () => {
 
     test('should preserve word order across wrapped ellipses', () => {
       expect(l('what Wait', 'Wait...\nwhat?')).toBeCloseTo(1 / 3, 15);
+    });
+
+    test('should preserve word order through a parenthetical continuation', () => {
+      expect(
+        l(
+          '100 accurate The result was surprisingly',
+          'The result was (surprisingly!) 100% accurate.',
+        ),
+      ).toBeCloseTo(8 / 17, 15);
     });
 
     test('should throw RangeError for empty candidate', () => {
