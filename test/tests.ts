@@ -9,6 +9,7 @@ const bracketPairs = [
   ['{', '}'],
   ['<', '>'],
 ] as const;
+const geographicAcronyms = ['U.S.', 'U.S.A.', 'E.U.'];
 const nonFiniteNumbers = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
 const invalidNGramSizes = [...nonFiniteNumbers, -1, 0, 1.5];
 const invalidMaxSkips = [Number.NaN, Number.NEGATIVE_INFINITY, -1, 0.5, 1.5];
@@ -345,10 +346,16 @@ describe('Utility Functions', () => {
         'I live in the U.S.',
         'How about you?',
       ]);
-      expect(ss('I live in the (U.S.) How about you?')).toEqual([
-        'I live in the (U.S.)',
+      expect(ss('(I live in the U.S.) How about you?')).toEqual([
+        '(I live in the U.S.)',
         'How about you?',
       ]);
+    });
+
+    test.each(geographicAcronyms)('allows a proper name after %s', (acronym) => {
+      const first = `I live in the ${acronym}`;
+      const second = 'Alice lives in Canada.';
+      expect(ss(`${first} ${second}`)).toEqual([first, second]);
     });
 
     test('should not split U.S. as non-sentence boundary', () => {
@@ -362,6 +369,11 @@ describe('Utility Functions', () => {
       'The U.S. Government policy.',
       'E.U. Commission',
       'U.S.A. Today',
+    ])('preserves acronym tokens across boundaries in %s', (input) => {
+      expect(ss(input).flatMap(rouge.treeBankTokenize)).toEqual(rouge.treeBankTokenize(input));
+    });
+
+    test.each([
       'Mt. Fuji',
       'The (U.S.) Government issued a statement.',
     ])('should retain abbreviated names in %s', (input) => {
@@ -454,12 +466,16 @@ describe('Utility Functions', () => {
       expect(ss(`${nested} Next.`)).toEqual([nested, 'Next.']);
     });
 
-    const uncasedContinuations = [
+    const parentheticalContinuations = [
       'The result was (surprisingly!) 100% accurate.',
       'The result was (surprisingly!) -- completely accurate.',
       'The result was (surprisingly!) $100.',
+      'The winner was (surprisingly!) Alice Smith.',
+      'The winner was (Surprisingly!) Alice Smith.',
+      'The winner was ((surprisingly!)) Alice Smith.',
+      'The winner was (she said "Wow!") Alice Smith.',
     ];
-    test.each(uncasedContinuations)('keeps the continuation in %s', (input) => {
+    test.each(parentheticalContinuations)('keeps the continuation in %s', (input) => {
       expect(ss(input)).toEqual([input]);
     });
 
@@ -733,11 +749,22 @@ describe('Utility Functions', () => {
         expect(ss(`Wait...${lineBreak}what?`)).toEqual(['Wait... what?']);
         expect(ss(`Wait...${lineBreak}what? Next step`)).toEqual(['Wait... what?', 'Next step']);
       });
+
+      test.each(lineBreaks)('keeps wrapped closing quotes (%j)', (lineBreak) => {
+        expect(ss(`He said "Stop.${lineBreak}" Next.`)).toEqual(['He said "Stop. "', 'Next.']);
+        expect(ss(`He said "Stop.${lineBreak}"`)).toEqual(['He said "Stop. "']);
+        expect(ss(`(He said "Stop.${lineBreak}") Next.`)).toEqual(['(He said "Stop. ")', 'Next.']);
+      });
     });
   });
 
   describe('treeBankTokenize', () => {
     const tbt = rouge.treeBankTokenize;
+
+    test.each(geographicAcronyms)('retains the final dot in %s', (acronym) => {
+      expect(tbt(acronym)).toEqual([acronym]);
+      expect(tbt(`"${acronym}"`)).toEqual(['``', acronym, "''"]);
+    });
 
     test.each(bracketPairs)('splits final periods through %s%s spacing', (open, close) => {
       expect(tbt(`${open} Nobody noticed. ${close}`)).toEqual([
@@ -1044,6 +1071,11 @@ describe('Core Functions', () => {
     ['ROUGE-L', rouge.l],
   ] as const;
   describe.each(metrics)('%s input handling', (_name, score) => {
+    test.each(['\n', '\r\n', '\r'])('keeps wrapped quotes (%j)', (lineBreak) => {
+      expect(score(`He said "Stop.${lineBreak}" Next.`, 'He said "Stop." Next.')).toBe(1);
+      expect(score(`He said "Stop.${lineBreak}"`, 'He said "Stop."')).toBe(1);
+    });
+
     test('should use defaults for explicitly undefined options', () => {
       const options = {
         beta: undefined,
@@ -1075,6 +1107,7 @@ describe('Core Functions', () => {
         1,
       );
     });
+
     test('should treat word-separating whitespace consistently', () => {
       expect(score('alpha\tbeta', 'alpha beta')).toBe(1);
       expect(score('alpha\nbeta', 'alpha beta')).toBe(1);
@@ -1302,6 +1335,15 @@ describe('Core Functions', () => {
           'The result was (surprisingly!) 100% accurate.',
         ),
       ).toBeCloseTo(8 / 17, 15);
+      expect(
+        l('Alice Smith The winner was surprisingly', 'The winner was (surprisingly!) Alice Smith.'),
+      ).toBeCloseTo(1 / 2, 15);
+    });
+
+    test.each(geographicAcronyms)('recognizes reordered sentences ending in %s', (acronym) => {
+      const first = `I live in the ${acronym}`;
+      const second = 'Alice lives in Canada.';
+      expect(l(`${first} ${second}`, `${second} ${first}`)).toBe(1);
     });
 
     test('should throw RangeError for empty candidate', () => {
