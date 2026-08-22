@@ -832,6 +832,15 @@ describe('Utility Functions', () => {
       expect(fm(1e-300, 0.5, 1e200)).toBe(0.5);
     });
 
+    test('should preserve denominator ratios involving subnormal inputs', () => {
+      expect(fm(Number.MIN_VALUE, 2e-124, 1e100) / 1e-124).toBeCloseTo(1.423_685_637_8, 9);
+      expect(fm(2e-124, Number.MIN_VALUE, 1e-100) / 1e-124).toBeCloseTo(1.423_685_637_8, 9);
+      expect(fm(Number.MIN_VALUE, 1, 1e161)).toBeCloseTo(0.047_080_479_817_375_9, 14);
+      expect(fm(Number.MIN_VALUE, 1, Number.MAX_VALUE)).toBe(1);
+      expect(fm(Number.MIN_VALUE, 1, 0)).toBe(Number.MIN_VALUE);
+      expect(fm(1, Number.MIN_VALUE, 2)).toBe(Number.MIN_VALUE);
+    });
+
     test('should throw RangeError for OOB precision input', () => {
       expect(() => fm(10, 0.5)).toThrow(RangeError);
     });
@@ -946,9 +955,7 @@ describe('Core Functions', () => {
       expect(score('a b c', 'a b d', options)).toBe(score('a b c', 'a b d'));
     });
 
-    test.each(
-      invalidBetas,
-    )('should validate beta %s before tokenization and zero-overlap returns', (beta) => {
+    test.each(invalidBetas)('rejects beta=%s before callbacks', (beta) => {
       const tokenizer = jest.fn((input: string): string[] => input.split(' '));
       expect(() => score('a b', 'a b', { beta, tokenizer })).toThrow(/beta/);
       expect(() => score('a b', 'c d', { beta, tokenizer })).toThrow(/beta/);
@@ -1021,9 +1028,7 @@ describe('Core Functions', () => {
   describe('ROUGE-N', () => {
     const { n } = rouge;
 
-    test.each(
-      invalidNGramSizes,
-    )('should validate n=%s before invoking custom generators', (size) => {
+    test.each(invalidNGramSizes)('rejects n=%s before callbacks', (size) => {
       const nGram = jest.fn((): string[] => []);
       expect(() => n('a b', 'c d', { n: size, nGram })).toThrow(RangeError);
       expect(nGram).not.toHaveBeenCalled();
@@ -1095,9 +1100,7 @@ describe('Core Functions', () => {
   describe('ROUGE-S', () => {
     const { s } = rouge;
 
-    test.each(
-      invalidMaxSkips,
-    )('should validate maxSkip=%s before invoking custom generators', (maxSkip) => {
+    test.each(invalidMaxSkips)('rejects maxSkip=%s before callbacks', (maxSkip) => {
       const skipBigram = jest.fn((): string[] => []);
       expect(() => s('a b', 'c d', { maxSkip, skipBigram })).toThrow(RangeError);
       expect(skipBigram).not.toHaveBeenCalled();
