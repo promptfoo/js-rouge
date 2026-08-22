@@ -435,6 +435,15 @@ describe('Utility Functions', () => {
       ]);
     });
 
+    test.each(lineBreaks)('should consume wrapped name fragments once across %j', (lineBreak) => {
+      expect(ss(`I met${lineBreak}Albert\tI.${lineBreak}Jones at${lineBreak}Acme.`)).toEqual([
+        'I met Albert I. Jones at Acme.',
+      ]);
+      expect(ss(`I met${lineBreak}Albert\tI.${lineBreak}van der${lineBreak}Meer.`)).toEqual([
+        'I met Albert I. van der Meer.',
+      ]);
+    });
+
     test('should handle a standalone initialism', () => {
       expect(ss('D.C. Next.')).toEqual(['D.C.', 'Next.']);
     });

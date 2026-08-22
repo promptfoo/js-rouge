@@ -77,6 +77,13 @@ function escapeRegExp(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+const abbrvReg = new RegExp(`\\b(${GATE_SUBSTITUTIONS.map(escapeRegExp).join('|')})[.!?] ?$`, 'i');
+const acronymReg = /[ |.][A-Z].?$/i;
+const breakReg = /[\r\n]+/;
+// Match a bounded ellipsis suffix to avoid excessive backtracking.
+const ellipseReg = /\.{2,10}$/;
+const excepReg = new RegExp(`\\b(${GATE_EXCEPTIONS.map(escapeRegExp).join('|')})[.!?] ?$`, 'i');
+
 /**
  * Splits a body of text into an array of sentences
  * using a rule-based segmentation approach.
@@ -93,17 +100,6 @@ export function sentenceSegment(input: string): string[] {
   if (input.length === 0) {
     return [];
   }
-
-  const abbrvReg = new RegExp(
-    `\\b(${GATE_SUBSTITUTIONS.map(escapeRegExp).join('|')})[.!?] ?$`,
-    'i',
-  );
-  const acronymReg = new RegExp(/[ |.][A-Z].?$/, 'i');
-  const breakReg = /[\r\n]+/;
-  // Match 2-10 dots at end of string (ellipsis pattern)
-  // Using bounded {2,10} quantifier to avoid ReDoS with extremely long dot sequences
-  const ellipseReg = /\.{2,10}$/;
-  const excepReg = new RegExp(`\\b(${GATE_EXCEPTIONS.map(escapeRegExp).join('|')})[.!?] ?$`, 'i');
 
   // Split sentences naively based on common terminals (.?!")
   // Pattern uses a "tempered greedy token" to avoid ReDoS:
@@ -172,6 +168,7 @@ export function sentenceSegment(input: string): string[] {
             // the previous and next words are all capitalized. Normalize line
             // wrapping in the separator so it cannot split the joined name again.
             chunks[idx + 2] = chunks[idx] + chunks[idx + 1].replace(/\s+/g, ' ') + nextSentence;
+            chunks[idx + 1] = '';
           } else {
             // Retain a boundary for other entities and unterminated final fragments.
             acc.push(chunks[idx]);
