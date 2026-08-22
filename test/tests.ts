@@ -1,3 +1,6 @@
+import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
+import { buildSync } from 'esbuild';
 import * as rouge from '../src/rouge';
 
 describe('Utility Functions', () => {
@@ -504,6 +507,36 @@ describe('Utility Functions', () => {
     // Using 500ms threshold to account for CI environment variability
     describe('ReDoS prevention', () => {
       const TIMEOUT_MS = 500;
+
+      test('should segment abbreviation chains within a small heap', () => {
+        const bundled = buildSync({
+          entryPoints: [join(__dirname, '../src/rouge.ts')],
+          bundle: true,
+          platform: 'node',
+          target: 'node18',
+          write: false,
+        }).outputFiles[0].text;
+        const script = `${bundled}
+          for (const [fragment, normalized] of [['Dr. ', 'Dr. '], ['e.g. ', 'e.g. '], ['Dr.\\n', 'Dr. ']]) {
+            const summary = fragment.repeat(5000) + 'End.';
+            const sentences = module.exports.sentenceSegment(summary);
+            if (sentences.length !== 1 || sentences[0] !== normalized.repeat(5000) + 'End.') {
+              throw new Error('Sentence content changed');
+            }
+            if (module.exports.l(summary, 'unmatched') !== 0) {
+              throw new Error('Unexpected ROUGE-L match');
+            }
+          }
+          process.stdout.write('ok');
+        `;
+        const child = spawnSync(process.execPath, ['--max-old-space-size=64', '-e', script], {
+          encoding: 'utf8',
+          timeout: 15_000,
+        });
+        expect(child.error).toBeUndefined();
+        expect({ status: child.status, stderr: child.stderr }).toEqual({ status: 0, stderr: '' });
+        expect(child.stdout).toBe('ok');
+      });
 
       test('should handle long strings without sentence terminators quickly', () => {
         const input = 'a'.repeat(64_000);

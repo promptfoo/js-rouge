@@ -84,6 +84,140 @@ const breakReg = /[\r\n]+/;
 // Match a bounded ellipsis suffix to avoid excessive backtracking.
 const ellipseReg = /\.{2,10}$/;
 const excepReg = new RegExp(`\\b(${GATE_EXCEPTIONS.map(escapeRegExp).join('|')})[.!?] ?$`, 'i');
+const sentenceSuffixLength = Math.max(10, ...GATE_SUBSTITUTIONS.map((word) => word.length + 2));
+
+/** Keep merged fragments separate; boundary rules only need a suffix and word casing. */
+class SentenceBuffer {
+  #parts: string[] = [];
+  #normalizedThrough = 0;
+  #length = 0;
+  #normalizedLength = 0;
+  #normalizedSuffix = '';
+  #nonSpaceSuffix = '';
+  #nonWhitespaceSuffix = '';
+  #words: { titleCase: boolean; lowerCase: boolean }[] = [];
+  suffix = '';
+  hasLineBreaks = false;
+  startsWithTitleCase = false;
+
+  constructor(text: string) {
+    this.append(trimSpaces(text));
+  }
+
+  get empty(): boolean {
+    return this.#words.length === 0;
+  }
+
+  get lastWordIsLowerCase(): boolean {
+    return this.#words.at(-1)?.lowerCase ?? true;
+  }
+
+  get previousWordIsTitleCase(): boolean {
+    return this.#words.at(-2)?.titleCase ?? false;
+  }
+
+  append(text: string): void {
+    if (text.length === 0) {
+      return;
+    }
+
+    // A merge without separating whitespace can continue the previous word.
+    const previous = this.#words.at(-1);
+    for (const match of text.matchAll(/\S+/g)) {
+      const word = match[0];
+      const lowerCase = word === word.toLowerCase();
+      if (match.index === 0 && previous && !/\s/.test(this.suffix.at(-1) ?? '')) {
+        previous.lowerCase = previous.lowerCase && lowerCase;
+      } else {
+        const titleCase = strIsTitleCase(word);
+        if (this.empty) {
+          this.startsWithTitleCase = titleCase;
+        }
+        this.#words.push({ titleCase, lowerCase });
+        if (this.#words.length > 2) {
+          this.#words.shift();
+        }
+      }
+    }
+
+    const noSpaces = trimEndSpaces(text);
+    const noWhitespace = text.trimEnd();
+    if (noSpaces.length > 0) {
+      this.#nonSpaceSuffix = (this.suffix + noSpaces).slice(-sentenceSuffixLength);
+    }
+    if (noWhitespace.length > 0) {
+      this.#nonWhitespaceSuffix = (this.suffix + noWhitespace).slice(-sentenceSuffixLength);
+    }
+    this.suffix = (this.suffix + text).slice(-sentenceSuffixLength);
+
+    let normalized = text.replace(/\s+/g, ' ');
+    if (this.#normalizedSuffix.endsWith(' ') && normalized.startsWith(' ')) {
+      normalized = normalized.slice(1);
+    }
+    this.#normalizedLength += normalized.length;
+    this.#normalizedSuffix = (this.#normalizedSuffix + normalized).slice(-sentenceSuffixLength);
+    this.#length += text.length;
+    this.hasLineBreaks = this.hasLineBreaks || breakReg.test(text);
+    this.#parts.push(text);
+  }
+
+  trimEnd(allWhitespace = false): void {
+    let removed = 0;
+    while (this.#parts.length > 0) {
+      const index = this.#parts.length - 1;
+      const part = this.#parts[index];
+      const trimmed = allWhitespace ? part.trimEnd() : trimEndSpaces(part);
+      removed += part.length - trimmed.length;
+      if (trimmed.length > 0) {
+        this.#parts[index] = trimmed;
+        break;
+      }
+      this.#parts.pop();
+    }
+    if (removed === 0) {
+      return;
+    }
+
+    this.#length -= removed;
+    this.#normalizedThrough = Math.min(this.#normalizedThrough, this.#parts.length);
+    this.suffix = allWhitespace ? this.#nonWhitespaceSuffix : this.#nonSpaceSuffix;
+    if (this.#length === 0) {
+      this.suffix = '';
+    } else if (this.#length < sentenceSuffixLength) {
+      this.suffix = this.suffix.slice(-this.#length);
+    }
+    if (!/\s$/.test(this.suffix) && this.#normalizedSuffix.endsWith(' ')) {
+      this.#normalizedLength--;
+      this.#normalizedSuffix = this.#normalizedSuffix.slice(0, -1);
+    }
+  }
+
+  normalizeWhitespace(): void {
+    this.trimEnd(true);
+    const first = this.#parts[0];
+    const trimmed = first.trimStart();
+    if (trimmed.length < first.length) {
+      this.#parts[0] = trimmed;
+      this.#normalizedLength--;
+      if (this.#normalizedLength < sentenceSuffixLength) {
+        this.#normalizedSuffix = this.#normalizedSuffix.slice(-this.#normalizedLength);
+      }
+    }
+
+    // Repeated normalization is idempotent: apply it once to the longest prefix on output.
+    this.#normalizedThrough = this.#parts.length;
+    this.#length = this.#normalizedLength;
+    this.suffix = this.#normalizedSuffix;
+    this.#nonSpaceSuffix = this.suffix;
+    this.#nonWhitespaceSuffix = this.suffix;
+    this.hasLineBreaks = false;
+  }
+
+  text(): string {
+    const prefix = this.#parts.slice(0, this.#normalizedThrough).join('').replace(/\s+/g, ' ');
+    return prefix + this.#parts.slice(this.#normalizedThrough).join('');
+  }
+}
 
 /**
  * Splits a body of text into an array of sentences
@@ -106,76 +240,73 @@ export function sentenceSegment(input: string): string[] {
   const chunks = sentenceChunks(input);
 
   const acc: string[] = [];
+  let pending: SentenceBuffer | undefined;
   for (let idx = 0; idx < chunks.length; idx++) {
-    if (chunks[idx]) {
+    if (pending || chunks[idx]) {
+      const chunk = pending ?? new SentenceBuffer(chunks[idx]);
+      pending = undefined;
       // Trim only spaces (i.e. preserve line breaks/carriage feeds)
-      chunks[idx] = trimSpaces(chunks[idx]);
+      chunk.trimEnd();
 
       // Separators are not sentences and have no character to test for titlecase.
-      if (chunks[idx].trim().length === 0) {
+      if (chunk.empty) {
         continue;
       }
 
-      if (breakReg.test(chunks[idx])) {
-        if (chunks[idx + 1] && strIsTitleCase(chunks[idx])) {
+      if (chunk.hasLineBreaks) {
+        if (chunks[idx + 1] && chunk.startsWithTitleCase) {
           // Catch line breaks embedded within valid sentences
           // i.e. sentences that start with a capital letter
           // and normalize every wrap before reprocessing the joined chunk.
-          chunks[idx + 1] = `${chunks[idx]} ${chunks[idx + 1]}`.trim().replace(/\s+/g, ' ');
+          chunk.append(` ${chunks[idx + 1]}`);
+          chunk.normalizeWhitespace();
+          pending = chunk;
         } else {
           // Assume that all other embedded line breaks are
           // valid sentence breakpoints
-          for (const line of chunks[idx].split(breakReg)) {
+          for (const line of chunk.text().split(breakReg)) {
             const sentence = line.trim();
             if (sentence.length > 0) {
               acc.push(sentence);
             }
           }
         }
-      } else if (chunks[idx + 1] && abbrvReg.test(chunks[idx])) {
+      } else if (chunks[idx + 1] && abbrvReg.test(chunk.suffix)) {
         const nextChunk = chunks[idx + 1];
-        if (nextChunk.trim() && strIsTitleCase(nextChunk) && !excepReg.test(chunks[idx])) {
+        if (nextChunk.trim() && strIsTitleCase(nextChunk) && !excepReg.test(chunk.suffix)) {
           // Catch abbreviations followed by a capital letter and treat as a boundary.
           // FIXME: This causes named entities like `Mt. Fuji` or `U.S. Government` to fail.
-          acc.push(chunks[idx]);
-          chunks[idx] = '';
+          acc.push(chunk.text());
         } else {
           // Catch common abbreviations and merge them with a delimiting space
-          chunks[idx + 1] = `${chunks[idx]} ${nextChunk.replace(/ +/g, ' ')}`;
+          chunk.append(` ${nextChunk.replace(/ +/g, ' ')}`);
+          pending = chunk;
         }
-      } else if (chunks[idx].length > 1 && chunks[idx + 1] && acronymReg.test(chunks[idx])) {
-        const words = chunks[idx].split(/\s+/);
-        const lastWord = words.at(-1) ?? '';
-
-        if (lastWord === lastWord.toLowerCase()) {
+      } else if (chunks[idx + 1] && acronymReg.test(chunk.suffix)) {
+        if (chunk.lastWordIsLowerCase) {
           // Catch small-letter abbreviations and merge them.
-          chunks[idx + 1] = `${chunks[idx]} ${chunks[idx + 1].replace(/ +/g, ' ')}`;
+          chunk.append(` ${chunks[idx + 1].replace(/ +/g, ' ')}`);
+          pending = chunk;
         } else {
           const nextSentence = chunks[idx + 2];
-          const previousWord = words.at(-2);
-          if (
-            nextSentence &&
-            previousWord &&
-            strIsTitleCase(previousWord) &&
-            strIsTitleCase(nextSentence)
-          ) {
+          if (nextSentence && chunk.previousWordIsTitleCase && strIsTitleCase(nextSentence)) {
             // Catch name abbreviations (e.g. Albert I. Jones) by checking if
             // the previous and next words are all capitalized. Normalize line
             // wrapping in the separator so it cannot split the joined name again.
-            chunks[idx + 2] = chunks[idx] + chunks[idx + 1].replace(/\s+/g, ' ') + nextSentence;
-            chunks[idx + 1] = '';
+            chunk.append(chunks[idx + 1].replace(/\s+/g, ' ') + nextSentence);
+            pending = chunk;
+            idx++;
           } else {
             // Retain a boundary for other entities and unterminated final fragments.
-            acc.push(chunks[idx]);
-            chunks[idx] = '';
+            acc.push(chunk.text());
           }
         }
-      } else if (chunks[idx + 1] && ellipseReg.test(chunks[idx])) {
+      } else if (chunks[idx + 1] && ellipseReg.test(chunk.suffix)) {
         // Catch mid-sentence ellipses (and their derivatives) and merge them
-        chunks[idx + 1] = chunks[idx] + chunks[idx + 1].replace(/ +/g, ' ');
-      } else if (chunks[idx] && chunks[idx].length > 0) {
-        acc.push(chunks[idx]);
-        chunks[idx] = '';
+        chunk.append(chunks[idx + 1].replace(/ +/g, ' '));
+        pending = chunk;
+      } else {
+        acc.push(chunk.text());
       }
     }
   }
@@ -228,6 +359,14 @@ function trimSpaces(input: string): string {
     end--;
   }
   return input.slice(start, end);
+}
+
+function trimEndSpaces(input: string): string {
+  let end = input.length;
+  while (end > 0 && input[end - 1] === ' ') {
+    end--;
+  }
+  return input.slice(0, end);
 }
 
 /**
