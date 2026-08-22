@@ -373,10 +373,8 @@ describe('Utility Functions', () => {
       expect(ss(input).flatMap(rouge.treeBankTokenize)).toEqual(rouge.treeBankTokenize(input));
     });
 
-    test.each([
-      'Mt. Fuji',
-      'The (U.S.) Government issued a statement.',
-    ])('should retain abbreviated names in %s', (input) => {
+    const abbreviatedNames = ['Mt. Fuji', 'The (U.S.) Government issued a statement.'];
+    test.each(abbreviatedNames)('keeps abbreviated names in %s', (input) => {
       expect(ss(input)).toEqual([input]);
     });
 
