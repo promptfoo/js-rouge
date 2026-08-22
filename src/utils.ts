@@ -101,12 +101,7 @@ export function sentenceSegment(input: string): string[] {
     return [];
   }
 
-  // Split sentences naively based on common terminals (.?!")
-  // Pattern uses a "tempered greedy token" to avoid ReDoS:
-  // - (?:[^.?!\r\n]|[.?!](?!\s|$|"))* matches any char except newlines, OR a terminator NOT at a boundary
-  // - [^.?!\r\n] excludes newlines to match original behavior (JS regex . doesn't match newlines)
-  // - This allows matching through "U.S.A." and "$100.00" without polynomial backtracking
-  // - [.?!]{1,3} limits consecutive terminators (e.g., "!!", "?!", "...") to prevent ReDoS
+  // Keep captured sentences and unmatched separators for the rules below.
   const chunks = input.split(/(\S(?:[^.?!\r\n]|[.?!](?!\s|$|"))*[.?!]{1,3})(?=\s|$|")/g);
 
   const acc: string[] = [];
