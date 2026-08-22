@@ -25,23 +25,19 @@ export function treeBankTokenize(input: string): string[] {
     return [];
   }
 
-  // Does the following things in order of appearance by line:
-  // 1. Replace quotes at the sentence start position with double ticks
-  // 2. Wrap spaces around a double quote preceded by opening brackets
-  // 3. Wrap spaces around a non-unicode ellipsis
-  // 4. Separate commas/colons except before digits, and wrap other punctuation (;@#$%&)
-  // 5. Split a final period, allowing closing brackets, quotes, and whitespace after it.
-  //    Do not split ellipses. Sentence tokenization is assumed as a preprocessing step.
-  // 6. Wrap spaces around all exclamation marks and question marks
-  // 7. Wrap spaces around opening and closing brackets
-  // 8. Wrap spaces around en and em-dashes
-  let parse = text
-    .replace(/^"/, ' `` ')
-    .replace(/([ ([{<])"/g, '$1 `` ')
+  // Classify paired quotes before inserting spaces around punctuation.
+  let insideQuotes = false;
+  let parse = text.replace(/"/g, (_quote: string, index: number): string => {
+    insideQuotes = opensDoubleQuote(text, index, insideQuotes);
+    return insideQuotes ? ' `` ' : " '' ";
+  });
+
+  // Preserve numeric commas/colons and only split a sentence-final period.
+  parse = parse
     .replace(/\.\.\.*/g, ' ... ')
     .replace(/[:,](?!\d)/g, ' $& ')
     .replace(/[;@#$%&]/g, ' $& ')
-    .replace(/([^.])(\.)([\])}>"'\s]*)$/g, '$1 $2$3 ')
+    .replace(/([^.])(\.)([\])}>'\s]*)$/g, '$1 $2$3 ')
     .replace(/[?!]/g, ' $& ')
     .replace(/[\][(){}<>]/g, ' $& ')
     .replace(/---*/g, ' -- ');
@@ -50,13 +46,8 @@ export function treeBankTokenize(input: string): string[] {
   // i.e. reduce the number of Regex matches required
   parse = ` ${parse} `;
 
-  // Does the following things in order of appearance by line:
-  // 1. Replace double quotes with a pair of single quotes wrapped with spaces
-  // 2. Wrap possessive or closing single quotes
-  // 3. Add a space before single quotes followed by `s`, `m`, or `d` and a space
-  // 4. Add a space before occurrences of `'ll`, `'re`, `'ve` or `n't`
+  // Split possessive/closing apostrophes and common contractions.
   parse = parse
-    .replace(/"/g, " '' ")
     .replace(/([^'])' /g, "$1 ' ")
     .replace(/'([sSmMdD]) /g, " '$1 ")
     .replace(/('ll|'LL|'re|'RE|'ve|'VE|n't|N'T) /g, ' $1 ');
@@ -71,6 +62,10 @@ export function treeBankTokenize(input: string): string[] {
 
   // Split on spaces (original and inserted) to return the tokenized result
   return parse.split(' ');
+}
+
+function opensDoubleQuote(input: string, index: number, insideQuotes: boolean): boolean {
+  return !insideQuotes && (index === 0 || /[\s([{<]/.test(input[index - 1]));
 }
 
 function escapeRegExp(input: string): string {
@@ -214,7 +209,7 @@ export function sentenceSegment(input: string): string[] {
     return [];
   }
 
-  // Split sentences naively based on common terminals (.?!")
+  // Scan terminals before applying abbreviation and line-wrap rules.
   const chunks = sentenceChunks(input);
 
   const acc: string[] = [];
@@ -303,9 +298,16 @@ function sentenceChunks(input: string): string[] {
   const chunks: string[] = [];
   let lastEnd = 0;
   let start = -1;
+  let insideQuotes = false;
 
   for (let index = 0; index < input.length; index++) {
     const char = input[index];
+    if (char === '"') {
+      insideQuotes = opensDoubleQuote(input, index, insideQuotes);
+    }
+    if (index < lastEnd) {
+      continue;
+    }
     if (char === '\r' || char === '\n') {
       // A match cannot cross CR/LF; its prefix remains unmatched text.
       start = -1;
@@ -319,13 +321,12 @@ function sentenceChunks(input: string): string[] {
       continue;
     }
     if (char === '.' || char === '?' || char === '!') {
-      const end = sentenceEnd(input, index);
+      const end = sentenceEnd(input, index, insideQuotes);
       if (end === -1) {
         continue;
       }
       chunks.push(input.slice(lastEnd, start), input.slice(start, end));
       lastEnd = end;
-      index = end - 1;
       start = -1;
     }
   }
@@ -335,22 +336,26 @@ function sentenceChunks(input: string): string[] {
 }
 
 /** Include closing delimiters, or return -1 when the sentence continues. */
-function sentenceEnd(input: string, index: number): number {
+function sentenceEnd(input: string, index: number, insideQuotes: boolean): number {
   let end = index + 1;
-  let closed = false;
+  let quotePending = insideQuotes;
   while (end < input.length) {
     if (closingDelimiterReg.test(input[end])) {
-      closed = true;
+      quotePending &&= input[end] !== '"';
       end++;
       continue;
     }
 
-    // A bracket can follow spaces; a quote after spaces may open the next sentence.
+    // Only consume a spaced quote when it closes an existing quotation.
     let next = end;
     while (next < input.length && /[^\S\r\n]/.test(input[next])) {
       next++;
     }
-    if (next > end && next < input.length && closingBracketReg.test(input[next])) {
+    if (
+      next > end &&
+      next < input.length &&
+      (closingBracketReg.test(input[next]) || (quotePending && input[next] === '"'))
+    ) {
       end = next;
       continue;
     }
@@ -360,19 +365,18 @@ function sentenceEnd(input: string, index: number): number {
   if (end < input.length && !/\s/.test(input[end])) {
     return -1;
   }
-  if (!closed) {
+  if (end === index + 1) {
     return end;
   }
 
   let next = end;
-  while (next < input.length && /\s/.test(input[next])) {
+  while (next < input.length && /[\s"'([{<]/.test(input[next])) {
     next++;
   }
   if (next === input.length) {
     return end;
   }
-  const initial = input[next];
-  if (/[,;:]/.test(initial) || initial.toUpperCase() !== initial) {
+  if (!charIsUpperCase(input[next])) {
     return -1;
   }
 
