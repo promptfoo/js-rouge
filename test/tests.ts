@@ -735,11 +735,7 @@ describe('Utility Functions', () => {
       expect(
         jk(references, candidate, (reference, summary) => recall(summary, reference)),
       ).toBeCloseTo(4 / 9, 15);
-      expect(recall.mock.calls).toEqual([
-        ['a', 'a b'],
-        ['a', 'a c d'],
-        ['a', 'a b c d e'],
-      ]);
+      expect(recall.mock.calls).toEqual(references.map((reference) => [candidate, reference]));
 
       // Direct callbacks retain the documented candidate-first orientation.
       expect(jk(references, candidate, recall)).toBe(1);
