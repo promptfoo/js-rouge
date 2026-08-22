@@ -80,14 +80,18 @@ function escapeRegExp(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-const abbrvReg = new RegExp(`\\b(${GATE_SUBSTITUTIONS.map(escapeRegExp).join('|')})[.!?] ?$`, 'i');
+const abbrvReg = new RegExp(
+  `\\b(${GATE_SUBSTITUTIONS.map(escapeRegExp).join('|')})[.!?]"? ?$`,
+  'i',
+);
 const acronymReg = /[ |.][A-Z].?$/i;
 const breakReg = /[\r\n]+/;
 // Match a bounded ellipsis suffix to avoid excessive backtracking.
 const ellipseReg = /\.{2,10}$/;
-const excepReg = new RegExp(`\\b(${GATE_EXCEPTIONS.map(escapeRegExp).join('|')})[.!?] ?$`, 'i');
-const sentenceSuffixLength = Math.max(10, ...GATE_SUBSTITUTIONS.map((word) => word.length + 2));
-const geographicAcronymReg = /\b(?:U\.S(?:\.A)?|E\.U)\.$/i;
+const excepReg = new RegExp(`\\b(${GATE_EXCEPTIONS.map(escapeRegExp).join('|')})[.!?]"? ?$`, 'i');
+// Retain the preceding character, punctuation, and optional closing quote.
+const sentenceSuffixLength = Math.max(10, ...GATE_SUBSTITUTIONS.map((word) => word.length + 3));
+const geographicAcronymReg = /\b(?:U\.S(?:\.A)?|E\.U)\."?$/i;
 // Conservative acronym boundaries follow pragmatic_segmenter's sentence-starter approach:
 // https://github.com/diasks2/pragmatic_segmenter/blob/master/lib/pragmatic_segmenter/languages/common.rb
 const sentenceStarterReg =
@@ -97,13 +101,7 @@ const sentenceStarterReg =
 class SentenceBuffer {
   #parts: string[] = [];
   #normalizedThrough = 0;
-  #length = 0;
-  #normalizedLength = 0;
-  #normalizedSuffix = '';
-  #nonSpaceSuffix = '';
-  #nonWhitespaceSuffix = '';
   #words: { titleCase: boolean; lowerCase: boolean }[] = [];
-  suffix = '';
   hasLineBreaks = false;
   startsWithTitleCase = false;
 
@@ -121,6 +119,14 @@ class SentenceBuffer {
 
   get previousWordIsTitleCase(): boolean {
     return this.#words.at(-2)?.titleCase ?? false;
+  }
+
+  get suffix(): string {
+    let suffix = '';
+    for (let i = this.#parts.length - 1; i >= 0 && suffix.length < sentenceSuffixLength; i--) {
+      suffix = `${this.#parts[i].slice(suffix.length - sentenceSuffixLength)}${suffix}`;
+    }
+    return suffix;
   }
 
   append(text: string): void {
@@ -147,82 +153,44 @@ class SentenceBuffer {
       }
     }
 
-    const noSpaces = trimEndSpaces(text);
-    const noWhitespace = text.trimEnd();
-    if (noSpaces.length > 0) {
-      this.#nonSpaceSuffix = (this.suffix + noSpaces).slice(-sentenceSuffixLength);
-    }
-    if (noWhitespace.length > 0) {
-      this.#nonWhitespaceSuffix = (this.suffix + noWhitespace).slice(-sentenceSuffixLength);
-    }
-    this.suffix = (this.suffix + text).slice(-sentenceSuffixLength);
-
-    let normalized = text.replace(/\s+/g, ' ');
-    if (this.#normalizedSuffix.endsWith(' ') && normalized.startsWith(' ')) {
-      normalized = normalized.slice(1);
-    }
-    this.#normalizedLength += normalized.length;
-    this.#normalizedSuffix = (this.#normalizedSuffix + normalized).slice(-sentenceSuffixLength);
-    this.#length += text.length;
     this.hasLineBreaks = this.hasLineBreaks || breakReg.test(text);
     this.#parts.push(text);
   }
 
   trimEnd(allWhitespace = false): void {
-    let removed = 0;
     while (this.#parts.length > 0) {
       const index = this.#parts.length - 1;
       const part = this.#parts[index];
       const trimmed = allWhitespace ? part.trimEnd() : trimEndSpaces(part);
-      removed += part.length - trimmed.length;
       if (trimmed.length > 0) {
         this.#parts[index] = trimmed;
         break;
       }
       this.#parts.pop();
     }
-    if (removed === 0) {
-      return;
-    }
-
-    this.#length -= removed;
     this.#normalizedThrough = Math.min(this.#normalizedThrough, this.#parts.length);
-    this.suffix = allWhitespace ? this.#nonWhitespaceSuffix : this.#nonSpaceSuffix;
-    if (this.#length === 0) {
-      this.suffix = '';
-    } else if (this.#length < sentenceSuffixLength) {
-      this.suffix = this.suffix.slice(-this.#length);
-    }
-    if (!/\s$/.test(this.suffix) && this.#normalizedSuffix.endsWith(' ')) {
-      this.#normalizedLength--;
-      this.#normalizedSuffix = this.#normalizedSuffix.slice(0, -1);
-    }
   }
 
   normalizeWhitespace(): void {
-    this.trimEnd(true);
-    const first = this.#parts[0];
-    const trimmed = first.trimStart();
-    if (trimmed.length < first.length) {
-      this.#parts[0] = trimmed;
-      this.#normalizedLength--;
-      if (this.#normalizedLength < sentenceSuffixLength) {
-        this.#normalizedSuffix = this.#normalizedSuffix.slice(-this.#normalizedLength);
+    // Normalize each fragment once, including whitespace at fragment boundaries.
+    let write = this.#normalizedThrough;
+    for (let read = write; read < this.#parts.length; read++) {
+      let part = this.#parts[read].replace(/\s+/g, ' ');
+      if ((write === 0 || this.#parts[write - 1].endsWith(' ')) && part.startsWith(' ')) {
+        part = part.slice(1);
+      }
+      if (part.length > 0) {
+        this.#parts[write++] = part;
       }
     }
-
-    // Repeated normalization is idempotent: apply it once to the longest prefix on output.
+    this.#parts.length = write;
+    this.trimEnd(true);
     this.#normalizedThrough = this.#parts.length;
-    this.#length = this.#normalizedLength;
-    this.suffix = this.#normalizedSuffix;
-    this.#nonSpaceSuffix = this.suffix;
-    this.#nonWhitespaceSuffix = this.suffix;
     this.hasLineBreaks = false;
   }
 
   text(): string {
-    const prefix = this.#parts.slice(0, this.#normalizedThrough).join('').replace(/\s+/g, ' ');
-    return prefix + this.#parts.slice(this.#normalizedThrough).join('');
+    return this.#parts.join('');
   }
 }
 
@@ -317,8 +285,8 @@ export function sentenceSegment(input: string): string[] {
         // Catch mid-sentence ellipses (and their derivatives) and merge them
         const nextChunk = chunks[idx + 1];
         chunk.append(nextChunk.replace(/ +/g, ' '));
-        if (!nextChunk.trim() && chunks[idx + 2]) {
-          // Keep the separator inside the sentence so the next pass cannot trim it away.
+        if (!(nextChunk.trim() || breakReg.test(nextChunk)) && chunks[idx + 2]) {
+          // Keep the separator inside the sentence; leave line breaks to the newline rule.
           chunk.append(chunks[idx + 2].replace(/ +/g, ' '));
           idx++;
         }
