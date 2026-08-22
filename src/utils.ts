@@ -103,19 +103,13 @@ export function sentenceSegment(input: string): string[] {
   }
 
   // Split sentences naively based on common terminals (.?!")
-  // Pattern uses a "tempered greedy token" to avoid ReDoS:
-  // - (?:[^.?!\r\n]|[.?!](?!\s|$|"))* matches any char except newlines, OR a terminator NOT at a boundary
-  // - [^.?!\r\n] excludes newlines to match original behavior (JS regex . doesn't match newlines)
-  // - This allows matching through "U.S.A." and "$100.00" without polynomial backtracking
-  // - [.?!]{1,3} limits consecutive terminators (e.g., "!!", "?!", "...") to prevent ReDoS
-  const chunks = input.split(/(\S(?:[^.?!\r\n]|[.?!](?!\s|$|"))*[.?!]{1,3})(?=\s|$|")/g);
+  const chunks = sentenceChunks(input);
 
   const acc: string[] = [];
   for (let idx = 0; idx < chunks.length; idx++) {
     if (chunks[idx]) {
       // Trim only spaces (i.e. preserve line breaks/carriage feeds)
-      // Note: Using separate replacements instead of alternation to avoid ReDoS
-      chunks[idx] = chunks[idx].replace(/^ +/, '').replace(/ +$/, '');
+      chunks[idx] = trimSpaces(chunks[idx]);
 
       // Separators are not sentences and have no character to test for titlecase.
       if (chunks[idx].trim().length === 0) {
@@ -188,6 +182,52 @@ export function sentenceSegment(input: string): string[] {
 
   // If no matches were found, return the input treated as a single sentence
   return acc.length === 0 ? [input] : acc;
+}
+
+/** Scan sentence boundaries once, preserving the former captured-split layout. */
+function sentenceChunks(input: string): string[] {
+  const chunks: string[] = [];
+  let lastEnd = 0;
+  let start = -1;
+
+  for (let index = 0; index < input.length; index++) {
+    const char = input[index];
+    if (char === '\r' || char === '\n') {
+      // A match cannot cross CR/LF; its prefix remains unmatched text.
+      start = -1;
+      continue;
+    }
+    if (start === -1) {
+      if (/\S/.test(char)) {
+        start = index;
+      }
+      // A terminal must follow the initial character, even if it is punctuation.
+      continue;
+    }
+    if (
+      (char === '.' || char === '?' || char === '!') &&
+      (index + 1 === input.length || /[\s"]/.test(input[index + 1]))
+    ) {
+      chunks.push(input.slice(lastEnd, start), input.slice(start, index + 1));
+      lastEnd = index + 1;
+      start = -1;
+    }
+  }
+
+  chunks.push(input.slice(lastEnd));
+  return chunks;
+}
+
+function trimSpaces(input: string): string {
+  let start = 0;
+  let end = input.length;
+  while (start < end && input[start] === ' ') {
+    start++;
+  }
+  while (end > start && input[end - 1] === ' ') {
+    end--;
+  }
+  return input.slice(start, end);
 }
 
 /**
