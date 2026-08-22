@@ -1,5 +1,6 @@
 import { lcsIndices } from './lcs';
 import * as utils from './utils';
+import { validateBeta, validateMaxSkip, validateNGramSize } from './validation';
 
 export * from './utils';
 
@@ -62,6 +63,24 @@ function countMatchingGrams(candidate: string[], reference: string[]): number {
   return matches;
 }
 
+/** The built-in tokenizer expects sentences; custom tokenizers receive whole summaries. */
+function tokenizeSummary(
+  input: string,
+  caseSensitive: boolean,
+  tokenizer?: (input: string) => string[],
+): string[] {
+  const tokenize = tokenizer ?? utils.treeBankTokenize;
+  const sentences = tokenize === utils.treeBankTokenize ? utils.sentenceSegment(input) : [input];
+  return sentences.flatMap((sentence) =>
+    tokenize(caseSensitive ? sentence : sentence.toLowerCase()),
+  );
+}
+
+/** JSON string tokens remain unambiguous when the built-in gram utilities join them. */
+function encodeTokens(tokens: string[]): string[] {
+  return tokens.map((token) => JSON.stringify(token));
+}
+
 /**
  * Computes the ROUGE-N score for a candidate summary.
  *
@@ -93,21 +112,22 @@ export function n(cand: string, ref: string, opts?: RougeNOptions): number {
     throw new RangeError('Reference cannot be an empty string');
   }
 
-  // Merge user-provided configuration with defaults
-  const options = {
-    n: 1,
-    beta: 1.0,
-    caseSensitive: true,
-    nGram: utils.nGram,
-    tokenizer: utils.treeBankTokenize,
-    ...opts,
+  const {
+    n: size = 1,
+    beta = 1.0,
+    caseSensitive = true,
+    nGram = utils.nGram,
+    tokenizer,
+  } = opts ?? {};
+  validateNGramSize(size);
+  validateBeta(beta);
+
+  const getGrams = (input: string): string[] => {
+    const tokens = tokenizeSummary(input, caseSensitive, tokenizer);
+    return nGram(nGram === utils.nGram ? encodeTokens(tokens) : tokens, size);
   };
-
-  const candText = options.caseSensitive ? cand : cand.toLowerCase();
-  const refText = options.caseSensitive ? ref : ref.toLowerCase();
-
-  const candGrams = options.nGram(options.tokenizer(candText), options.n);
-  const refGrams = options.nGram(options.tokenizer(refText), options.n);
+  const candGrams = getGrams(cand);
+  const refGrams = getGrams(ref);
 
   const matches = countMatchingGrams(candGrams, refGrams);
 
@@ -118,7 +138,7 @@ export function n(cand: string, ref: string, opts?: RougeNOptions): number {
   const precision = matches / candGrams.length;
   const recall = matches / refGrams.length;
 
-  return utils.fMeasure(precision, recall, options.beta);
+  return utils.fMeasure(precision, recall, beta);
 }
 
 /**
@@ -152,21 +172,22 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
     throw new RangeError('Reference cannot be an empty string');
   }
 
-  // Merge user-provided configuration with defaults
-  const options = {
-    beta: 1.0,
-    caseSensitive: true,
-    maxSkip: Number.POSITIVE_INFINITY,
-    skipBigram: utils.skipBigram,
-    tokenizer: utils.treeBankTokenize,
-    ...opts,
+  const {
+    beta = 1.0,
+    caseSensitive = true,
+    maxSkip = Number.POSITIVE_INFINITY,
+    skipBigram = utils.skipBigram,
+    tokenizer,
+  } = opts ?? {};
+  validateMaxSkip(maxSkip);
+  validateBeta(beta);
+
+  const getGrams = (input: string): string[] => {
+    const tokens = tokenizeSummary(input, caseSensitive, tokenizer);
+    return skipBigram(skipBigram === utils.skipBigram ? encodeTokens(tokens) : tokens, maxSkip);
   };
-
-  const candText = options.caseSensitive ? cand : cand.toLowerCase();
-  const refText = options.caseSensitive ? ref : ref.toLowerCase();
-
-  const candGrams = options.skipBigram(options.tokenizer(candText), options.maxSkip);
-  const refGrams = options.skipBigram(options.tokenizer(refText), options.maxSkip);
+  const candGrams = getGrams(cand);
+  const refGrams = getGrams(ref);
 
   const skip2 = countMatchingGrams(candGrams, refGrams);
 
@@ -176,7 +197,7 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
   const skip2Recall = skip2 / refGrams.length;
   const skip2Prec = skip2 / candGrams.length;
 
-  return utils.fMeasure(skip2Prec, skip2Recall, options.beta);
+  return utils.fMeasure(skip2Prec, skip2Recall, beta);
 }
 
 /**
@@ -211,20 +232,19 @@ export function l(cand: string, ref: string, opts?: RougeLOptions): number {
     throw new RangeError('Reference cannot be an empty string');
   }
 
-  // Merge user-provided configuration with defaults
-  const options = {
-    beta: 1.0,
-    caseSensitive: true,
-    lcs: utils.lcs,
-    segmenter: utils.sentenceSegment,
-    tokenizer: utils.treeBankTokenize,
-    ...opts,
-  };
+  const {
+    beta = 1.0,
+    caseSensitive = true,
+    lcs: getLcs = utils.lcs,
+    segmenter = utils.sentenceSegment,
+    tokenizer = utils.treeBankTokenize,
+  } = opts ?? {};
+  validateBeta(beta);
 
   const tokenizeSentence = (sentence: string): string[] =>
-    options.tokenizer(options.caseSensitive ? sentence : sentence.toLowerCase());
-  const candSents = options.segmenter(cand).map(tokenizeSentence);
-  const refSents = options.segmenter(ref).map(tokenizeSentence);
+    tokenizer(caseSensitive ? sentence : sentence.toLowerCase());
+  const candSents = segmenter(cand).map(tokenizeSentence);
+  const refSents = segmenter(ref).map(tokenizeSentence);
 
   const remaining = new Map<string, number>();
   let candLength = 0;
@@ -244,7 +264,7 @@ export function l(cand: string, ref: string, opts?: RougeLOptions): number {
   for (const reference of refSents) {
     const union = new Set<number>();
     for (const candidate of candSents) {
-      for (const index of matchedReferenceIndices(candidate, reference, options.lcs)) {
+      for (const index of matchedReferenceIndices(candidate, reference, getLcs)) {
         union.add(index);
       }
     }
@@ -263,7 +283,7 @@ export function l(cand: string, ref: string, opts?: RougeLOptions): number {
   if (matches === 0) {
     return 0;
   }
-  return utils.fMeasure(matches / candLength, matches / refLength, options.beta);
+  return utils.fMeasure(matches / candLength, matches / refLength, beta);
 }
 
 function matchedReferenceIndices(

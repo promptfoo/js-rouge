@@ -109,15 +109,21 @@ rougeN("Hello World", "hello world", { caseSensitive: false }); // => 1.0
 
 ### Text Preprocessing
 
-The default tokenizer treats spaces, tabs, line breaks, and other whitespace as word separators. It returns no tokens for whitespace-only text and expands every occurrence of supported contractions. Punctuation remains part of the token stream.
+By default, all three metrics segment the original text before case folding and per-sentence Penn Treebank tokenization. ROUGE-N/S flatten the tokens, so grams can cross sentence boundaries. Explicitly passing `treeBankTokenize` behaves the same. Custom tokenizers receive each whole summary once in `n()`/`s()` and individual sentences in `l()`.
 
-The default sentence segmenter handles LF, CRLF, and CR line endings and ignores blank separator chunks. Abbreviations such as `e.g.` are matched literally, and sentences ending in an initial or acronym are retained even when the following fragment has no punctuation.
+The tokenizer treats spaces, tabs, line breaks, and other whitespace as word separators. It returns no tokens for whitespace-only text and expands every occurrence of supported contractions. Punctuation remains part of the token stream. Colons and commas are separated unless followed by a digit, preserving numbers such as `12,000` and times such as `12:30`. Multi-initial acronyms such as `U.S.` keep their final dot, including at sentence boundaries, so a heuristic boundary cannot change the acronym's token identity.
+
+The default sentence segmenter handles LF, CRLF, and CR line endings and ignores blank separator chunks. Abbreviations such as `e.g.` are matched literally, and sentences ending in an initial or acronym are retained even when the following fragment has no punctuation. Spaces and line wraps after a mid-sentence ellipsis preserve word separation. Closing quotes and brackets stay with their sentence, including across line wraps. Inline parentheticals remain inside the surrounding sentence, even before a capitalized continuation. Capitalized text after an abbreviation may start a new sentence.
 
 The scoring functions reject empty or whitespace-only candidate/reference summaries with `RangeError`. Existing minimum-token requirements still apply: ROUGE-N needs at least `n` tokens, and ROUGE-S needs at least two. The standalone `sentenceSegment` utility retains its single-sentence fallback for whitespace-only input.
 
-These preprocessing corrections can change scores for affected inputs. Keep the same tokenizer and segmenter configuration when comparing evaluation runs across versions.
+These preprocessing corrections can change scores for multi-sentence summaries, colons, numeric commas, ellipses, and punctuation inside quotes or brackets. For example, `n("Alpha. Beta.", "Beta. Alpha.")` now returns `1` rather than `1/3`. Rerun affected baselines and keep the same tokenizer and segmenter configuration when comparing evaluation runs across versions.
 
 ## Options
+
+Omitted options and fields explicitly set to `undefined` use the documented defaults. Explicit `false`, `0`, and `Infinity` values are preserved where supported.
+
+`n` must be a positive integer. `maxSkip` must be a non-negative integer or positive `Infinity`. `beta` must be a non-negative finite number or positive `Infinity`; `NaN` is never valid. Invalid numeric options throw `RangeError` before tokenization or a zero-overlap return, including with custom gram generators. The public `nGram`, `skipBigram`, and `fMeasure` utilities enforce the same numeric contracts, and `fMeasure` requires finite precision and recall in `[0, 1]`. Large finite beta values produce finite scores.
 
 ### ROUGE-N Options
 
@@ -153,9 +159,12 @@ These preprocessing corrections can change scores for affected inputs. Keep the 
 
 ROUGE-N and ROUGE-S count repeated matching grams up to the smaller of their frequencies in the candidate and reference. Correcting earlier versions' set-based counting changes scores for repeated grams; rerun evaluation baselines when comparing versions.
 
+Built-in scoring preserves token boundaries even when custom tokenizers return tokens containing spaces, quotes, or separators. For example, `["new york", "city"]` and `["new", "york city"]` no longer count as the same bigram. The exported `nGram()` and `skipBigram()` utilities retain their readable, space-joined output strings; those strings are not collision-free identifiers for arbitrary token arrays. Custom gram generators still receive the original tokens and their returned strings are used as identities, so those callbacks remain responsible for any encoding they need.
+
 ### Limitations
 
 - **English-centric tokenizer**: The default Penn Treebank tokenizer is designed for English text. For other languages, provide a custom `tokenizer` function that appropriately segments text in your target language.
+- **Heuristic sentence boundaries**: Abbreviations and names can be ambiguous. For domain-specific boundaries, supply a custom tokenizer to ROUGE-N/S or a custom segmenter to ROUGE-L.
 
 ## Jackknife Resampling
 

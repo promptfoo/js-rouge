@@ -1,4 +1,19 @@
+import { spawnSync } from 'node:child_process';
+import { join } from 'node:path';
+import { buildSync } from 'esbuild';
 import * as rouge from '../src/rouge';
+
+const bracketPairs = [
+  ['(', ')'],
+  ['[', ']'],
+  ['{', '}'],
+  ['<', '>'],
+] as const;
+const geographicAcronyms = ['U.S.', 'U.S.A.', 'E.U.'];
+const nonFiniteNumbers = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
+const invalidNGramSizes = [...nonFiniteNumbers, -1, 0, 1.5];
+const invalidMaxSkips = [Number.NaN, Number.NEGATIVE_INFINITY, -1, 0.5, 1.5];
+const invalidBetas = [Number.NaN, Number.NEGATIVE_INFINITY, -1];
 
 describe('Utility Functions', () => {
   describe('fact', () => {
@@ -141,11 +156,12 @@ describe('Utility Functions', () => {
     const { nGram } = rouge;
     const data = ['a', 'b', 'c', 'd'];
 
-    test('should throw RangeError for ngram size < 1', () => {
-      expect(() => nGram(data, 0)).toThrow(RangeError);
-    });
     test('should throw RangeError for invalid ngram size', () => {
       expect(() => nGram(data, 5)).toThrow(RangeError);
+    });
+
+    test.each(invalidNGramSizes)('should reject invalid ngram size %s', (size) => {
+      expect(() => nGram(data, size)).toThrow(RangeError);
     });
 
     test("should return ['a', 'b', 'c', 'd'] for n = 1", () => {
@@ -153,6 +169,11 @@ describe('Utility Functions', () => {
     });
     test("should return ['a b', 'b c', 'c d'] for n = 2", () => {
       expect(nGram(data)).toEqual(['a b', 'b c', 'c d']);
+    });
+
+    test('should retain readable public gram strings for multiword tokens', () => {
+      expect(nGram(['new york', 'city'])).toEqual(['new york city']);
+      expect(nGram(['new', 'york city'])).toEqual(['new york city']);
     });
     test("should return ['a b c', 'b c d'] for n = 3", () => {
       expect(nGram(data, 3)).toEqual(['a b c', 'b c d']);
@@ -196,6 +217,16 @@ describe('Utility Functions', () => {
         'a b c d',
       ]);
     });
+
+    test('should default undefined padding fields without changing false', () => {
+      expect(nGram(data, 2, { start: true, end: false, val: undefined })).toEqual([
+        '<S> a',
+        'a b',
+        'b c',
+        'c d',
+      ]);
+      expect(nGram(data, 2, { start: undefined, end: undefined })).toEqual(nGram(data, 2));
+    });
   });
 
   describe('skipBigram', () => {
@@ -208,8 +239,17 @@ describe('Utility Functions', () => {
       expect(() => sb(['a'])).toThrow(RangeError);
     });
 
+    test.each(invalidMaxSkips)('should reject invalid maxSkip %s', (maxSkip) => {
+      expect(() => sb(data, maxSkip)).toThrow(RangeError);
+    });
+
     test('should return the correct result', () => {
       expect(sb(data)).toEqual(result);
+    });
+
+    test('should retain readable public skip-bigram strings for multiword tokens', () => {
+      expect(sb(['new york', 'city'])).toEqual(['new york city']);
+      expect(sb(['new', 'york city'])).toEqual(['new york city']);
     });
 
     test('should return all pairs with default maxSkip (Infinity)', () => {
@@ -316,12 +356,36 @@ describe('Utility Functions', () => {
         'I live in the U.S.',
         'How about you?',
       ]);
+      expect(ss('(I live in the U.S.) How about you?')).toEqual([
+        '(I live in the U.S.)',
+        'How about you?',
+      ]);
+    });
+
+    test.each(geographicAcronyms)('allows a proper name after %s', (acronym) => {
+      const first = `I live in the ${acronym}`;
+      const second = 'Alice lives in Canada.';
+      expect(ss(`${first} ${second}`)).toEqual([first, second]);
     });
 
     test('should not split U.S. as non-sentence boundary', () => {
       expect(ss('I have lived in the U.S. for 20 years.')).toEqual([
         'I have lived in the U.S. for 20 years.',
       ]);
+    });
+
+    test.each([
+      'U.S. Government',
+      'The U.S. Government policy.',
+      'E.U. Commission',
+      'U.S.A. Today',
+    ])('preserves acronym tokens across boundaries in %s', (input) => {
+      expect(ss(input).flatMap(rouge.treeBankTokenize)).toEqual(rouge.treeBankTokenize(input));
+    });
+
+    const abbreviatedNames = ['Mt. Fuji', 'The (U.S.) Government issued a statement.'];
+    test.each(abbreviatedNames)('keeps abbreviated names in %s', (input) => {
+      expect(ss(input)).toEqual([input]);
     });
 
     test('should not split numbers as a non-sentence boundary', () => {
@@ -367,6 +431,54 @@ describe('Utility Functions', () => {
       expect(ss("She turned to him, 'This is great.' she said.")).toEqual([
         "She turned to him, 'This is great.' she said.",
       ]);
+    });
+
+    test('should keep closing double quotes with their sentence', () => {
+      expect(ss('He said... "what?" Next.')).toEqual(['He said... "what?"', 'Next.']);
+      expect(ss('He said "hello." Then left.')).toEqual(['He said "hello."', 'Then left.']);
+      expect(ss('"Hello!" "Goodbye!"')).toEqual(['"Hello!"', '"Goodbye!"']);
+      expect(ss('(Stop.) "Next."')).toEqual(['(Stop.)', '"Next."']);
+      expect(ss('He moved to the "U.S." How about you?')).toEqual([
+        'He moved to the "U.S."',
+        'How about you?',
+      ]);
+      expect(ss('(He said "Stop.") Next came rain.')).toEqual([
+        '(He said "Stop.")',
+        'Next came rain.',
+      ]);
+    });
+
+    const sentenceContinuations = [
+      'Use "e.g." here.',
+      '"Dr." is a title.',
+      '"U.S." is an abbreviation.',
+      'She wrote "etc.", then left.',
+      'She wrote "etc." , then left.',
+      'She wrote "etc."; then left.',
+      'She wrote "etc.": more would follow.',
+      'She wrote "hello." then left.',
+      'The label was "Hello!" 100 times larger.',
+      'The result was (surprisingly!) 100% accurate.',
+      'The result was (surprisingly!) -- completely accurate.',
+      'The result was (surprisingly!) $100.',
+      'The winner was (surprisingly!) Alice Smith.',
+      'The winner was (Surprisingly!) Alice Smith.',
+      'The winner was ((surprisingly!)) Alice Smith.',
+      'The winner was (she said "Wow!") Alice Smith.',
+    ];
+    test.each(sentenceContinuations)('keeps continuations in %s', (input) => {
+      expect(ss(input)).toEqual([input]);
+    });
+
+    test.each(bracketPairs)('keeps closing %s%s with its sentence', (open, close) => {
+      const sentence = `${open}Nobody noticed.${close}`;
+      const spaced = `${open} Nobody noticed. ${close}`;
+      expect(ss(`${sentence} Next came rain.`)).toEqual([sentence, 'Next came rain.']);
+      expect(ss(`${spaced} Next came rain.`)).toEqual([spaced, 'Next came rain.']);
+      expect(ss(`${sentence} then left.`)).toEqual([`${sentence} then left.`]);
+      expect(ss(`${spaced} then left.`)).toEqual([`${spaced} then left.`]);
+      const nested = `He said "${open}Stop. ${close} "`;
+      expect(ss(`${nested} Next.`)).toEqual([nested, 'Next.']);
     });
 
     test('should split double exclamation points', () => {
@@ -505,6 +617,37 @@ describe('Utility Functions', () => {
     describe('ReDoS prevention', () => {
       const TIMEOUT_MS = 500;
 
+      test('should segment abbreviation chains within a small heap', () => {
+        const bundled = buildSync({
+          entryPoints: [join(__dirname, '../src/rouge.ts')],
+          bundle: true,
+          platform: 'node',
+          target: 'node18',
+          write: false,
+        }).outputFiles[0].text;
+        const script = `${bundled}
+          for (const [fragment, normalized] of [['Dr. ', 'Dr. '], ['e.g. ', 'e.g. '], ['Dr.\\n', 'Dr. ']]) {
+            const summary = fragment.repeat(5000) + 'End.';
+            const sentences = module.exports.sentenceSegment(summary);
+            if (sentences.length !== 1 || sentences[0] !== normalized.repeat(5000) + 'End.') {
+              throw new Error('Sentence content changed');
+            }
+            if (module.exports.l(summary, 'unmatched') !== 0) {
+              throw new Error('Unexpected ROUGE-L match');
+            }
+          }
+          process.stdout.write('ok');
+        `;
+        const child = spawnSync(process.execPath, ['--max-old-space-size=64'], {
+          input: script,
+          encoding: 'utf8',
+          timeout: 15_000,
+        });
+        expect(child.error).toBeUndefined();
+        expect({ status: child.status, stderr: child.stderr }).toEqual({ status: 0, stderr: '' });
+        expect(child.stdout).toBe('ok');
+      });
+
       test('should handle long strings without sentence terminators quickly', () => {
         const input = 'a'.repeat(64_000);
         const start = Date.now();
@@ -597,14 +740,39 @@ describe('Utility Functions', () => {
       });
 
       test('should handle mid-sentence ellipsis', () => {
-        // Tests ellipsis merge branch (line 157)
-        expect(ss('He said.. and then continued.')).toEqual(['He said..and then continued.']);
+        expect(ss('He said.. and then continued.')).toEqual(['He said.. and then continued.']);
+        expect(ss('Wait... what?')).toEqual(['Wait... what?']);
+        expect(ss('Wait...  what?')).toEqual(['Wait... what?']);
+        expect(ss('Wait...\twhat?')).toEqual(['Wait...\twhat?']);
+        expect(ss('Wait...what?')).toEqual(['Wait...what?']);
+      });
+
+      test.each(lineBreaks)('joins wrapped ellipses across %j', (lineBreak) => {
+        expect(ss(`Wait...${lineBreak}what?`)).toEqual(['Wait... what?']);
+        expect(ss(`Wait...${lineBreak}what? Next step`)).toEqual(['Wait... what?', 'Next step']);
+      });
+
+      test.each(lineBreaks)('keeps wrapped closing quotes (%j)', (lineBreak) => {
+        expect(ss(`He said "Stop.${lineBreak}" Next.`)).toEqual(['He said "Stop. "', 'Next.']);
+        expect(ss(`He said "Stop.${lineBreak}"`)).toEqual(['He said "Stop. "']);
+        expect(ss(`(He said "Stop.${lineBreak}") Next.`)).toEqual(['(He said "Stop. ")', 'Next.']);
       });
     });
   });
 
   describe('treeBankTokenize', () => {
     const tbt = rouge.treeBankTokenize;
+
+    test.each(geographicAcronyms)('retains the final dot in %s', (acronym) => {
+      expect(tbt(acronym)).toEqual([acronym]);
+      expect(tbt(`"${acronym}"`)).toEqual(['``', acronym, "''"]);
+    });
+
+    test.each(bracketPairs)('splits final periods through %s%s spacing', (open, close) => {
+      const tokens = [open, 'Nobody', 'noticed', '.', close];
+      expect(tbt(`${open} Nobody noticed. ${close}`)).toEqual(tokens);
+      expect(tbt(`"${open} Nobody noticed. ${close} "`)).toEqual(['``', ...tokens, "''"]);
+    });
 
     test('should return empty array for empty input', () => {
       expect(tbt('')).toEqual([]);
@@ -684,6 +852,14 @@ describe('Utility Functions', () => {
       ]);
     });
 
+    test.each([
+      ['Note: hello, world:', ['Note', ':', 'hello', ',', 'world', ':']],
+      ['12,000 items at 12:30,', ['12,000', 'items', 'at', '12:30', ',']],
+      ['12,000,000 and 3.88.', ['12,000,000', 'and', '3.88', '.']],
+    ])('should apply Treebank comma and colon rules to %s', (input, expected) => {
+      expect(tbt(input)).toEqual(expected);
+    });
+
     test('should handle double quotation marks', () => {
       expect(tbt('"We beat some pretty good teams to get here," Slocum said.')).toEqual([
         '``',
@@ -700,6 +876,17 @@ describe('Utility Functions', () => {
         "''",
         'Slocum',
         'said',
+        '.',
+      ]);
+      expect(tbt('5" nails and "wide" boards.')).toEqual([
+        '5',
+        "''",
+        'nails',
+        'and',
+        '``',
+        'wide',
+        "''",
+        'boards',
         '.',
       ]);
     });
@@ -745,6 +932,48 @@ describe('Utility Functions', () => {
   describe('fMeasure', () => {
     const fm = rouge.fMeasure;
 
+    test.each(nonFiniteNumbers)('should reject non-finite precision and recall %s', (value) => {
+      expect(() => fm(value, 0.5)).toThrow(RangeError);
+      expect(() => fm(0.5, value)).toThrow(RangeError);
+    });
+
+    test.each(invalidBetas)('should reject invalid beta %s even with no matches', (beta) => {
+      expect(() => fm(0, 0, beta)).toThrow(RangeError);
+    });
+
+    const largeBetas = [1e154, 1e200, Number.MAX_VALUE];
+    test.each(largeBetas)('should stay finite for large finite beta %s', (beta) => {
+      expect(fm(1, 0.5, beta)).toBeCloseTo(0.5);
+      expect(fm(0.5, 1, beta)).toBeCloseTo(1);
+      expect(fm(0, 0.5, beta)).toBe(0);
+      expect(fm(0.5, 0, beta)).toBe(0);
+    });
+
+    test('should not underflow the precision-recall product', () => {
+      expect(fm(1e-200, 2e-200) / 1e-200).toBeCloseTo(4 / 3);
+      expect(fm(1e-200, 1e-200, 2)).toBe(1e-200);
+      expect(fm(1e-300, 0.5, 1e200)).toBe(0.5);
+    });
+
+    test('should preserve denominator ratios involving subnormal inputs', () => {
+      expect(fm(Number.MIN_VALUE, 2e-124, 1e100) / 1e-124).toBeCloseTo(1.423_685_637_8, 9);
+      expect(fm(2e-124, Number.MIN_VALUE, 1e-100) / 1e-124).toBeCloseTo(1.423_685_637_8, 9);
+      expect(fm(Number.MIN_VALUE, 1, 1e161)).toBeCloseTo(0.047_080_479_817_375_9, 14);
+      expect(fm(Number.MIN_VALUE, 1, Number.MAX_VALUE)).toBe(1);
+      expect(fm(1, Number.MIN_VALUE, 2)).toBe(Number.MIN_VALUE);
+    });
+
+    const scoreBoundsCases = [
+      [1.737_610_985_955_693e-134, 1, 1.884_479_164_656_194_7e105],
+      [0.8, 0.799_999_999_999_999_9, 2.5],
+    ];
+    test.each(scoreBoundsCases)('bounds F-beta (%p, %p, %p)', (p, r, beta) => {
+      for (const score of [fm(p, r, beta), fm(r, p, 1 / beta)]) {
+        expect(score).toBeGreaterThanOrEqual(Math.min(p, r));
+        expect(score).toBeLessThanOrEqual(Math.max(p, r));
+      }
+    });
+
     test('should throw RangeError for OOB precision input', () => {
       expect(() => fm(10, 0.5)).toThrow(RangeError);
     });
@@ -758,8 +987,12 @@ describe('Utility Functions', () => {
     test('should return pure recall when beta is Infinity', () => {
       expect(fm(0.5, 0.75, Number.POSITIVE_INFINITY)).toBe(0.75);
     });
+    test.each([0, -0])('uses precision for beta=%p', (beta) => {
+      expect(fm(0.5, 0.75, beta)).toBe(0.5);
+      expect(fm(Number.MIN_VALUE, 1, beta)).toBe(Number.MIN_VALUE);
+    });
     test('should correctly compute F1 score (beta=1)', () => {
-      expect(fm(0.5, 0.75, 1)).toBe(0.6);
+      expect(fm(0.5, 0.75, 1)).toBeCloseTo(0.6, 15);
     });
     test('should correctly compute F2 score (beta=2, favors recall)', () => {
       // F2 = (1 + 4) * P * R / (4 * P + R) = 5 * 0.5 * 0.75 / (2 + 0.75) = 1.875 / 2.75
@@ -843,6 +1076,43 @@ describe('Core Functions', () => {
     ['ROUGE-L', rouge.l],
   ] as const;
   describe.each(metrics)('%s input handling', (_name, score) => {
+    test.each(['\n', '\r\n', '\r'])('keeps wrapped quotes (%j)', (lineBreak) => {
+      expect(score(`He said "Stop.${lineBreak}" Next.`, 'He said "Stop." Next.')).toBe(1);
+      expect(score(`He said "Stop.${lineBreak}"`, 'He said "Stop."')).toBe(1);
+    });
+
+    test('should use defaults for explicitly undefined options', () => {
+      const options = {
+        beta: undefined,
+        caseSensitive: undefined,
+        tokenizer: undefined,
+        n: undefined,
+        nGram: undefined,
+        maxSkip: undefined,
+        skipBigram: undefined,
+        segmenter: undefined,
+        lcs: undefined,
+      };
+      expect(score('A B', 'a b', options)).toBe(0);
+      expect(score('a b c', 'a b d', options)).toBe(score('a b c', 'a b d'));
+    });
+
+    test.each(invalidBetas)('rejects beta=%s before callbacks', (beta) => {
+      const tokenizer = jest.fn((input: string): string[] => input.split(' '));
+      expect(() => score('a b', 'a b', { beta, tokenizer })).toThrow(/beta/);
+      expect(() => score('a b', 'c d', { beta, tokenizer })).toThrow(/beta/);
+      expect(tokenizer).not.toHaveBeenCalled();
+    });
+
+    test('should keep finite large-beta scores and explicit recall mode', () => {
+      expect(score('a b', 'a b c', { beta: 1e200 })).toBe(
+        score('a b', 'a b c', { beta: Number.POSITIVE_INFINITY }),
+      );
+      expect(score('A B C', 'a b', { beta: Number.POSITIVE_INFINITY, caseSensitive: false })).toBe(
+        1,
+      );
+    });
+
     test('should treat word-separating whitespace consistently', () => {
       expect(score('alpha\tbeta', 'alpha beta')).toBe(1);
       expect(score('alpha\nbeta', 'alpha beta')).toBe(1);
@@ -853,16 +1123,145 @@ describe('Core Functions', () => {
       expect(() => score(' \t\r\n', 'alpha beta')).toThrow('Candidate cannot be an empty string');
       expect(() => score('alpha beta', ' \t\r\n')).toThrow('Reference cannot be an empty string');
     });
+
+    test('should separate colons without splitting numeric commas', () => {
+      expect(score('Note: 12,000 items', 'Note : 12,000 items')).toBe(1);
+      expect(score('12,000 items', '12 000 items')).toBeLessThan(1);
+    });
+
+    test.each([
+      ['He said... "what?" Next.', "He said ... `` what ? '' Next ."],
+      ['Use "e.g." here.', "Use `` e.g. '' here ."],
+      ['"Dr." is a title.', "`` Dr. '' is a title ."],
+      ['"U.S." is an abbreviation.', "`` U.S. '' is an abbreviation ."],
+      ['She wrote "etc.", then left.', "She wrote `` etc. '' , then left ."],
+    ])('preserves quoted token identities in %s', (input, tokens) => {
+      expect(score(input, tokens)).toBe(1);
+    });
+
+    test.each(bracketPairs)('keeps %s%s spacing equivalent', (open, close) => {
+      const sentence = `${open}Nobody noticed.${close}`;
+      const spaced = `${open} Nobody noticed. ${close}`;
+      expect(score(`${sentence} Next came rain.`, `${spaced} Next came rain.`)).toBe(1);
+      expect(score(`${sentence} then left.`, `${spaced} then left.`)).toBe(1);
+      expect(
+        score(`He said "${open}Stop.${close}" Next.`, `He said "${open}Stop. ${close} " Next.`),
+      ).toBe(1);
+    });
+  });
+
+  describe.each([
+    ['ROUGE-N', rouge.n],
+    ['ROUGE-S', rouge.s],
+  ] as const)('%s summary tokenization', (_name, score) => {
+    test('should tokenize each sentence before flattening the token stream', () => {
+      expect(score('Alpha. Beta.', 'Alpha . Beta .')).toBe(1);
+      expect(score('Alpha. Beta.', 'alpha . beta .', { caseSensitive: false })).toBe(1);
+      expect(
+        score('Use etc. Another sentence.', 'use etc . another sentence .', {
+          caseSensitive: false,
+        }),
+      ).toBe(1);
+    });
+
+    test('should pass complete summaries to custom tokenizers', () => {
+      const tokenizer = jest.fn((input: string): string[] => input.split(' '));
+      expect(score('Alpha. Beta.', 'alpha. beta.', { tokenizer, caseSensitive: false })).toBe(1);
+      expect(tokenizer.mock.calls).toEqual([['alpha. beta.'], ['alpha. beta.']]);
+    });
+
+    test('should use sentence tokenization for the explicitly supplied built-in tokenizer', () => {
+      expect(score('Alpha. Beta.', 'Alpha . Beta .', { tokenizer: rouge.treeBankTokenize })).toBe(
+        1,
+      );
+    });
+
+    test('should not split a period off an acronym inside a name', () => {
+      const tokenizer = (input: string): string[] => rouge.treeBankTokenize(input);
+      expect(score('U.S. Government', 'U.S Government')).toBe(
+        score('U.S. Government', 'U.S Government', { tokenizer }),
+      );
+    });
+  });
+
+  describe.each([
+    ['ROUGE-N', rouge.n, 'nGram', rouge.nGram, 1 / 2],
+    ['ROUGE-S', rouge.s, 'skipBigram', rouge.skipBigram, 2 / 7],
+  ] as const)('%s token identity', (_name, score, gramOption, builtIn, repeatedScore) => {
+    const tokenizer = (input: string): string[] => JSON.parse(input);
+    const options = { n: 2, tokenizer };
+
+    test.each<[string[], string[]]>([
+      [
+        ['new york', 'city'],
+        ['new', 'york city'],
+      ],
+      [
+        ['a ', 'b'],
+        ['a', ' b'],
+      ],
+      [
+        ['', ' a'],
+        [' ', 'a'],
+      ],
+      [
+        ['a|b', 'c'],
+        ['a', 'b|c'],
+      ],
+      [
+        ['a\0b', 'c'],
+        ['a', 'b\0c'],
+      ],
+      [
+        ['a" b', 'c\\d'],
+        ['a"', 'b c\\d'],
+      ],
+    ])('should distinguish token tuples %j and %j', (candidate, reference) => {
+      const cand = JSON.stringify(candidate);
+      const ref = JSON.stringify(reference);
+      expect(score(cand, ref, options)).toBe(0);
+      expect(score(cand, cand, options)).toBe(1);
+    });
+
+    test('should encode built-in grams but pass raw tokens to custom generators', () => {
+      const candidate = ['new york', 'city'];
+      const reference = ['new', 'york city'];
+      const cand = JSON.stringify(candidate);
+      const ref = JSON.stringify(reference);
+      expect(score(cand, ref, { ...options, [gramOption]: builtIn })).toBe(0);
+      const generator = jest.fn((): string[] => ['custom gram']);
+      expect(score(cand, ref, { ...options, maxSkip: 2, [gramOption]: generator })).toBe(1);
+      expect(generator.mock.calls).toEqual([
+        [candidate, 2],
+        [reference, 2],
+      ]);
+    });
+
+    test('should clip repeated multiword-token grams', () => {
+      expect(
+        score('["new york","city","new york","city"]', '["new york","city"]', options),
+      ).toBeCloseTo(repeatedScore);
+    });
   });
 
   describe('ROUGE-N', () => {
     const { n } = rouge;
+
+    test.each(invalidNGramSizes)('rejects n=%s before callbacks', (size) => {
+      const nGram = jest.fn((): string[] => []);
+      expect(() => n('a b', 'c d', { n: size, nGram })).toThrow(RangeError);
+      expect(nGram).not.toHaveBeenCalled();
+    });
 
     const cand = 'pulses may ease schizophrenic voices';
     const refs = [
       'magnetic pulse series sent through brain may ease schizophrenic voices',
       'yale finds magnetic stimulation some relief to schizophrenics imaginary voices',
     ];
+
+    test('should give reordered sentence unigrams a perfect score', () => {
+      expect(n('Alpha. Beta.', 'Beta. Alpha.')).toBe(1);
+    });
 
     test('should throw RangeError for empty candidate', () => {
       expect(() => n('', refs[0], { n: 2 })).toThrow(RangeError);
@@ -875,7 +1274,7 @@ describe('Core Functions', () => {
       // 3 matching bigrams, 4 candidate bigrams, 9 reference bigrams
       // precision = 3/4, recall = 3/9 = 1/3
       // F1 = 2 * P * R / (P + R) = 2 * (3/4) * (1/3) / (3/4 + 1/3) = 6/13
-      expect(n(cand, refs[0], { n: 2, beta: 1 })).toBe(6 / 13);
+      expect(n(cand, refs[0], { n: 2, beta: 1 })).toBeCloseTo(6 / 13, 15);
     });
     test('should correctly compute ROUGE-N F1-score for ref 2', () => {
       expect(n(cand, refs[1], { n: 2, beta: 1 })).toBe(0);
@@ -919,6 +1318,12 @@ describe('Core Functions', () => {
 
   describe('ROUGE-S', () => {
     const { s } = rouge;
+
+    test.each(invalidMaxSkips)('rejects maxSkip=%s before callbacks', (maxSkip) => {
+      const skipBigram = jest.fn((): string[] => []);
+      expect(() => s('a b', 'c d', { maxSkip, skipBigram })).toThrow(RangeError);
+      expect(skipBigram).not.toHaveBeenCalled();
+    });
 
     const ref = 'police killed the gunman';
     const cands = ['police kill the gunman', 'the gunman kill police', 'the gunman police killed'];
@@ -978,6 +1383,33 @@ describe('Core Functions', () => {
 
     const ref = 'police killed the gunman';
     const cands = ['police kill the gunman', 'the gunman kill police', 'the gunman police killed'];
+
+    test('should preserve word separation after an ellipsis for custom tokenizers', () => {
+      const tokenizer = (input: string): string[] => input.split(/\s+/);
+      expect(l('what?', 'Wait... what?', { tokenizer })).toBeCloseTo(2 / 3);
+    });
+
+    test('should preserve word order across wrapped ellipses', () => {
+      expect(l('what Wait', 'Wait...\nwhat?')).toBeCloseTo(1 / 3, 15);
+    });
+
+    test('should preserve word order through a parenthetical continuation', () => {
+      expect(
+        l(
+          '100 accurate The result was surprisingly',
+          'The result was (surprisingly!) 100% accurate.',
+        ),
+      ).toBeCloseTo(8 / 17, 15);
+      expect(
+        l('Alice Smith The winner was surprisingly', 'The winner was (surprisingly!) Alice Smith.'),
+      ).toBeCloseTo(1 / 2, 15);
+    });
+
+    test.each(geographicAcronyms)('recognizes reordered sentences ending in %s', (acronym) => {
+      const first = `I live in the ${acronym}`;
+      const second = 'Alice lives in Canada.';
+      expect(l(`${first} ${second}`, `${second} ${first}`)).toBe(1);
+    });
 
     test('should throw RangeError for empty candidate', () => {
       expect(() => l('', ref, undefined as any)).toThrow(RangeError);
