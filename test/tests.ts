@@ -405,6 +405,65 @@ describe('Utility Functions', () => {
       ]);
     });
 
+    const lineBreaks = ['\n', '\r\n', '\r'];
+    test.each(lineBreaks)('should split sentences across %j', (lineBreak) => {
+      expect(ss(`Alpha.${lineBreak}Beta.${lineBreak}Gamma.`)).toEqual([
+        'Alpha.',
+        'Beta.',
+        'Gamma.',
+      ]);
+    });
+
+    test.each(lineBreaks)('should split lists across %j', (lineBreak) => {
+      expect(ss(`alpha${lineBreak}beta${lineBreak}gamma`)).toEqual(['alpha', 'beta', 'gamma']);
+    });
+
+    test.each(lineBreaks)('should join every sentence wrap across %j', (lineBreak) => {
+      expect(ss(`The quick${lineBreak}brown${lineBreak}fox jumps.`)).toEqual([
+        'The quick brown fox jumps.',
+      ]);
+    });
+
+    test('should ignore blank separator chunks', () => {
+      expect(ss('\nAlpha.\r\n \t\nBeta.\n')).toEqual(['Alpha.', 'Beta.']);
+      expect(ss('alpha\n\n \n beta\n')).toEqual(['alpha', 'beta']);
+    });
+
+    test('should preserve text before an unterminated final fragment', () => {
+      expect(ss('We chose option A. Next step')).toEqual(['We chose option A.', 'Next step']);
+      expect(ss('Use Plan A. Next step')).toEqual(['Use Plan A.', 'Next step']);
+      expect(ss('We visited D.C. Today')).toEqual(['We visited D.C.', 'Today']);
+    });
+
+    test.each(lineBreaks)('should join line-wrapped name initials across %j', (lineBreak) => {
+      expect(ss(`Did you see Albert I.${lineBreak}Jones yesterday?`)).toEqual([
+        'Did you see Albert I. Jones yesterday?',
+      ]);
+    });
+
+    test.each(lineBreaks)('should consume wrapped name fragments once across %j', (lineBreak) => {
+      expect(ss(`I met${lineBreak}Albert\tI.${lineBreak}Jones at${lineBreak}Acme.`)).toEqual([
+        'I met Albert I. Jones at Acme.',
+      ]);
+      expect(ss(`I met${lineBreak}Albert\tI.${lineBreak}van der${lineBreak}Meer.`)).toEqual([
+        'I met Albert I. van der Meer.',
+      ]);
+    });
+
+    test('should handle a standalone initialism', () => {
+      expect(ss('D.C. Next.')).toEqual(['D.C.', 'Next.']);
+    });
+
+    test('should match abbreviation punctuation literally', () => {
+      expect(ss('I ate an egg. Tomorrow is Monday.')).toEqual([
+        'I ate an egg.',
+        'Tomorrow is Monday.',
+      ]);
+      expect(ss('She ate ice. We left.')).toEqual(['She ate ice.', 'We left.']);
+      expect(ss('Use e.g. Examples.')).toEqual(['Use e.g. Examples.']);
+      expect(ss('That is i.e. An example.')).toEqual(['That is i.e. An example.']);
+    });
+
     test('should split geo-coordinate as a sentence boundary', () => {
       expect(ss('You can find it at N°. 1026.253.553. That is where the treasure is.')).toEqual([
         'You can find it at N°. 1026.253.553.',
@@ -506,9 +565,10 @@ describe('Utility Functions', () => {
 
       test('should handle whitespace-only input', () => {
         // Whitespace gets trimmed to empty string, so no chunks are added to acc
-        // Returns [input] when acc is empty (line 166)
+        // Preserve the single-sentence fallback for whitespace-only input.
         expect(ss('   ')).toEqual(['   ']);
         expect(ss('\t\t')).toEqual(['\t\t']);
+        expect(ss('\r\n')).toEqual(['\r\n']);
       });
 
       test('should handle abbreviation followed by lowercase text', () => {
@@ -534,6 +594,41 @@ describe('Utility Functions', () => {
 
     test('should return empty array for empty input', () => {
       expect(tbt('')).toEqual([]);
+    });
+
+    const whitespace = [' ', '\t', '\n', '\r\n', '\u00a0'];
+    test.each(whitespace)('should split words separated by %j', (separator) => {
+      expect(tbt(`alpha${separator}beta`)).toEqual(['alpha', 'beta']);
+      expect(tbt(`${separator}They'll${separator}go.${separator}`)).toEqual([
+        'They',
+        "'ll",
+        'go',
+        '.',
+      ]);
+    });
+
+    test.each(whitespace)('should not invent tokens for %j', (separator) => {
+      expect(tbt(separator.repeat(3))).toEqual([]);
+    });
+
+    const uncommonContractions: [string, string[]][] = [
+      ['cannot', ['can', 'not']],
+      ["d'ye", ['d', "'ye"]],
+      ['gimme', ['gim', 'me']],
+      ['gonna', ['gon', 'na']],
+      ['gotta', ['got', 'ta']],
+      ['lemme', ['lem', 'me']],
+      ["more'n", ['more', "'n"]],
+      ['wanna', ['wan', 'na']],
+      ["'tis", ["'t", 'is']],
+      ["'twas", ["'t", 'was']],
+    ];
+    test.each(uncommonContractions)('should split every %s', (word, tokens) => {
+      const input = `${word} ${word} ${word.toUpperCase()}`;
+      const expected = [...tokens, ...tokens, ...tokens.map((token) => token.toUpperCase())];
+      expect(tbt(input)).toEqual(expected);
+      // Global patterns must also reset between tokenizer calls.
+      expect(tbt(input)).toEqual(expected);
     });
 
     test("should split 'll contractions", () => {
@@ -703,10 +798,33 @@ describe('Utility Functions', () => {
     test('should return false for lowercase input with interspesed capitals', () => {
       expect(isTitle('aBcD')).toBe(false);
     });
+
+    test('should return false when there is no first character', () => {
+      expect(isTitle('')).toBe(false);
+      expect(isTitle(' \t\r\n')).toBe(false);
+    });
   });
 });
 
 describe('Core Functions', () => {
+  const metrics = [
+    ['ROUGE-N', rouge.n],
+    ['ROUGE-S', rouge.s],
+    ['ROUGE-L', rouge.l],
+  ] as const;
+  describe.each(metrics)('%s input handling', (_name, score) => {
+    test('should treat word-separating whitespace consistently', () => {
+      expect(score('alpha\tbeta', 'alpha beta')).toBe(1);
+      expect(score('alpha\nbeta', 'alpha beta')).toBe(1);
+      expect(score('alpha\u00a0beta', 'alpha beta')).toBe(1);
+    });
+
+    test('should reject whitespace-only summaries like empty strings', () => {
+      expect(() => score(' \t\r\n', 'alpha beta')).toThrow('Candidate cannot be an empty string');
+      expect(() => score('alpha beta', ' \t\r\n')).toThrow('Reference cannot be an empty string');
+    });
+  });
+
   describe('ROUGE-N', () => {
     const { n } = rouge;
 
@@ -836,6 +954,11 @@ describe('Core Functions', () => {
     });
     test('should throw RangeError for empty ref', () => {
       expect(() => l(cands[0], '', undefined as any)).toThrow(RangeError);
+    });
+
+    test('should accept newline-separated sentences', () => {
+      const tokenizer = (text: string): string[] => text.match(/[A-Za-z]+/g) || [];
+      expect(l('Alpha.\r\nBeta.', 'Alpha.\nBeta.', { tokenizer })).toBe(1);
     });
 
     test('should correctly compute ROUGE-L score for cand 1 with different opts', () => {
