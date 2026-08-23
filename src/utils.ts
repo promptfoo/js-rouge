@@ -450,64 +450,27 @@ export function charIsUpperCase(input: string): boolean {
 }
 
 /**
- * Memoizes a function using a Map
+ * Computes the factorial of an integer from 0 through 170.
  *
- * **Memory Warning**: The cache is unbounded and will grow indefinitely for unique inputs.
- * In long-running processes with many unique inputs, consider using a bounded cache
- * implementation (e.g., LRU cache) or periodically clearing the memoized function.
+ * Values above 170 are rejected because their factorials overflow
+ * JavaScript's finite number range.
  *
- * @method memoize
- * @param  {Function} func    The function to be memoized
- * @param  {Function} Store   The data store constructor. Defaults to the ES6-inbuilt Map function.
- *                            A store should implement `has`, `get`, and `set` methods.
- * @return {Function}         A closure of the memoization cache and the original function
+ * @method fact
+ * @param  {number} x     The integer for which the factorial is to be computed
+ * @return {number}       The finite factorial result
  */
-function memoize<T, R>(func: (arg: T) => R, Store: new () => Map<T, R> = Map): (arg: T) => R {
-  return (() => {
-    const cache = new Store();
-
-    return (n: T) => {
-      if (cache.has(n)) {
-        const cachedResult = cache.get(n);
-        if (cachedResult !== undefined) {
-          return cachedResult;
-        }
-      }
-      const result = func(n);
-      cache.set(n, result);
-      return result;
-    };
-  })();
-}
-
-/**
- * Computes the factorial of a number.
- *
- * This function uses a tail-recursive call to avoid
- * blowing the stack when computing inputs with a large
- * recursion depth.
- *
- * @method factRec
- * @param  {number} x     The number for which the factorial is to be computed
- * @param  {number} acc   The starting value for the computation. Defaults to 1.
- * @return {number}       The factorial result
- */
-function factRec(x: number, acc = 1): number {
-  if (x < 0) {
-    throw new RangeError('Input must be a positive number');
+export function fact(x: number): number {
+  if (!Number.isInteger(x) || x < 0 || x > 170) {
+    throw new RangeError('Input must be an integer between 0 and 170');
   }
-  return x < 2 ? acc : factRec(x - 1, x * acc);
-}
 
-/**
- * Memoized factorial function.
- *
- * **Memory Note**: Results are cached indefinitely. In typical ROUGE usage,
- * factorial is called with small values (≤20) so memory impact is negligible.
- * The cache size is bounded by the range of valid factorial inputs that don't
- * overflow JavaScript's number type (approximately n ≤ 170).
- */
-export const fact = memoize(factRec);
+  let result = 1;
+  // Preserve the floating-point multiplication order of the former recursive implementation.
+  for (let factor = x; factor >= 2; factor--) {
+    result *= factor;
+  }
+  return result;
+}
 
 /**
  * Returns the skip bigrams for an array of word tokens.
