@@ -205,6 +205,9 @@ export function n(cand: string, ref: string, opts?: RougeNOptions): number {
 
   const getGrams = (input: string): string[] => {
     const tokens = tokenizeSummary(input, caseSensitive, tokenizer);
+    if (nGram === utils.nGram && tokens.length < size) {
+      return [];
+    }
     return nGram(nGram === utils.nGram ? encodeTokens(tokens) : tokens, size);
   };
   const candGrams = getGrams(cand);
@@ -274,12 +277,9 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
   }
 
   const candTokens = tokenizeSummary(cand, caseSensitive, tokenizer);
-  if (candTokens.length < 2) {
-    throw new RangeError('Input must have at least two words');
-  }
   const refTokens = tokenizeSummary(ref, caseSensitive, tokenizer);
-  if (refTokens.length < 2) {
-    throw new RangeError('Input must have at least two words');
+  if (candTokens.length < 2 || refTokens.length < 2) {
+    return 0;
   }
 
   const skip2 = countMatchingSkipBigrams(candTokens, refTokens, maxSkip);
