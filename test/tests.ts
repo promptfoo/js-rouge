@@ -250,6 +250,18 @@ describe('Utility Functions', () => {
       expect(() => nGram([], 2, { start: true })).toThrow(RangeError);
       expect(() => nGram(['a'], 3, { start: false, end: false })).toThrow(RangeError);
     });
+
+    test('should reject impossible large padding before materializing it', () => {
+      const unshift = jest.spyOn(Array.prototype, 'unshift').mockImplementation((): number => {
+        throw new Error('padding should not be materialized');
+      });
+      try {
+        expect(() => nGram([], 1_000_000_000, { start: true })).toThrow(RangeError);
+        expect(unshift).not.toHaveBeenCalled();
+      } finally {
+        unshift.mockRestore();
+      }
+    });
   });
 
   describe('skipBigram', () => {

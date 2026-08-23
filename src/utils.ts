@@ -567,6 +567,13 @@ export function nGram(tokens: string[], n = 2, pad: Partial<NGramOptions> = {}):
       val: pad.val ?? NGRAM_DEFAULT_OPTS.val,
     };
 
+    const paddingSize = n - 1;
+    const paddedLength =
+      tokens.length + (config.start ? paddingSize : 0) + (config.end ? paddingSize : 0);
+    if (paddedLength < n) {
+      throw new RangeError('ngram size cannot be larger than the number of tokens available');
+    }
+
     // Clone the input token array to avoid mutating the source data
     workingTokens = tokens.slice();
 
