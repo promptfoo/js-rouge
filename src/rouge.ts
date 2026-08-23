@@ -64,6 +64,7 @@ function countMatchingGrams(candidate: string[], reference: string[]): number {
 }
 
 interface SharedTokenPositions {
+  token: string;
   candidate: number[];
   reference: number[];
 }
@@ -82,28 +83,38 @@ function tokenPositions(tokens: string[]): Map<string, number[]> {
   return positions;
 }
 
-/** Count ordered position pairs whose index distance is at most maxSkip. */
-function countSkipPairs(first: number[], second: number[], maxSkip: number): number {
+/** Count ordered position pairs for an unbounded skip window. */
+function countUnboundedSkipPairs(first: number[], second: number[]): number {
   let firstValid = 0;
-  let afterLastValid = 0;
   let pairs = 0;
 
   for (const firstPosition of first) {
     while (firstValid < second.length && second[firstValid] <= firstPosition) {
       firstValid++;
     }
-    if (afterLastValid < firstValid) {
-      afterLastValid = firstValid;
-    }
-
-    const lastPosition =
-      maxSkip === Number.POSITIVE_INFINITY ? Number.POSITIVE_INFINITY : firstPosition + maxSkip;
-    while (afterLastValid < second.length && second[afterLastValid] <= lastPosition) {
-      afterLastValid++;
-    }
-    pairs += afterLastValid - firstValid;
+    pairs += second.length - firstValid;
   }
   return pairs;
+}
+
+/** Count finite-window followers for one first-token value without retaining all pair types. */
+function countFollowingSharedTokens(
+  tokens: string[],
+  firstPositions: number[],
+  sharedTokens: Set<string>,
+  maxSkip: number,
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const firstPosition of firstPositions) {
+    const lastPosition = Math.min(firstPosition + maxSkip, tokens.length - 1);
+    for (let secondPosition = firstPosition + 1; secondPosition <= lastPosition; secondPosition++) {
+      const token = tokens[secondPosition];
+      if (sharedTokens.has(token)) {
+        counts.set(token, (counts.get(token) ?? 0) + 1);
+      }
+    }
+  }
+  return counts;
 }
 
 /** Count clipped built-in skip-bigram matches without materializing pair strings. */
@@ -120,6 +131,7 @@ function countMatchingSkipBigrams(
     const referenceTokenPositions = referencePositions.get(token);
     if (referenceTokenPositions) {
       shared.push({
+        token,
         candidate: candidateTokenPositions,
         reference: referenceTokenPositions,
       });
@@ -127,11 +139,33 @@ function countMatchingSkipBigrams(
   }
 
   let matches = 0;
+  if (maxSkip !== Number.POSITIVE_INFINITY) {
+    const sharedTokens = new Set(shared.map(({ token }) => token));
+    for (const first of shared) {
+      const candidateCounts = countFollowingSharedTokens(
+        candidate,
+        first.candidate,
+        sharedTokens,
+        maxSkip,
+      );
+      const referenceCounts = countFollowingSharedTokens(
+        reference,
+        first.reference,
+        sharedTokens,
+        maxSkip,
+      );
+      for (const [secondToken, candidateCount] of candidateCounts) {
+        matches += Math.min(candidateCount, referenceCounts.get(secondToken) ?? 0);
+      }
+    }
+    return matches;
+  }
+
   for (const first of shared) {
     for (const second of shared) {
-      const candidateCount = countSkipPairs(first.candidate, second.candidate, maxSkip);
+      const candidateCount = countUnboundedSkipPairs(first.candidate, second.candidate);
       if (candidateCount > 0) {
-        const referenceCount = countSkipPairs(first.reference, second.reference, maxSkip);
+        const referenceCount = countUnboundedSkipPairs(first.reference, second.reference);
         matches += Math.min(candidateCount, referenceCount);
       }
     }
@@ -280,6 +314,9 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
   const refTokens = tokenizeSummary(ref, caseSensitive, tokenizer);
   if (refTokens.length < 2) {
     throw new RangeError('Input must have at least two words');
+  }
+  if (maxSkip === 0) {
+    return 0;
   }
 
   const skip2 = countMatchingSkipBigrams(candTokens, refTokens, maxSkip);

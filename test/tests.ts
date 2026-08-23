@@ -1446,6 +1446,37 @@ describe('Core Functions', () => {
       expect(child.stdout).toBe('ok');
     }, 30_000);
 
+    test('should score finite windows without scanning every distinct token pair', () => {
+      const bundled = buildSync({
+        entryPoints: [join(__dirname, '../src/rouge.ts')],
+        bundle: true,
+        platform: 'node',
+        target: 'node18',
+        write: false,
+      }).outputFiles[0].text;
+      const script = `${bundled}
+          const summary = Array.from({ length: 30000 }, (_, index) => \`token\${index}\`).join(' ');
+          if (module.exports.s(summary, summary, { maxSkip: 0 }) !== 0) {
+            throw new Error('zero-window score changed');
+          }
+          if (module.exports.s(summary, summary, { maxSkip: 1 }) !== 1) {
+            throw new Error('finite-window score changed');
+          }
+          process.stdout.write('ok');
+        `;
+      const child = spawnSync(process.execPath, [], {
+        input: script,
+        encoding: 'utf8',
+        timeout: 3000,
+      });
+      expect(child.error).toBeUndefined();
+      expect({ status: child.status, stderr: child.stderr }).toEqual({
+        status: 0,
+        stderr: '',
+      });
+      expect(child.stdout).toBe('ok');
+    }, 10_000);
+
     test('should respect maxSkip option', () => {
       // With maxSkip=1, only adjacent pairs are considered
       // cand: 'police kill the gunman' -> adjacent pairs: 'police kill', 'kill the', 'the gunman'
