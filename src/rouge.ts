@@ -63,6 +63,87 @@ function countMatchingGrams(candidate: string[], reference: string[]): number {
   return matches;
 }
 
+interface SharedTokenPositions {
+  candidate: number[];
+  reference: number[];
+}
+
+function tokenPositions(tokens: string[]): Map<string, number[]> {
+  const positions = new Map<string, number[]>();
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index];
+    const existing = positions.get(token);
+    if (existing) {
+      existing.push(index);
+    } else {
+      positions.set(token, [index]);
+    }
+  }
+  return positions;
+}
+
+/** Count ordered position pairs whose index distance is at most maxSkip. */
+function countSkipPairs(first: number[], second: number[], maxSkip: number): number {
+  let firstValid = 0;
+  let afterLastValid = 0;
+  let pairs = 0;
+
+  for (const firstPosition of first) {
+    while (firstValid < second.length && second[firstValid] <= firstPosition) {
+      firstValid++;
+    }
+    if (afterLastValid < firstValid) {
+      afterLastValid = firstValid;
+    }
+
+    const lastPosition =
+      maxSkip === Number.POSITIVE_INFINITY ? Number.POSITIVE_INFINITY : firstPosition + maxSkip;
+    while (afterLastValid < second.length && second[afterLastValid] <= lastPosition) {
+      afterLastValid++;
+    }
+    pairs += afterLastValid - firstValid;
+  }
+  return pairs;
+}
+
+/** Count clipped built-in skip-bigram matches without materializing pair strings. */
+function countMatchingSkipBigrams(
+  candidate: string[],
+  reference: string[],
+  maxSkip: number,
+): number {
+  const candidatePositions = tokenPositions(candidate);
+  const referencePositions = tokenPositions(reference);
+  const shared: SharedTokenPositions[] = [];
+
+  for (const [token, candidateTokenPositions] of candidatePositions) {
+    const referenceTokenPositions = referencePositions.get(token);
+    if (referenceTokenPositions) {
+      shared.push({
+        candidate: candidateTokenPositions,
+        reference: referenceTokenPositions,
+      });
+    }
+  }
+
+  let matches = 0;
+  for (const first of shared) {
+    for (const second of shared) {
+      const candidateCount = countSkipPairs(first.candidate, second.candidate, maxSkip);
+      if (candidateCount > 0) {
+        const referenceCount = countSkipPairs(first.reference, second.reference, maxSkip);
+        matches += Math.min(candidateCount, referenceCount);
+      }
+    }
+  }
+  return matches;
+}
+
+function skipBigramCount(tokenCount: number, maxSkip: number): number {
+  const distance = Math.min(maxSkip, tokenCount - 1);
+  return distance * tokenCount - (distance * (distance + 1)) / 2;
+}
+
 /** The built-in tokenizer expects sentences; custom tokenizers receive whole summaries. */
 function tokenizeSummary(
   input: string,
@@ -182,20 +263,31 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
   validateMaxSkip(maxSkip);
   validateBeta(beta);
 
-  const getGrams = (input: string): string[] => {
-    const tokens = tokenizeSummary(input, caseSensitive, tokenizer);
-    return skipBigram(skipBigram === utils.skipBigram ? encodeTokens(tokens) : tokens, maxSkip);
-  };
-  const candGrams = getGrams(cand);
-  const refGrams = getGrams(ref);
+  if (skipBigram !== utils.skipBigram) {
+    const candGrams = skipBigram(tokenizeSummary(cand, caseSensitive, tokenizer), maxSkip);
+    const refGrams = skipBigram(tokenizeSummary(ref, caseSensitive, tokenizer), maxSkip);
+    const skip2 = countMatchingGrams(candGrams, refGrams);
+    if (skip2 === 0) {
+      return 0;
+    }
+    return utils.fMeasure(skip2 / candGrams.length, skip2 / refGrams.length, beta);
+  }
 
-  const skip2 = countMatchingGrams(candGrams, refGrams);
+  const candTokens = tokenizeSummary(cand, caseSensitive, tokenizer);
+  if (candTokens.length < 2) {
+    throw new RangeError('Input must have at least two words');
+  }
+  const refTokens = tokenizeSummary(ref, caseSensitive, tokenizer);
+  if (refTokens.length < 2) {
+    throw new RangeError('Input must have at least two words');
+  }
 
+  const skip2 = countMatchingSkipBigrams(candTokens, refTokens, maxSkip);
   if (skip2 === 0) {
     return 0;
   }
-  const skip2Recall = skip2 / refGrams.length;
-  const skip2Prec = skip2 / candGrams.length;
+  const skip2Recall = skip2 / skipBigramCount(refTokens.length, maxSkip);
+  const skip2Prec = skip2 / skipBigramCount(candTokens.length, maxSkip);
 
   return utils.fMeasure(skip2Prec, skip2Recall, beta);
 }

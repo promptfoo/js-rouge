@@ -1334,6 +1334,20 @@ describe('Core Functions', () => {
     test('should throw RangeError for empty ref', () => {
       expect(() => s(cands[0], '', undefined as any)).toThrow(RangeError);
     });
+    test('should throw RangeError for a candidate with fewer than two tokens', () => {
+      expect(() => s('one', 'one two')).toThrow(RangeError);
+    });
+    test('should throw RangeError for a reference with fewer than two tokens', () => {
+      expect(() => s('one two', 'one')).toThrow(RangeError);
+    });
+    test('should let custom generators define short-token behavior', () => {
+      const skipBigram = jest.fn((): string[] => ['custom gram']);
+      expect(s('one', 'one', { skipBigram })).toBe(1);
+      expect(skipBigram.mock.calls).toEqual([
+        [['one'], Number.POSITIVE_INFINITY],
+        [['one'], Number.POSITIVE_INFINITY],
+      ]);
+    });
 
     test('should return 0 for summaries with zero overlap', () => {
       expect(s('banana yoghurt', ref, undefined as any)).toBe(0);
@@ -1368,6 +1382,69 @@ describe('Core Functions', () => {
     test('should preserve the zero-window behavior', () => {
       expect(s('a b', 'a b', { maxSkip: 0 })).toBe(0);
     });
+
+    test('should match materialized skip-bigram scoring exhaustively', () => {
+      const tokenizer = (input: string): string[] => JSON.parse(input);
+      const materialized = (tokens: string[], maxSkip?: number): string[] =>
+        rouge.skipBigram(
+          tokens.map((token) => JSON.stringify(token)),
+          maxSkip,
+        );
+      const sequences: string[][] = [];
+      for (let length = 2; length <= 4; length++) {
+        for (let value = 0; value < 2 ** length; value++) {
+          sequences.push(Array.from({ length }, (_, index) => (value & (1 << index) ? 'a' : 'b')));
+        }
+      }
+
+      for (const candidate of sequences) {
+        for (const reference of sequences) {
+          for (const maxSkip of [0, 1, 2, Number.POSITIVE_INFINITY]) {
+            for (const beta of [0, 1, Number.POSITIVE_INFINITY]) {
+              const candidateJson = JSON.stringify(candidate);
+              const referenceJson = JSON.stringify(reference);
+              expect(s(candidateJson, referenceJson, { tokenizer, maxSkip, beta })).toBeCloseTo(
+                s(candidateJson, referenceJson, {
+                  tokenizer,
+                  maxSkip,
+                  beta,
+                  skipBigram: materialized,
+                }),
+                12,
+              );
+            }
+          }
+        }
+      }
+    });
+
+    test('should score long summaries within a small heap', () => {
+      const bundled = buildSync({
+        entryPoints: [join(__dirname, '../src/rouge.ts')],
+        bundle: true,
+        platform: 'node',
+        target: 'node18',
+        write: false,
+      }).outputFiles[0].text;
+      const script = `${bundled}
+          const summary = Array.from({ length: 5000 }, () => 'a').join(' ');
+          if (module.exports.s(summary, summary) !== 1) {
+            throw new Error('ROUGE-S score changed');
+          }
+          process.stdout.write('ok');
+        `;
+      const child = spawnSync(process.execPath, ['--max-old-space-size=64'], {
+        input: script,
+        encoding: 'utf8',
+        timeout: 30_000,
+      });
+      expect(child.error).toBeUndefined();
+      expect({ status: child.status, stderr: child.stderr }).toEqual({
+        status: 0,
+        stderr: '',
+      });
+      expect(child.stdout).toBe('ok');
+    }, 30_000);
 
     test('should respect maxSkip option', () => {
       // With maxSkip=1, only adjacent pairs are considered
