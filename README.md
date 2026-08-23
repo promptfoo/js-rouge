@@ -22,7 +22,7 @@ Nevertheless, the [paper](http://www.aclweb.org/anthology/W04-1013) describing R
 
 This package is available on NPM:
 
-Node.js 18.14 or later is required.
+Node.js 18 or later is required.
 
 ```shell
 npm install js-rouge
@@ -268,6 +268,7 @@ Have a bug or a feature request? [Please open a new issue](https://github.com/pr
 ## Contributing
 
 Please submit all pull requests against the main branch. All code should pass Biome validation and tests.
+Developing and testing locally requires Node.js 18.14 or later because Jest 30 sets that floor; the published package supports Node.js 18.0 or later.
 
 The amount of data available for writing tests is unfortunately woefully inadequate. We've tried to be as thorough as possible, but that eliminates neither the possibility of nor existence of errors. The gold standard is the DUC data-set, but that too is form-walled and legal-release-walled, which is infuriating. If you have data in the form of a candidate summary, reference(s), and a verified ROUGE score you do not mind sharing, we would love to add that to the test harness.
 

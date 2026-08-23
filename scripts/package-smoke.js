@@ -97,7 +97,9 @@ void score;
 
   const installedRoot = join(consumerRoot, 'node_modules', 'js-rouge');
   const installedPackage = JSON.parse(readFileSync(join(installedRoot, 'package.json'), 'utf8'));
-  assert.equal(installedPackage.dependencies, undefined, 'The package must remain dependency-free');
+  for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
+    assert.equal(installedPackage[field], undefined, `The package must not declare ${field}`);
+  }
 
   const declarationMaps = readdirSync(join(installedRoot, 'dist')).filter((file) =>
     file.endsWith('.d.ts.map'),

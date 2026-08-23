@@ -19,7 +19,7 @@
     "build:js": "esbuild src/rouge.ts --bundle --minify --sourcemap --platform=node --target=node18 --outfile=dist/rouge.js && esbuild src/rouge.ts --bundle --minify --sourcemap --platform=neutral --format=esm --target=node18 --outfile=dist/rouge.mjs",
     "build:types": "tsc -p tsconfig.json --emitDeclarationOnly --outDir dist",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
-    "type-check": "tsc --noEmit && tsc -p tsconfig.test.json",
+    "type-check": "tsc -p tsconfig.test.json",
     "lint": "biome lint .",
     "format": "biome format --write . && prettier --write \"**/*.md\"",
     "check": "biome check --write . && prettier --write \"**/*.md\"",
@@ -59,7 +59,7 @@
     "typescript": "^7.0.0"
   },
   "engines": {
-    "node": ">=18.14.0"
+    "node": ">=18.0.0"
   },
   "files": [
     "dist",
