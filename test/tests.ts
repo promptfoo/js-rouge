@@ -311,6 +311,30 @@ describe('Utility Functions', () => {
       expect(ss(lowerCase, { caseNeutral: true })).toEqual([lowerCase]);
     });
 
+    test('should keep case-expanding initials consistent without changing the default path', () => {
+      const dottedI = 'Albert \u0130. Jones left.';
+      const lowerCase = dottedI.toLowerCase();
+      expect(lowerCase).toBe('albert i\u0307. jones left.');
+      expect(ss(dottedI)).toEqual(['Albert \u0130.', 'Jones left.']);
+      expect(ss(lowerCase)).toEqual(['albert i\u0307.', 'jones left.']);
+      expect(ss(dottedI, { caseNeutral: true })).toEqual([dottedI]);
+      expect(ss(lowerCase, { caseNeutral: true })).toEqual([lowerCase]);
+    });
+
+    test.each([
+      'I\u0307',
+      'I\u0307\u0323',
+      `I${'\u0307'.repeat(16)}`,
+      'I\u093e',
+      'I\u20dd',
+      '\u{10400}\u0307',
+    ])('should treat combining marks as part of a case-neutral initial: %s', (initial) => {
+      const text = `Albert ${initial}. Jones left.`;
+      const lowerCase = text.toLowerCase();
+      expect(ss(text, { caseNeutral: true })).toEqual([text]);
+      expect(ss(lowerCase, { caseNeutral: true })).toEqual([lowerCase]);
+    });
+
     test('should split end-of-sentence question marks', () => {
       expect(ss('What is your name? My name is Jonas.')).toEqual([
         'What is your name?',
@@ -1579,6 +1603,15 @@ describe('Core Functions', () => {
       ['ROUGE-L', l],
     ] as const)('%s treats Unicode name-initial casing neutrally', (_name, score) => {
       const mixedCase = 'Albert \u212a. Jones left.';
+      expect(score(mixedCase, mixedCase.toLowerCase(), { caseSensitive: false })).toBe(1);
+    });
+
+    test.each([
+      ['ROUGE-N', n],
+      ['ROUGE-S', s],
+      ['ROUGE-L', l],
+    ] as const)('%s handles lowercase expansions in name initials', (_name, score) => {
+      const mixedCase = 'Albert \u0130. Jones left.';
       expect(score(mixedCase, mixedCase.toLowerCase(), { caseSensitive: false })).toBe(1);
     });
 

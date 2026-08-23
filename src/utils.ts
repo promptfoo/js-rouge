@@ -75,7 +75,8 @@ function escapeRegExp(input: string): string {
 
 const abbrvReg = new RegExp(`\\b(${GATE_SUBSTITUTIONS.map(escapeRegExp).join('|')})[.!?] ?$`, 'i');
 const acronymReg = /[ |.][A-Z].?$/i;
-const caseNeutralAcronymReg = /[ |.]\p{Cased}.?$/u;
+// Case mappings can add combining marks (for example, `İ` lowercases to `i` + dot above).
+const caseNeutralAcronymReg = /(?:^|[ |.])\p{Cased}\p{M}*.?$/u;
 const breakReg = /[\r\n]+/;
 // Match a bounded ellipsis suffix to avoid excessive backtracking.
 const ellipseReg = /\.{2,10}$/;
@@ -88,6 +89,7 @@ const closingBracketReg = /[\])}>]/;
 /** Keep merged fragments separate; boundary rules only need a suffix and word casing. */
 class SentenceBuffer {
   readonly #caseNeutral: boolean;
+  #lastWord = '';
   #parts: string[] = [];
   #normalizedThrough = 0;
   #words: { titleCase: boolean; lowerCase: boolean }[] = [];
@@ -107,6 +109,10 @@ class SentenceBuffer {
     return this.#words.at(-1)?.lowerCase ?? true;
   }
 
+  get lastWord(): string {
+    return this.#lastWord;
+  }
+
   get previousWordIsTitleCase(): boolean {
     return this.#words.at(-2)?.titleCase ?? false;
   }
@@ -117,6 +123,13 @@ class SentenceBuffer {
       suffix = `${this.#parts[i].slice(suffix.length - sentenceSuffixLength)}${suffix}`;
     }
     return suffix;
+  }
+
+  #trackLastWord(word: string, continuesPreviousWord: boolean): void {
+    if (!this.#caseNeutral) {
+      return;
+    }
+    this.#lastWord = continuesPreviousWord ? `${this.#lastWord}${word}` : word;
   }
 
   append(text: string): void {
@@ -131,12 +144,14 @@ class SentenceBuffer {
       const lowerCase = this.#caseNeutral ? !hasCasedCharacter(word) : word === word.toLowerCase();
       if (match.index === 0 && previous && !/\s/.test(this.#parts.at(-1)?.at(-1) ?? '')) {
         previous.lowerCase = previous.lowerCase && lowerCase;
+        this.#trackLastWord(word, true);
       } else {
         const titleCase = this.#caseNeutral ? startsWithCasedCharacter(word) : strIsTitleCase(word);
         if (this.empty) {
           this.startsWithTitleCase = titleCase;
         }
         this.#words.push({ titleCase, lowerCase });
+        this.#trackLastWord(word, false);
         if (this.#words.length > 2) {
           this.#words.shift();
         }
@@ -252,7 +267,10 @@ export function sentenceSegment(
           chunk.append(` ${trimSpaces(nextChunk.replace(/ +/g, ' '))}`);
           pending = chunk;
         }
-      } else if (chunks[idx + 1] && matchesAcronymSuffix(chunk.suffix, caseNeutral)) {
+      } else if (
+        chunks[idx + 1] &&
+        matchesAcronymSuffix(chunk.suffix, chunk.lastWord, caseNeutral)
+      ) {
         if (chunk.lastWordIsLowerCase) {
           // Catch small-letter abbreviations and merge them.
           chunk.append(` ${chunks[idx + 1].replace(/ +/g, ' ')}`);
@@ -481,8 +499,8 @@ function isCasedCharacter(input: string): boolean {
   return input.toUpperCase() !== input.toLowerCase();
 }
 
-function matchesAcronymSuffix(input: string, caseNeutral: boolean): boolean {
-  return (caseNeutral ? caseNeutralAcronymReg : acronymReg).test(input);
+function matchesAcronymSuffix(suffix: string, lastWord: string, caseNeutral: boolean): boolean {
+  return caseNeutral ? caseNeutralAcronymReg.test(lastWord) : acronymReg.test(suffix);
 }
 
 function startsWithCasedCharacter(input: string): boolean {
