@@ -315,7 +315,17 @@ function matchedReferenceIndices(
     return builtInLcsIndices(candidate, reference);
   }
 
-  return alignReferenceIndices(candidate, reference, getLcs(candidate, reference));
+  // Preserve the value-only callback's legacy best-effort alignment.
+  const indices: number[] = [];
+  let next = 0;
+  for (const token of getLcs(candidate, reference)) {
+    const index = reference.indexOf(token, next);
+    if (index !== -1) {
+      indices.push(index);
+      next = index + 1;
+    }
+  }
+  return indices;
 }
 
 function validateCustomLcsIndices(
@@ -328,68 +338,21 @@ function validateCustomLcsIndices(
   }
 
   let previous = -1;
+  let nextCandidate = 0;
   for (const index of result) {
     if (!Number.isInteger(index) || index < 0 || index >= reference.length || index <= previous) {
       throw new RangeError(
         'Custom lcsIndices must return strictly increasing integer indices within the reference',
       );
     }
-    previous = index;
-  }
-
-  const selected = result.map((index) => reference[index]);
-  if (!isSubsequence(selected, candidate)) {
-    throw new RangeError(
-      'Custom lcsIndices must select reference tokens that form a subsequence of the candidate',
-    );
-  }
-  return result;
-}
-
-function alignReferenceIndices(
-  candidate: string[],
-  reference: string[],
-  result: string[],
-): number[] {
-  if (!Array.isArray(result)) {
-    throw new RangeError('Custom lcs must return an array of token strings');
-  }
-
-  if (!result.every((token) => typeof token === 'string')) {
-    throw new RangeError('Custom lcs must return an array of token strings');
-  }
-  if (!isSubsequence(result, candidate)) {
-    throw new RangeError('Custom lcs must return a common subsequence of candidate and reference');
-  }
-
-  const indices: number[] = [];
-  let next = 0;
-  for (const token of result) {
-    const index = reference.indexOf(token, next);
-    if (index === -1) {
+    const candidateIndex = candidate.indexOf(reference[index], nextCandidate);
+    if (candidateIndex === -1) {
       throw new RangeError(
-        'Custom lcs must return a common subsequence of candidate and reference',
+        'Custom lcsIndices must select reference tokens that form a subsequence of the candidate',
       );
     }
-    indices.push(index);
-    next = index + 1;
+    previous = index;
+    nextCandidate = candidateIndex + 1;
   }
-  return indices;
-}
-
-function isSubsequence(tokens: string[], sequence: string[]): boolean {
-  if (tokens.length === 0) {
-    return true;
-  }
-
-  let tokenIndex = 0;
-  for (const token of sequence) {
-    if (token === tokens[tokenIndex]) {
-      tokenIndex++;
-      if (tokenIndex === tokens.length) {
-        return true;
-      }
-    }
-  }
-  return false;
+  return result;
 }

@@ -1515,18 +1515,6 @@ describe('Core Functions', () => {
       );
     });
 
-    test('should reject a non-array custom LCS result', () => {
-      const customLcs = (): string[] => 'not an array' as unknown as string[];
-      expect(() => l('a b', 'a b', { lcs: customLcs })).toThrow(/must return an array/);
-    });
-
-    test('should reject non-string values from a custom LCS callback', () => {
-      const customLcs = (): string[] => [0] as unknown as string[];
-      expect(() => l('a b', 'a b', { lcs: customLcs })).toThrow(
-        /must return an array of token strings/,
-      );
-    });
-
     const malformedIndexResults = [
       { name: 'negative out-of-range index', indices: [-1] },
       { name: 'upper out-of-range index', indices: [2] },
@@ -1546,12 +1534,8 @@ describe('Core Functions', () => {
       );
     });
 
-    test('should reject values that are not a common subsequence from a custom LCS callback', () => {
-      expect(() => l('a b', 'a b', { lcs: () => ['b', 'a'] })).toThrow(/common subsequence/);
-    });
-
-    test('should reject custom LCS values that are absent from the reference', () => {
-      expect(() => l('a b', 'a c', { lcs: () => ['b'] })).toThrow(/common subsequence/);
+    test('should preserve best-effort alignment for legacy value-only callbacks', () => {
+      expect(l('a b', 'a c', { lcs: () => ['a', 'missing'] })).toBeCloseTo(1 / 2);
     });
 
     test('should accept an empty custom LCS result', () => {
