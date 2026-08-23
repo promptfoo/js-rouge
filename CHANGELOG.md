@@ -1,5 +1,26 @@
 # Changelog
 
+## [3.2.1](https://github.com/promptfoo/js-rouge/compare/js-rouge-v3.2.0...js-rouge-v3.2.1) (2026-08-23)
+
+
+### Bug Fixes
+
+* bound built-in ROUGE-S memory ([#130](https://github.com/promptfoo/js-rouge/issues/130)) ([49e0605](https://github.com/promptfoo/js-rouge/commit/49e060535107936ab93be2b2c9fed59c0ee00408))
+* bound LCS auxiliary memory ([#129](https://github.com/promptfoo/js-rouge/issues/129)) ([f7cc3c2](https://github.com/promptfoo/js-rouge/commit/f7cc3c2b02d7bdefcd863c2a963164aa3f8b3ce4))
+* correct summary-level ROUGE-L scoring ([#117](https://github.com/promptfoo/js-rouge/issues/117)) ([c67bf3e](https://github.com/promptfoo/js-rouge/commit/c67bf3ef4b5fc3e6ad2423d494e3d8b06146e0e6))
+* correct tokenization and sentence preprocessing ([#118](https://github.com/promptfoo/js-rouge/issues/118)) ([972cf08](https://github.com/promptfoo/js-rouge/commit/972cf08362a33dc2f34238d67b2a550bd8f2d1b4))
+* harden utility contracts and resampling ([#133](https://github.com/promptfoo/js-rouge/issues/133)) ([aae788c](https://github.com/promptfoo/js-rouge/commit/aae788c7706c3139e93220f0f4b7e3dcf8395860))
+* make case-insensitive segmentation casing-neutral ([#132](https://github.com/promptfoo/js-rouge/issues/132)) ([9c08900](https://github.com/promptfoo/js-rouge/commit/9c08900b302c0a36bf761189604d7ff404ebcfd0))
+* make custom ROUGE-L matching position-aware ([#128](https://github.com/promptfoo/js-rouge/issues/128)) ([fd96156](https://github.com/promptfoo/js-rouge/commit/fd961565e088d2a80919b702718f0ab1a6a3ba49))
+* preserve repeated matches in ROUGE-N and ROUGE-S ([#116](https://github.com/promptfoo/js-rouge/issues/116)) ([39996a9](https://github.com/promptfoo/js-rouge/commit/39996a9aa508a02adfc79ecab2d06f02eea4e45d))
+* preserve token boundaries in internal gram keys ([#125](https://github.com/promptfoo/js-rouge/issues/125)) ([f660f77](https://github.com/promptfoo/js-rouge/commit/f660f7733cf25a957ee08f27d4aceacf560a8947))
+* prevent sentence segmentation heap exhaustion ([#122](https://github.com/promptfoo/js-rouge/issues/122)) ([1a720fd](https://github.com/promptfoo/js-rouge/commit/1a720fdba366d7c37fe8d299342c25317bcebdef))
+* return zero when summaries yield no grams ([#131](https://github.com/promptfoo/js-rouge/issues/131)) ([32d8d92](https://github.com/promptfoo/js-rouge/commit/32d8d9239ccc235d8b4eefd886c53d2d705bec7b))
+* scan sentence boundaries in one pass ([#119](https://github.com/promptfoo/js-rouge/issues/119)) ([1d5aad2](https://github.com/promptfoo/js-rouge/commit/1d5aad25ee109a3f467208a582ef1dc3cd8555ce))
+* tokenize summaries consistently and preserve punctuation boundaries ([#123](https://github.com/promptfoo/js-rouge/issues/123)) ([fb5cb45](https://github.com/promptfoo/js-rouge/commit/fb5cb45dabcc9b9340a1621f8bf6d571898a895a))
+* validate factorial inputs ([#127](https://github.com/promptfoo/js-rouge/issues/127)) ([973f8aa](https://github.com/promptfoo/js-rouge/commit/973f8aa139f9da49c39a3a50ed72e03bf42d8d0c))
+* validate metric options and stabilize F-beta arithmetic ([#124](https://github.com/promptfoo/js-rouge/issues/124)) ([f745365](https://github.com/promptfoo/js-rouge/commit/f74536511ffc466a42d6103ed7dfa6cf5d1cb858))
+
 ## [3.2.0](https://github.com/promptfoo/js-rouge/compare/js-rouge-v3.1.5...js-rouge-v3.2.0) (2026-01-05)
 
 ### Features
