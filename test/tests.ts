@@ -1284,8 +1284,7 @@ describe('Core Functions', () => {
     test.each([
       ['one', 'one two'],
       ['one two', 'one'],
-      ['one', 'one'],
-    ])('should return 0 when %j and %j cannot produce the requested grams', (candidate, reference) => {
+    ])('returns 0 for short %j and %j', (candidate, reference) => {
       expect(n(candidate, reference, { n: 2 })).toBe(0);
     });
     test('should return 0 when built-in tokenization produces no grams', () => {
@@ -1368,8 +1367,7 @@ describe('Core Functions', () => {
     test.each([
       ['one', 'one two'],
       ['one two', 'one'],
-      ['one', 'one'],
-    ])('should return 0 when %j and %j cannot produce skip-bigrams', (candidate, reference) => {
+    ])('returns 0 for short %j and %j', (candidate, reference) => {
       expect(s(candidate, reference)).toBe(0);
     });
     test('should return 0 when built-in tokenization produces no skip-bigrams', () => {
