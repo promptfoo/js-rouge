@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { buildSync } from 'esbuild';
+import { lcsIndices } from '../src/lcs';
 import * as rouge from '../src/rouge';
 
 const bracketPairs = [
@@ -143,6 +144,12 @@ describe('Utility Functions', () => {
     test('should preserve its choice when multiple longest subsequences exist', () => {
       expect(lcs(['a', 'b'], ['b', 'a'])).toEqual(['b']);
     });
+    test('should preserve reference-position choices when duplicate tokens tie', () => {
+      expect(lcsIndices(['a'], ['a', 'a'])).toEqual([1]);
+      expect(lcsIndices(['a', 'b'], ['b', 'a'])).toEqual([0]);
+      expect(lcsIndices(['a', 'a'], ['a', 'a', 'a'])).toEqual([1, 2]);
+      expect(lcsIndices(['a', 'b'], ['a', 'a'])).toEqual([0]);
+    });
     test('should return ["w1", "w3", "w5"] for ["w1", "w2", "w3", "w4", "w5"] and ["w1", "w3", "w8", "w9", "w5"]', () => {
       expect(lcs(['w1', 'w2', 'w3', 'w4', 'w5'], ['w1', 'w3', 'w8', 'w9', 'w5'])).toEqual([
         'w1',
@@ -150,6 +157,35 @@ describe('Utility Functions', () => {
         'w5',
       ]);
     });
+
+    test('should process long token sequences within a small heap', () => {
+      const bundled = buildSync({
+        entryPoints: [join(__dirname, '../src/rouge.ts')],
+        bundle: true,
+        platform: 'node',
+        target: 'node18',
+        write: false,
+      }).outputFiles[0].text;
+      const script = `${bundled}
+          const tokens = Array.from({ length: 4000 }, (_, index) => \`token-\${index}\`);
+          const result = module.exports.lcs(tokens, tokens);
+          if (result.length !== tokens.length || result[0] !== tokens[0] || result.at(-1) !== tokens.at(-1)) {
+            throw new Error('LCS content changed');
+          }
+          process.stdout.write('ok');
+        `;
+      const child = spawnSync(process.execPath, ['--max-old-space-size=64'], {
+        input: script,
+        encoding: 'utf8',
+        timeout: 30_000,
+      });
+      expect(child.error).toBeUndefined();
+      expect({ status: child.status, stderr: child.stderr }).toEqual({
+        status: 0,
+        stderr: '',
+      });
+      expect(child.stdout).toBe('ok');
+    }, 30_000);
   });
 
   describe('nGram', () => {
