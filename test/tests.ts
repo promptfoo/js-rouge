@@ -251,20 +251,20 @@ describe('Utility Functions', () => {
       expect(() => nGram(['a'], 3, { start: false, end: false })).toThrow(RangeError);
     });
 
-    test.each([
-      1_000_000_000,
-      2 ** 54,
-    ])('should reject impossible padding size %s before materializing it', (size) => {
-      const unshift = jest.spyOn(Array.prototype, 'unshift').mockImplementation((): number => {
-        throw new Error('padding should not be materialized');
-      });
-      try {
-        expect(() => nGram([], size, { start: true })).toThrow(RangeError);
-        expect(unshift).not.toHaveBeenCalled();
-      } finally {
-        unshift.mockRestore();
-      }
-    });
+    test.each([1_000_000_000, 2 ** 54])(
+      'should reject impossible padding size %s before materializing it',
+      (size) => {
+        const unshift = jest.spyOn(Array.prototype, 'unshift').mockImplementation((): number => {
+          throw new Error('padding should not be materialized');
+        });
+        try {
+          expect(() => nGram([], size, { start: true })).toThrow(RangeError);
+          expect(unshift).not.toHaveBeenCalled();
+        } finally {
+          unshift.mockRestore();
+        }
+      },
+    );
   });
 
   describe('skipBigram', () => {
