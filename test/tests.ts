@@ -12,7 +12,8 @@ const bracketPairs = [
 ] as const;
 const geographicAcronyms = ['U.S.', 'U.S.A.', 'E.U.'];
 const nonFiniteNumbers = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
-const invalidNGramSizes = [...nonFiniteNumbers, -1, 0, 1.5];
+const unsafeInteger = Number.MAX_SAFE_INTEGER + 1;
+const invalidNGramSizes = [...nonFiniteNumbers, -1, 0, 1.5, unsafeInteger];
 const invalidMaxSkips = [Number.NaN, Number.NEGATIVE_INFINITY, -1, 0.5, 1.5];
 const invalidBetas = [Number.NaN, Number.NEGATIVE_INFINITY, -1];
 
@@ -46,40 +47,63 @@ function legacyLcsIndices(a: string[], b: string[]): number[] {
   return indices.reverse();
 }
 
+function expectBundledScriptToPass(script: string, timeout: number, nodeArgs: string[] = []): void {
+  const bundled = buildSync({
+    entryPoints: [join(__dirname, '../src/rouge.ts')],
+    bundle: true,
+    platform: 'node',
+    target: 'node18',
+    write: false,
+  }).outputFiles[0].text;
+  const child = spawnSync(process.execPath, nodeArgs, {
+    input: `${bundled}\n${script}`,
+    encoding: 'utf8',
+    timeout,
+  });
+  if (child.error) {
+    throw child.error;
+  }
+  if (child.status !== 0 || child.stderr !== '' || child.stdout !== 'ok') {
+    throw new Error(
+      `Bundled script failed: ${JSON.stringify({ status: child.status, stderr: child.stderr, stdout: child.stdout })}`,
+    );
+  }
+}
+
 describe('Utility Functions', () => {
   describe('fact', () => {
     const { fact } = rouge;
 
-    test('should throw RangeError for -1!', () => {
-      expect(() => fact(-1)).toThrow(RangeError);
-    });
+    test.each([-1, 1.5, 171, Number.NaN, Number.POSITIVE_INFINITY])(
+      'should throw RangeError for invalid input %p',
+      (input) => {
+        expect(() => fact(input)).toThrow(RangeError);
+      },
+    );
 
-    test('should return 1 for 0!', () => {
-      expect(fact(0)).toBe(1);
-    });
-    test('should return 1 for 1!', () => {
-      expect(fact(1)).toBe(1);
-    });
-
-    test('should return 120 for 5!', () => {
-      expect(fact(5)).toBe(120);
-    });
-    test('should return 3628800 for 10!', () => {
-      expect(fact(10)).toBe(3_628_800);
-    });
-    test('should return 2432902008176640000 for 20!', () => {
-      expect(fact(20)).toBe(2_432_902_008_176_640_000);
-    });
-    test('should return 2432902008176640000 for 20! using cache', () => {
-      expect(fact(20)).toBe(2_432_902_008_176_640_000);
+    test.each([
+      [0, 1],
+      [1, 1],
+      [5, 120],
+      [20, 2_432_902_008_176_640_000],
+      [98, 9.426_890_448_883_248e153],
+      [170, 7.257_415_615_308_004e306],
+    ])('should compute %i!', (input, expected) => {
+      expect(fact(input)).toBe(expected);
     });
   });
 
   describe('comb2', () => {
     const { comb2 } = rouge;
 
-    test('should throw RangeError for C(1,2)', () => {
-      expect(() => comb2(1)).toThrow(RangeError);
+    test.each([1, ...nonFiniteNumbers, 2.5, unsafeInteger])(
+      'should reject invalid item count %s',
+      (value) => {
+        expect(() => comb2(value)).toThrow(RangeError);
+      },
+    );
+    test('should reject results that exceed the safe integer range', () => {
+      expect(() => comb2(134_217_729)).toThrow(RangeError);
     });
 
     test('should return 1 for C(2,2)', () => {
@@ -90,6 +114,9 @@ describe('Utility Functions', () => {
     });
     test('should return 499500 for C(1000,2)', () => {
       expect(comb2(1000)).toBe(499_500);
+    });
+    test('should return the largest safe boundary result', () => {
+      expect(comb2(134_217_728)).toBe(9_007_199_187_632_128);
     });
   });
 
@@ -301,6 +328,28 @@ describe('Utility Functions', () => {
       ]);
       expect(nGram(data, 2, { start: undefined, end: undefined })).toEqual(nGram(data, 2));
     });
+
+    test('should apply requested padding before validating short inputs', () => {
+      const oneToken = ['a'];
+      expect(nGram(oneToken, 2, { start: true })).toEqual(['<S> a']);
+      expect(nGram(oneToken, 2, { end: true })).toEqual(['a <S>']);
+      expect(nGram([], 2, { start: true, end: true })).toEqual(['<S> <S>']);
+      expect(oneToken).toEqual(['a']);
+    });
+
+    test('should still reject short inputs when padding is insufficient', () => {
+      expect(() => nGram([], 2, { start: true })).toThrow(RangeError);
+    });
+
+    test('should reject impossible padding before allocation', () => {
+      expect(() => nGram([], 1_000_000_000, { start: true })).toThrow(RangeError);
+    });
+
+    test('should reject excessive two-sided padding before materialization', () => {
+      expect(() => nGram([], 1_000_000_000, { start: true, end: true })).toThrow(
+        /materialization limit/,
+      );
+    });
   });
 
   describe('skipBigram', () => {
@@ -345,6 +394,7 @@ describe('Utility Functions', () => {
 
   describe('sentenceSegment', () => {
     const ss = rouge.sentenceSegment;
+    const segmentCaseNeutrally = (input: string): string[] => ss(input, { caseNeutral: true });
 
     test('should return empty array for empty input', () => {
       expect(ss('')).toEqual([]);
@@ -356,6 +406,92 @@ describe('Utility Functions', () => {
     test('should split simple periods', () => {
       expect(ss('Hello World. My name is Jonas.')).toEqual(['Hello World.', 'My name is Jonas.']);
     });
+
+    test.each([
+      ['astral uppercase', '\u{10400}', true],
+      ['astral lowercase', '\u{10428}', false],
+      ['titlecase', 'ǅ', true],
+      ['Roman numeral', 'Ⅰ', true],
+      ['circled uppercase', 'Ⓐ', true],
+      ['mapping-less uppercase', '𝐀', true],
+      ['mapping-less lowercase', '𝐚', false],
+    ])('classifies %s sentence starts', (_label, character, defaultBoundary) => {
+      const input = `Use etc. ${character} begins.`;
+      const sentences = ['Use etc.', `${character} begins.`];
+      expect(ss(input)).toEqual(defaultBoundary ? sentences : [input]);
+      expect(segmentCaseNeutrally(input)).toEqual(sentences);
+    });
+
+    test('recognizes titlecase letters across line wraps', () => {
+      expect(ss('ǅuro\ncontinued.')).toEqual(['ǅuro continued.']);
+    });
+
+    test.each([
+      ['Use etc. Another sentence.', ['Use etc.', 'Another sentence.']],
+      ['use etc. another sentence.', ['use etc.', 'another sentence.']],
+    ])('segments %j without changing its text', (input, expected) => {
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
+    test('should match lowercase-equivalent Unicode abbreviations case-neutrally', () => {
+      const mixedCase = 'Da\u212a.\nNext.';
+      const lowerCase = mixedCase.toLowerCase();
+      expect(ss(mixedCase)).toEqual(['Da\u212a.', 'Next.']);
+      expect(segmentCaseNeutrally(mixedCase)).toEqual(['Da\u212a. Next.']);
+      expect(segmentCaseNeutrally(lowerCase)).toEqual(['dak. next.']);
+    });
+
+    test('should preserve gate exceptions in case-neutral quoted continuations', () => {
+      expect(segmentCaseNeutrally('"Mt." Next stop.')).toEqual(['"Mt." Next stop.']);
+      expect(segmentCaseNeutrally('"mt." next stop.')).toEqual(['"mt." next stop.']);
+    });
+
+    test.each(['\u212a', '\u0130', 'I\u0307\u0323', 'I\u093e', 'I\u20dd', '\u{10400}\u0307'])(
+      'should treat combining marks as part of a case-neutral initial: %s',
+      (initial) => {
+        const firstSentence = `Albert ${initial}.`;
+        const text = `${firstSentence} Jones left.`;
+        const lowerCase = text.toLowerCase();
+        expect(segmentCaseNeutrally(text)).toEqual([firstSentence, 'Jones left.']);
+        expect(segmentCaseNeutrally(lowerCase)).toEqual([
+          firstSentence.toLowerCase(),
+          'jones left.',
+        ]);
+      },
+    );
+
+    test.each([
+      ['We chose option A. Next step.', ['We chose option A.', 'Next step.']],
+      ['We chose option A. 10 people agreed.', ['We chose option A.', '10 people agreed.']],
+    ])('splits the ambiguous initial in %j', (input, expected) => {
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        expected.map((sentence) => sentence.toLowerCase()),
+      );
+    });
+
+    test.each(['10', '(10)', '#10'])(
+      'retains the page-number continuation %s case-neutrally',
+      (continuation) => {
+        const input = `Please turn to P. ${continuation} for details.`;
+        expect(segmentCaseNeutrally(input)).toEqual([input]);
+        expect(segmentCaseNeutrally(input.toLowerCase())).toEqual([input.toLowerCase()]);
+      },
+    );
+
+    test('retains an unterminated page number case-neutrally', () => {
+      expect(segmentCaseNeutrally('Please turn to P. 10')).toEqual(['Please turn to P. 10']);
+    });
+
+    test.each(['$10', '-10', '"10"', '10abc', '(10)abc'])(
+      'should not treat %s as a page number',
+      (continuation) => {
+        expect(segmentCaseNeutrally(`First P. ${continuation} follows.`)).toEqual([
+          'First P.',
+          `${continuation} follows.`,
+        ]);
+      },
+    );
 
     test('should split end-of-sentence question marks', () => {
       expect(ss('What is your name? My name is Jonas.')).toEqual([
@@ -692,14 +828,8 @@ describe('Utility Functions', () => {
       const TIMEOUT_MS = 500;
 
       test('should segment abbreviation chains within a small heap', () => {
-        const bundled = buildSync({
-          entryPoints: [join(__dirname, '../src/rouge.ts')],
-          bundle: true,
-          platform: 'node',
-          target: 'node18',
-          write: false,
-        }).outputFiles[0].text;
-        const script = `${bundled}
+        expectBundledScriptToPass(
+          `
           for (const [fragment, normalized] of [['Dr. ', 'Dr. '], ['e.g. ', 'e.g. '], ['Dr.\\n', 'Dr. ']]) {
             const summary = fragment.repeat(5000) + 'End.';
             const sentences = module.exports.sentenceSegment(summary);
@@ -711,15 +841,10 @@ describe('Utility Functions', () => {
             }
           }
           process.stdout.write('ok');
-        `;
-        const child = spawnSync(process.execPath, ['--max-old-space-size=64'], {
-          input: script,
-          encoding: 'utf8',
-          timeout: 15_000,
-        });
-        expect(child.error).toBeUndefined();
-        expect({ status: child.status, stderr: child.stderr }).toEqual({ status: 0, stderr: '' });
-        expect(child.stdout).toBe('ok');
+        `,
+          15_000,
+          ['--max-old-space-size=64'],
+        );
       });
 
       test('should handle long strings without sentence terminators quickly', () => {
@@ -986,6 +1111,30 @@ describe('Utility Functions', () => {
       expect(jk(cands, ref, evalFunc, statTest)).toBe(31);
     });
 
+    test('should preserve leave-one-out maxima and score each candidate once', () => {
+      const scorer = jest.fn((candidate: string): number => Number(candidate));
+      const statistic = jest.fn(() => 0);
+
+      expect(jk(['4', '3', '2'], ref, scorer, statistic)).toBe(0);
+      expect(statistic).toHaveBeenCalledWith([3, 4, 4]);
+      expect(scorer.mock.calls).toEqual([
+        ['4', ref],
+        ['3', ref],
+        ['2', ref],
+      ]);
+    });
+
+    test('should preserve NaN propagation in leave-one-out maxima', () => {
+      const statistic = jest.fn(() => 0);
+      jk(['nan', '3', '1'], ref, (candidate) => Number(candidate), statistic);
+      expect(statistic).toHaveBeenCalledWith([3, Number.NaN, Number.NaN]);
+    });
+
+    test('should handle large candidate sets without quadratic resampling', () => {
+      const candidates = Array.from({ length: 50_000 }, (_, index) => String(index));
+      expect(jk(candidates, ref, () => 1)).toBe(1);
+    });
+
     test('should adapt multiple references without reversing an asymmetric scorer', () => {
       const candidate = 'a';
       const references = ['a b', 'a c d', 'a b c d e'];
@@ -1096,6 +1245,7 @@ describe('Utility Functions', () => {
 
     test('should throw RangeError for non-character input', () => {
       expect(() => isUpper('abcd')).toThrow(RangeError);
+      expect(() => isUpper('\u{10400}A')).toThrow(RangeError);
     });
     test('should throw RangeError for empty input', () => {
       expect(() => isUpper('')).toThrow(RangeError);
@@ -1121,6 +1271,20 @@ describe('Utility Functions', () => {
       expect(isUpper('é')).toBe(false);
       expect(isUpper('ñ')).toBe(false);
     });
+    test.each([
+      ['astral uppercase', '\u{10400}', true],
+      ['astral lowercase', '\u{10428}', false],
+      ['titlecase', 'ǅ', true],
+      ['titlecase lowercase', 'ǆ', false],
+      ['Roman uppercase', 'Ⅰ', true],
+      ['Roman lowercase', 'ⅰ', false],
+      ['circled uppercase', 'Ⓐ', true],
+      ['circled lowercase', 'ⓐ', false],
+      ['mapping-less uppercase', '𝐀', true],
+      ['mapping-less lowercase', '𝐚', false],
+    ])('classifies %s characters', (_label, input, expected) => {
+      expect(isUpper(input)).toBe(expected);
+    });
   });
 
   describe('strIsTitleCase', () => {
@@ -1140,6 +1304,14 @@ describe('Utility Functions', () => {
       expect(isTitle('')).toBe(false);
       expect(isTitle(' \t\r\n')).toBe(false);
     });
+
+    test.each([
+      ['  \u{10400}bc', true],
+      ['  \u{10428}bc', false],
+      ['ǅuro', true],
+    ])('classifies the first Unicode code point in %j', (input, expected) => {
+      expect(isTitle(input)).toBe(expected);
+    });
   });
 });
 
@@ -1149,6 +1321,20 @@ describe('Core Functions', () => {
     ['ROUGE-S', rouge.s],
     ['ROUGE-L', rouge.l],
   ] as const;
+
+  test.each([
+    ['ROUGE-N', rouge.n, 1],
+    ['ROUGE-S', rouge.s, 7 / 15],
+    ['ROUGE-L', rouge.l, 1],
+  ] as const)(
+    '%s preserves reordered mapping-less cased sentences case-insensitively',
+    (_name, score, expected) => {
+      const reference = 'Use etc. 𝐀 begins.';
+      const candidate = '𝐀 begins. Use etc.';
+      expect(score(candidate, reference, { caseSensitive: false })).toBe(expected);
+    },
+  );
+
   describe.each(metrics)('%s input handling', (_name, score) => {
     test.each(['\n', '\r\n', '\r'])('keeps wrapped quotes (%j)', (lineBreak) => {
       expect(score(`He said "Stop.${lineBreak}" Next.`, 'He said "Stop." Next.')).toBe(1);
@@ -1343,6 +1529,24 @@ describe('Core Functions', () => {
     test('should throw RangeError for empty ref', () => {
       expect(() => n(cand, '', { n: 2 })).toThrow(RangeError);
     });
+    test.each([
+      ['one', 'one two'],
+      ['one two', 'one'],
+    ])('returns 0 for short %j and %j', (candidate, reference) => {
+      expect(n(candidate, reference, { n: 2 })).toBe(0);
+    });
+    test('should return 0 when built-in tokenization produces no grams', () => {
+      const tokenizer = (): string[] => [];
+      expect(n('candidate', 'reference', { n: 2, tokenizer })).toBe(0);
+    });
+    test('should let custom generators define short-token behavior', () => {
+      const nGram = jest.fn((): string[] => ['custom gram']);
+      expect(n('one', 'one', { n: 2, nGram })).toBe(1);
+      expect(nGram.mock.calls).toEqual([
+        [['one'], 2],
+        [['one'], 2],
+      ]);
+    });
 
     test('should correctly compute ROUGE-N F1-score for ref 1', () => {
       // 3 matching bigrams, 4 candidate bigrams, 9 reference bigrams
@@ -1380,6 +1584,12 @@ describe('Core Functions', () => {
       expect(n('aaa', 'aa', { tokenizer, nGram })).toBeCloseTo(4 / 5);
     });
 
+    test('should not apply the built-in padding limit to custom ngram callbacks', () => {
+      const nGram = jest.fn((): string[] => ['match']);
+      expect(n('a', 'a', { n: 1_000_000_000, nGram })).toBe(1);
+      expect(nGram).toHaveBeenCalledTimes(2);
+    });
+
     test('should correctly compute ROUGE-N score with custom beta', () => {
       // With beta=0, F-score equals precision
       // 3 matching bigrams out of 4 candidate bigrams = 3/4
@@ -1407,6 +1617,24 @@ describe('Core Functions', () => {
     });
     test('should throw RangeError for empty ref', () => {
       expect(() => s(cands[0], '', undefined as any)).toThrow(RangeError);
+    });
+    test.each([
+      ['one', 'one two'],
+      ['one two', 'one'],
+    ])('returns 0 for short %j and %j', (candidate, reference) => {
+      expect(s(candidate, reference)).toBe(0);
+    });
+    test('should return 0 when built-in tokenization produces no skip-bigrams', () => {
+      const tokenizer = (): string[] => [];
+      expect(s('candidate', 'reference', { tokenizer })).toBe(0);
+    });
+    test('should let custom generators define short-token behavior', () => {
+      const skipBigram = jest.fn((): string[] => ['custom gram']);
+      expect(s('one', 'one', { skipBigram })).toBe(1);
+      expect(skipBigram.mock.calls).toEqual([
+        [['one'], Number.POSITIVE_INFINITY],
+        [['one'], Number.POSITIVE_INFINITY],
+      ]);
     });
 
     test('should return 0 for summaries with zero overlap', () => {
@@ -1442,6 +1670,71 @@ describe('Core Functions', () => {
     test('should preserve the zero-window behavior', () => {
       expect(s('a b', 'a b', { maxSkip: 0 })).toBe(0);
     });
+
+    test('should match materialized skip-bigram scoring exhaustively', () => {
+      const tokenizer = (input: string): string[] => JSON.parse(input);
+      const materialized = (tokens: string[], maxSkip?: number): string[] =>
+        rouge.skipBigram(
+          tokens.map((token) => JSON.stringify(token)),
+          maxSkip,
+        );
+      const sequences: string[][] = [];
+      for (let length = 2; length <= 4; length++) {
+        for (let value = 0; value < 2 ** length; value++) {
+          sequences.push(Array.from({ length }, (_, index) => (value & (1 << index) ? 'a' : 'b')));
+        }
+      }
+
+      for (const candidate of sequences) {
+        const candidateJson = JSON.stringify(candidate);
+        for (const reference of sequences) {
+          const referenceJson = JSON.stringify(reference);
+          for (const maxSkip of [0, 1, 2, Number.POSITIVE_INFINITY]) {
+            for (const beta of [0, 1, Number.POSITIVE_INFINITY]) {
+              expect(s(candidateJson, referenceJson, { tokenizer, maxSkip, beta })).toBeCloseTo(
+                s(candidateJson, referenceJson, {
+                  tokenizer,
+                  maxSkip,
+                  beta,
+                  skipBigram: materialized,
+                }),
+                12,
+              );
+            }
+          }
+        }
+      }
+    });
+
+    test('should score long summaries within a small heap', () => {
+      expectBundledScriptToPass(
+        `
+          const summary = Array.from({ length: 5000 }, () => 'a').join(' ');
+          if (module.exports.s(summary, summary) !== 1) {
+            throw new Error('ROUGE-S score changed');
+          }
+          process.stdout.write('ok');
+        `,
+        30_000,
+        ['--max-old-space-size=64'],
+      );
+    }, 30_000);
+
+    test('should score finite windows without scanning every distinct token pair', () => {
+      expectBundledScriptToPass(
+        `
+          const summary = Array.from({ length: 30000 }, (_, index) => \`token\${index}\`).join(' ');
+          if (module.exports.s(summary, summary, { maxSkip: 0 }) !== 0) {
+            throw new Error('zero-window score changed');
+          }
+          if (module.exports.s(summary, summary, { maxSkip: 1 }) !== 1) {
+            throw new Error('finite-window score changed');
+          }
+          process.stdout.write('ok');
+        `,
+        3000,
+      );
+    }, 10_000);
 
     test('should respect maxSkip option', () => {
       // With maxSkip=1, only adjacent pairs are considered
@@ -1561,6 +1854,60 @@ describe('Core Functions', () => {
       expect(l('a a a', 'a a', { lcs: customLcs })).toBeCloseTo(4 / 5);
     });
 
+    test('should preserve left-to-right alignment for value-only LCS callbacks', () => {
+      const customLcs = (a: string[], b: string[]): string[] => rouge.lcs(a, b);
+      expect(l('a\nb a', 'a b a', { lcs: customLcs })).toBe(1);
+    });
+
+    test('should use exact reference positions from a custom LCS-index callback', () => {
+      const customLcsIndices = (candidate: string[]): number[] =>
+        candidate.length === 1 ? [0] : [1, 2];
+      expect(l('a\nb a', 'a b a')).toBeCloseTo(2 / 3);
+      expect(l('a\nb a', 'a b a', { lcsIndices: customLcsIndices })).toBe(1);
+    });
+
+    test('should reject specifying both custom LCS callback forms', () => {
+      expect(() =>
+        l('a', 'a', {
+          lcs: () => ['a'],
+          lcsIndices: () => [0],
+        }),
+      ).toThrow(/cannot specify both lcs and lcsIndices/);
+    });
+
+    test('should reject a non-array custom LCS-index result', () => {
+      const customLcsIndices = (): number[] => 'not an array' as unknown as number[];
+      expect(() => l('a b', 'a b', { lcsIndices: customLcsIndices })).toThrow(
+        /must return an array/,
+      );
+    });
+
+    test.each([
+      { name: 'negative out-of-range index', indices: [-1] },
+      { name: 'upper out-of-range index', indices: [2] },
+      { name: 'fractional index', indices: [0.5] },
+      { name: 'duplicate indices', indices: [0, 0] },
+      { name: 'descending indices', indices: [1, 0] },
+    ])('should reject $name', ({ indices }) => {
+      expect(() => l('a b', 'a b', { lcsIndices: () => indices })).toThrow(
+        /strictly increasing integer indices within the reference/,
+      );
+    });
+
+    test('should reject custom LCS indices whose tokens are not a candidate subsequence', () => {
+      expect(() => l('a', 'a b', { lcsIndices: () => [1] })).toThrow(
+        /subsequence of the candidate/,
+      );
+    });
+
+    test('should preserve best-effort alignment for legacy value-only callbacks', () => {
+      expect(l('a b', 'a c', { lcs: () => ['a', 'missing'] })).toBeCloseTo(1 / 2);
+    });
+
+    test('should accept an empty custom LCS result', () => {
+      expect(l('candidate', 'reference', { lcs: () => [] })).toBe(0);
+    });
+
     test('should return zero when custom tokenization removes every token', () => {
       expect(l('a', 'b', { tokenizer: () => [] })).toBe(0);
     });
@@ -1597,6 +1944,34 @@ describe('Core Functions', () => {
 
   describe('caseSensitive option', () => {
     const { n, s, l } = rouge;
+
+    test.each([
+      ['ROUGE-N', n, 4 / 11],
+      ['ROUGE-S', s, 2 / 25],
+      ['ROUGE-L', l, 4 / 11],
+    ] as const)(
+      '%s keeps case-sensitive scoring while making case-insensitive boundaries casing-neutral',
+      (_name, score, caseSensitiveScore) => {
+        const mixedCase = 'Use etc. Another sentence.';
+        const lowerCase = mixedCase.toLowerCase();
+        expect(score(mixedCase, lowerCase)).toBeCloseTo(caseSensitiveScore);
+        expect(score(mixedCase, lowerCase, { caseSensitive: false })).toBe(1);
+      },
+    );
+
+    test('ROUGE-L passes original text to custom segmenters before case folding', () => {
+      const segmenter = jest.fn((input: string): string[] => [input]);
+      expect(
+        l('Use etc. Another sentence.', 'use etc. another sentence.', {
+          caseSensitive: false,
+          segmenter,
+        }),
+      ).toBe(1);
+      expect(segmenter.mock.calls).toEqual([
+        ['Use etc. Another sentence.'],
+        ['use etc. another sentence.'],
+      ]);
+    });
 
     test('ROUGE-N should be case-sensitive by default', () => {
       expect(n('Hello World', 'hello world')).toBe(0);

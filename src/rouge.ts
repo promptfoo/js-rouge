@@ -1,4 +1,4 @@
-import { lcsIndices } from './lcs';
+import { lcsIndices as builtInLcsIndices } from './lcs';
 import * as utils from './utils';
 import { validateBeta, validateMaxSkip, validateNGramSize } from './validation';
 
@@ -38,8 +38,10 @@ export interface RougeLOptions {
   beta?: number;
   /** Whether comparison is case-sensitive (default: true) */
   caseSensitive?: boolean;
-  /** Custom LCS function returning an ordered token subsequence */
+  /** Custom LCS returning values aligned to reference occurrences from left to right. */
   lcs?: (a: string[], b: string[]) => string[];
+  /** Custom LCS returning exact, strictly increasing reference indices; cannot be combined with `lcs`. */
+  lcsIndices?: (candidate: string[], reference: string[]) => number[];
   /** Custom sentence segmenter */
   segmenter?: (input: string) => string[];
   /** Custom string tokenizer */
@@ -63,6 +65,118 @@ function countMatchingGrams(candidate: string[], reference: string[]): number {
   return matches;
 }
 
+interface SharedTokenPositions {
+  candidate: number[];
+  reference: number[];
+}
+
+function tokenPositions(tokens: string[]): Map<string, number[]> {
+  const positions = new Map<string, number[]>();
+  for (let index = 0; index < tokens.length; index++) {
+    const token = tokens[index];
+    const existing = positions.get(token);
+    if (existing) {
+      existing.push(index);
+    } else {
+      positions.set(token, [index]);
+    }
+  }
+  return positions;
+}
+
+/** Count ordered position pairs for an unbounded skip window. */
+function countUnboundedSkipPairs(first: number[], second: number[]): number {
+  let firstValid = 0;
+  let pairs = 0;
+
+  for (const firstPosition of first) {
+    while (firstValid < second.length && second[firstValid] <= firstPosition) {
+      firstValid++;
+    }
+    pairs += second.length - firstValid;
+  }
+  return pairs;
+}
+
+/** Count finite-window followers for one first-token value without retaining all pair types. */
+function countFollowingSharedTokens(
+  tokens: string[],
+  firstPositions: number[],
+  sharedPositions: ReadonlyMap<string, number[]>,
+  maxSkip: number,
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  for (const firstPosition of firstPositions) {
+    const lastPosition = Math.min(firstPosition + maxSkip, tokens.length - 1);
+    for (let secondPosition = firstPosition + 1; secondPosition <= lastPosition; secondPosition++) {
+      const token = tokens[secondPosition];
+      if (sharedPositions.has(token)) {
+        counts.set(token, (counts.get(token) ?? 0) + 1);
+      }
+    }
+  }
+  return counts;
+}
+
+/** Count clipped built-in skip-bigram matches without materializing pair strings. */
+function countMatchingSkipBigrams(
+  candidate: string[],
+  reference: string[],
+  maxSkip: number,
+): number {
+  const candidatePositions = tokenPositions(candidate);
+  const referencePositions = tokenPositions(reference);
+  const shared: SharedTokenPositions[] = [];
+
+  for (const [token, candidateTokenPositions] of candidatePositions) {
+    const referenceTokenPositions = referencePositions.get(token);
+    if (referenceTokenPositions) {
+      shared.push({
+        candidate: candidateTokenPositions,
+        reference: referenceTokenPositions,
+      });
+    }
+  }
+
+  let matches = 0;
+  if (maxSkip !== Number.POSITIVE_INFINITY) {
+    for (const first of shared) {
+      const candidateCounts = countFollowingSharedTokens(
+        candidate,
+        first.candidate,
+        referencePositions,
+        maxSkip,
+      );
+      const referenceCounts = countFollowingSharedTokens(
+        reference,
+        first.reference,
+        candidatePositions,
+        maxSkip,
+      );
+      for (const [secondToken, candidateCount] of candidateCounts) {
+        matches += Math.min(candidateCount, referenceCounts.get(secondToken) ?? 0);
+      }
+    }
+    return matches;
+  }
+
+  for (const first of shared) {
+    for (const second of shared) {
+      const candidateCount = countUnboundedSkipPairs(first.candidate, second.candidate);
+      if (candidateCount > 0) {
+        const referenceCount = countUnboundedSkipPairs(first.reference, second.reference);
+        matches += Math.min(candidateCount, referenceCount);
+      }
+    }
+  }
+  return matches;
+}
+
+function skipBigramCount(tokenCount: number, maxSkip: number): number {
+  const distance = Math.min(maxSkip, tokenCount - 1);
+  return distance * tokenCount - (distance * (distance + 1)) / 2;
+}
+
 /** The built-in tokenizer expects sentences; custom tokenizers receive whole summaries. */
 function tokenizeSummary(
   input: string,
@@ -70,7 +184,10 @@ function tokenizeSummary(
   tokenizer?: (input: string) => string[],
 ): string[] {
   const tokenize = tokenizer ?? utils.treeBankTokenize;
-  const sentences = tokenize === utils.treeBankTokenize ? utils.sentenceSegment(input) : [input];
+  const sentences =
+    tokenize === utils.treeBankTokenize
+      ? utils.sentenceSegment(input, { caseNeutral: !caseSensitive })
+      : [input];
   return sentences.flatMap((sentence) =>
     tokenize(caseSensitive ? sentence : sentence.toLowerCase()),
   );
@@ -124,7 +241,10 @@ export function n(cand: string, ref: string, opts?: RougeNOptions): number {
 
   const getGrams = (input: string): string[] => {
     const tokens = tokenizeSummary(input, caseSensitive, tokenizer);
-    return nGram(nGram === utils.nGram ? encodeTokens(tokens) : tokens, size);
+    if (nGram === utils.nGram) {
+      return tokens.length < size ? [] : nGram(encodeTokens(tokens), size);
+    }
+    return nGram(tokens, size);
   };
   const candGrams = getGrams(cand);
   const refGrams = getGrams(ref);
@@ -182,20 +302,31 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
   validateMaxSkip(maxSkip);
   validateBeta(beta);
 
-  const getGrams = (input: string): string[] => {
-    const tokens = tokenizeSummary(input, caseSensitive, tokenizer);
-    return skipBigram(skipBigram === utils.skipBigram ? encodeTokens(tokens) : tokens, maxSkip);
-  };
-  const candGrams = getGrams(cand);
-  const refGrams = getGrams(ref);
+  if (skipBigram !== utils.skipBigram) {
+    const candGrams = skipBigram(tokenizeSummary(cand, caseSensitive, tokenizer), maxSkip);
+    const refGrams = skipBigram(tokenizeSummary(ref, caseSensitive, tokenizer), maxSkip);
+    const skip2 = countMatchingGrams(candGrams, refGrams);
+    if (skip2 === 0) {
+      return 0;
+    }
+    return utils.fMeasure(skip2 / candGrams.length, skip2 / refGrams.length, beta);
+  }
 
-  const skip2 = countMatchingGrams(candGrams, refGrams);
+  const candTokens = tokenizeSummary(cand, caseSensitive, tokenizer);
+  const refTokens = tokenizeSummary(ref, caseSensitive, tokenizer);
+  if (candTokens.length < 2 || refTokens.length < 2) {
+    return 0;
+  }
+  if (maxSkip === 0) {
+    return 0;
+  }
 
+  const skip2 = countMatchingSkipBigrams(candTokens, refTokens, maxSkip);
   if (skip2 === 0) {
     return 0;
   }
-  const skip2Recall = skip2 / refGrams.length;
-  const skip2Prec = skip2 / candGrams.length;
+  const skip2Recall = skip2 / skipBigramCount(refTokens.length, maxSkip);
+  const skip2Prec = skip2 / skipBigramCount(candTokens.length, maxSkip);
 
   return utils.fMeasure(skip2Prec, skip2Recall, beta);
 }
@@ -209,12 +340,14 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
  * 	beta: 1.0                           // The beta value used for the f-measure
  * 	caseSensitive: true                 // Whether comparison is case-sensitive
  * 	lcs: <inbuilt function>             // The longest common subsequence function
+ * 	lcsIndices: undefined                // A position-aware custom LCS function
  * 	segmenter: <inbuilt function>,      // The sentence segmenter
  * 	tokenizer: <inbuilt function>       // The string tokenizer
  * }
  * ```
  *
  * `lcs` has a type signature of ((Array<string>, Array<string>) => Array<string>)
+ * `lcsIndices` has a type signature of ((Array<string>, Array<string>) => Array<number>)
  * `segmenter` has a type signature of ((string) => Array<string)
  * `tokenizer` has a type signature of ((string) => Array<string)
  *
@@ -236,15 +369,23 @@ export function l(cand: string, ref: string, opts?: RougeLOptions): number {
     beta = 1.0,
     caseSensitive = true,
     lcs: getLcs = utils.lcs,
+    lcsIndices: getLcsIndices,
     segmenter = utils.sentenceSegment,
     tokenizer = utils.treeBankTokenize,
   } = opts ?? {};
+  if (opts?.lcs !== undefined && getLcsIndices !== undefined) {
+    throw new RangeError('ROUGE-L options cannot specify both lcs and lcsIndices');
+  }
   validateBeta(beta);
 
   const tokenizeSentence = (sentence: string): string[] =>
     tokenizer(caseSensitive ? sentence : sentence.toLowerCase());
-  const candSents = segmenter(cand).map(tokenizeSentence);
-  const refSents = segmenter(ref).map(tokenizeSentence);
+  const segmentSummary = (input: string): string[] =>
+    segmenter === utils.sentenceSegment
+      ? utils.sentenceSegment(input, { caseNeutral: !caseSensitive })
+      : segmenter(input);
+  const candSents = segmentSummary(cand).map(tokenizeSentence);
+  const refSents = segmentSummary(ref).map(tokenizeSentence);
 
   const remaining = new Map<string, number>();
   let candLength = 0;
@@ -264,7 +405,7 @@ export function l(cand: string, ref: string, opts?: RougeLOptions): number {
   for (const reference of refSents) {
     const union = new Set<number>();
     for (const candidate of candSents) {
-      for (const index of matchedReferenceIndices(candidate, reference, getLcs)) {
+      for (const index of matchedReferenceIndices(candidate, reference, getLcs, getLcsIndices)) {
         union.add(index);
       }
     }
@@ -290,12 +431,16 @@ function matchedReferenceIndices(
   candidate: string[],
   reference: string[],
   getLcs: (a: string[], b: string[]) => string[],
+  getLcsIndices?: (candidate: string[], reference: string[]) => number[],
 ): number[] {
+  if (getLcsIndices !== undefined) {
+    return validateCustomLcsIndices(candidate, reference, getLcsIndices(candidate, reference));
+  }
   if (getLcs === utils.lcs) {
-    return lcsIndices(candidate, reference);
+    return builtInLcsIndices(candidate, reference);
   }
 
-  // The public callback returns values, so align them to successive reference occurrences.
+  // Preserve the value-only callback's legacy best-effort alignment.
   const indices: number[] = [];
   let next = 0;
   for (const token of getLcs(candidate, reference)) {
@@ -306,4 +451,33 @@ function matchedReferenceIndices(
     }
   }
   return indices;
+}
+
+function validateCustomLcsIndices(
+  candidate: string[],
+  reference: string[],
+  result: number[],
+): number[] {
+  if (!Array.isArray(result)) {
+    throw new RangeError('Custom lcsIndices must return an array of reference token indices');
+  }
+
+  let previous = -1;
+  let nextCandidate = 0;
+  for (const index of result) {
+    if (!Number.isInteger(index) || index < 0 || index >= reference.length || index <= previous) {
+      throw new RangeError(
+        'Custom lcsIndices must return strictly increasing integer indices within the reference',
+      );
+    }
+    const candidateIndex = candidate.indexOf(reference[index], nextCandidate);
+    if (candidateIndex === -1) {
+      throw new RangeError(
+        'Custom lcsIndices must select reference tokens that form a subsequence of the candidate',
+      );
+    }
+    previous = index;
+    nextCandidate = candidateIndex + 1;
+  }
+  return result;
 }

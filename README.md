@@ -22,6 +22,8 @@ Nevertheless, the [paper](http://www.aclweb.org/anthology/W04-1013) describing R
 
 This package is available on NPM:
 
+Node.js 18 or later is required.
+
 ```shell
 npm install js-rouge
 ```
@@ -77,7 +79,7 @@ rougeL(candidate, reference); // => 0.75
 
 `l()` computes summary-level union LCS (called `rougeLsum` in Google's ROUGE package). It unions matched reference-token positions across candidate sentences and clips credit to the candidate's token counts. Sentence tokenization supplies both the matches and their denominators. Case-insensitive comparison preserves sentence boundaries by applying case folding after segmentation.
 
-The exported `lcs(a, b)` utility still returns token values. A custom `lcs` callback must return an ordered token subsequence; its values are aligned to successive reference occurrences from left to right. The built-in implementation retains the exact reference positions from its LCS alignment.
+The exported `lcs(a, b)` utility still returns token values. The value-returning `lcs` callback remains supported and aligns its ordered subsequence to successive reference occurrences from left to right, preserving legacy behavior for repeated tokens. For an exact alignment, use `lcsIndices`: it receives candidate and reference sentence-token arrays and returns strictly increasing reference indices whose selected tokens form a subsequence of the candidate. The built-in implementation retains exact reference positions.
 
 These corrections change ROUGE-L scores for repeated words and multi-sentence summaries. Rerun evaluation baselines when comparing versions.
 
@@ -109,13 +111,13 @@ rougeN("Hello World", "hello world", { caseSensitive: false }); // => 1.0
 
 ### Text Preprocessing
 
-By default, all three metrics segment the original text before case folding and per-sentence Penn Treebank tokenization. ROUGE-N/S flatten the tokens, so grams can cross sentence boundaries. Explicitly passing `treeBankTokenize` behaves the same. Custom tokenizers receive each whole summary once in `n()`/`s()` and individual sentences in `l()`.
+By default, all three metrics segment the original text before case folding and per-sentence Penn Treebank tokenization. With `caseSensitive: false`, built-in segmentation gives summaries equivalent under JavaScript's `toLowerCase()` the same boundaries; it does not provide locale-specific or full Unicode folding (`ß` and `SS` are not equivalent). Custom segmenters still receive the original text. Pass `{ caseNeutral: true }` to use the same neutral heuristics with `sentenceSegment()` directly. ROUGE-N/S flatten sentence tokens, so grams can cross boundaries. Custom tokenizers receive each whole summary once in `n()`/`s()` and individual sentences in `l()`.
 
 The tokenizer treats spaces, tabs, line breaks, and other whitespace as word separators. It returns no tokens for whitespace-only text and expands every occurrence of supported contractions. Punctuation remains part of the token stream. Colons and commas are separated unless followed by a digit, preserving numbers such as `12,000` and times such as `12:30`. Multi-initial acronyms such as `U.S.` keep their final dot, including at sentence boundaries, so a heuristic boundary cannot change the acronym's token identity.
 
 The default sentence segmenter handles LF, CRLF, and CR line endings and ignores blank separator chunks. Abbreviations such as `e.g.` are matched literally, and sentences ending in an initial or acronym are retained even when the following fragment has no punctuation. Spaces and line wraps after a mid-sentence ellipsis preserve word separation. Closing quotes and brackets stay with their sentence, including across line wraps. Inline parentheticals remain inside the surrounding sentence, even before a capitalized continuation. Capitalized text after an abbreviation may start a new sentence.
 
-The scoring functions reject empty or whitespace-only candidate/reference summaries with `RangeError`. Existing minimum-token requirements still apply: ROUGE-N needs at least `n` tokens, and ROUGE-S needs at least two. The standalone `sentenceSegment` utility retains its single-sentence fallback for whitespace-only input.
+The scorers reject empty or whitespace-only candidate/reference summaries with `RangeError`. For nonempty summaries, built-in ROUGE-N returns `0` when either side has fewer than `n` tokens, and built-in ROUGE-S does so below two. The exported `nGram()` and `skipBigram()` utilities stay strict; custom gram generators define their own short-input behavior. The standalone `sentenceSegment` utility retains its single-sentence fallback for whitespace-only input.
 
 These preprocessing corrections can change scores for multi-sentence summaries, colons, numeric commas, ellipses, and punctuation inside quotes or brackets. For example, `n("Alpha. Beta.", "Beta. Alpha.")` now returns `1` rather than `1/3`. Rerun affected baselines and keep the same tokenizer and segmenter configuration when comparing evaluation runs across versions.
 
@@ -123,7 +125,7 @@ These preprocessing corrections can change scores for multi-sentence summaries, 
 
 Omitted options and fields explicitly set to `undefined` use the documented defaults. Explicit `false`, `0`, and `Infinity` values are preserved where supported.
 
-`n` must be a positive integer. `maxSkip` must be a non-negative integer or positive `Infinity`. `beta` must be a non-negative finite number or positive `Infinity`; `NaN` is never valid. Invalid numeric options throw `RangeError` before tokenization or a zero-overlap return, including with custom gram generators. The public `nGram`, `skipBigram`, and `fMeasure` utilities enforce the same numeric contracts, and `fMeasure` requires finite precision and recall in `[0, 1]`. Large finite beta values produce finite scores.
+`n` must be a positive safe integer. `maxSkip` must be a non-negative integer or positive `Infinity`. `beta` must be a non-negative finite number or positive `Infinity`; `NaN` is never valid. Invalid numeric options throw `RangeError` before tokenization or a zero-overlap return, including with custom gram generators. The public `nGram`, `skipBigram`, and `fMeasure` utilities enforce the same numeric contracts, and `fMeasure` requires finite precision and recall in `[0, 1]`. Large finite beta values produce finite scores. The built-in `nGram()` rejects padded requests that would materialize more than one million padding-induced token positions; custom generators are unaffected.
 
 ### ROUGE-N Options
 
@@ -143,7 +145,10 @@ Omitted options and fields explicitly set to `undefined` use the documented defa
 | `caseSensitive` | boolean  | `true`        | Whether comparison is case-sensitive |
 | `tokenizer`     | function | Penn Treebank | Custom tokenizer function            |
 | `segmenter`     | function | built-in      | Custom sentence segmenter            |
-| `lcs`           | function | built-in      | Custom LCS function                  |
+| `lcs`           | function | built-in      | Value-returning LCS function         |
+| `lcsIndices`    | function | `undefined`   | Position-aware LCS function          |
+
+`lcs` and `lcsIndices` are mutually exclusive. Specifying both throws `RangeError`.
 
 ### ROUGE-S Options
 
@@ -158,6 +163,8 @@ Omitted options and fields explicitly set to `undefined` use the documented defa
 `maxSkip` measures the distance between token indices: `1` includes adjacent pairs, and `2` allows one intervening token. A value of `0` produces no pairs. To match a maximum gap of `d` intervening words in the ROUGE paper or Perl implementation, use `maxSkip: d + 1`. The default `Infinity` considers all in-order token pairs.
 
 ROUGE-N and ROUGE-S count repeated matching grams up to the smaller of their frequencies in the candidate and reference. Correcting earlier versions' set-based counting changes scores for repeated grams; rerun evaluation baselines when comparing versions.
+
+Built-in ROUGE-S scoring counts skip-bigram frequencies without allocating the full pair arrays. Calling the exported `skipBigram()` utility or supplying a custom `skipBigram` callback still materializes the callback's returned array.
 
 Built-in scoring preserves token boundaries even when custom tokenizers return tokens containing spaces, quotes, or separators. For example, `["new york", "city"]` and `["new", "york city"]` no longer count as the same bigram. The exported `nGram()` and `skipBigram()` utilities retain their readable, space-joined output strings; those strings are not collision-free identifiers for arbitrary token arrays. Custom gram generators still receive the original tokens and their returned strings are used as identities, so those callbacks remain responsible for any encoding they need.
 
@@ -222,7 +229,12 @@ const score: number = n("candidate text", "reference text", { n: 2 });
 Option interfaces are exported for typing your own functions and configurations:
 
 ```typescript
-import { n, RougeNOptions, RougeSOptions, RougeLOptions } from "js-rouge";
+import {
+  n,
+  type RougeNOptions,
+  type RougeSOptions,
+  type RougeLOptions,
+} from "js-rouge";
 
 // Type your options objects
 const opts: RougeNOptions = { n: 2, caseSensitive: false };
@@ -260,7 +272,8 @@ Have a bug or a feature request? [Please open a new issue](https://github.com/pr
 
 ## Contributing
 
-Please submit all pull requests against the main branch. All code should pass ESLint validation and tests.
+Please submit all pull requests against the main branch. All code should pass Biome validation and tests.
+Developing and testing locally requires Node.js 18.14 or later because Jest 30 sets that floor; the published package supports Node.js 18.0 or later.
 
 The amount of data available for writing tests is unfortunately woefully inadequate. We've tried to be as thorough as possible, but that eliminates neither the possibility of nor existence of errors. The gold standard is the DUC data-set, but that too is form-walled and legal-release-walled, which is infuriating. If you have data in the form of a candidate summary, reference(s), and a verified ROUGE score you do not mind sharing, we would love to add that to the test harness.
 

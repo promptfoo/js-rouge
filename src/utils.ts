@@ -75,6 +75,14 @@ function escapeRegExp(input: string): string {
 
 const abbrvReg = new RegExp(`\\b(${GATE_SUBSTITUTIONS.map(escapeRegExp).join('|')})[.!?] ?$`, 'i');
 const acronymReg = /[ |.][A-Z].?$/i;
+// Case mappings can add combining marks (for example, `İ` lowercases to `i` + dot above).
+const caseNeutralAcronymReg = /(?:^|[ |.])\p{Cased}\p{M}*.?$/u;
+const casedCharacterReg = /^\p{Cased}$/u;
+const upperOrTitleCaseLetterReg = /^[\p{Lu}\p{Lt}]$/u;
+const upperCaseReg = /^\p{Uppercase}$/u;
+// Recognize unambiguous page-reference forms: p. 10, p. (10), and p. #10.
+const pageNumberContinuationReg =
+  /^\s*(?:\(\s*\p{Number}+\s*\)|#\s*\p{Number}+|\p{Number}+)(?=\s|[.,;:!?)]|$)/u;
 const breakReg = /[\r\n]+/;
 // Match a bounded ellipsis suffix to avoid excessive backtracking.
 const ellipseReg = /\.{2,10}$/;
@@ -86,13 +94,15 @@ const closingBracketReg = /[\])}>]/;
 
 /** Keep merged fragments separate; boundary rules only need a suffix and word casing. */
 class SentenceBuffer {
+  readonly #caseNeutral: boolean;
   #parts: string[] = [];
   #normalizedThrough = 0;
   #words: { titleCase: boolean; lowerCase: boolean }[] = [];
   hasLineBreaks = false;
   startsWithTitleCase = false;
 
-  constructor(text: string) {
+  constructor(text: string, caseNeutral: boolean) {
+    this.#caseNeutral = caseNeutral;
     this.append(trimSpaces(text));
   }
 
@@ -125,13 +135,15 @@ class SentenceBuffer {
     const previous = this.#words.at(-1);
     for (const match of text.matchAll(/\S+/g)) {
       const word = match[0];
-      const lowerCase = word === word.toLowerCase();
+      const lowerCase = !this.#caseNeutral && word === word.toLowerCase();
       if (match.index === 0 && previous && !/\s/.test(this.#parts.at(-1)?.at(-1) ?? '')) {
         previous.lowerCase = previous.lowerCase && lowerCase;
       } else {
-        const titleCase = strIsTitleCase(word);
+        // Neutral line-wrap handling can recognize a leading letter without treating it as a
+        // title-cased name component.
+        const titleCase = !this.#caseNeutral && strIsTitleCase(word);
         if (this.empty) {
-          this.startsWithTitleCase = titleCase;
+          this.startsWithTitleCase = this.#caseNeutral ? startsWithCasedCharacter(word) : titleCase;
         }
         this.#words.push({ titleCase, lowerCase });
         if (this.#words.length > 2) {
@@ -189,22 +201,26 @@ class SentenceBuffer {
  *
  * @method sentenceSegment
  * @param  {string}         input     The document to be segmented
+ * @param  {Object}         options   Optional sentence-boundary behavior
  * @return {Array<string>}            An array of sentences
  */
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Sentence segmentation requires complex NLP logic
-export function sentenceSegment(input: string): string[] {
+export function sentenceSegment(
+  input: string,
+  { caseNeutral = false }: SentenceSegmentOptions = {},
+): string[] {
   if (input.length === 0) {
     return [];
   }
 
   // Scan terminals before applying abbreviation and line-wrap rules.
-  const chunks = sentenceChunks(input);
+  const chunks = sentenceChunks(input, caseNeutral);
 
   const acc: string[] = [];
   let pending: SentenceBuffer | undefined;
   for (let idx = 0; idx < chunks.length; idx++) {
     if (pending || chunks[idx]) {
-      const chunk = pending ?? new SentenceBuffer(chunks[idx]);
+      const chunk = pending ?? new SentenceBuffer(chunks[idx], caseNeutral);
       pending = undefined;
       // Trim only spaces (i.e. preserve line breaks/carriage feeds)
       chunk.trimEnd();
@@ -213,6 +229,10 @@ export function sentenceSegment(input: string): string[] {
       if (chunk.empty) {
         continue;
       }
+
+      const suffix = chunk.suffix;
+      const gateSuffix = caseNeutral ? suffix.toLowerCase() : suffix;
+      const lastWord = suffix.match(/\S+$/)?.[0] ?? '';
 
       if (chunk.hasLineBreaks) {
         if (chunks[idx + 1] && chunk.startsWithTitleCase) {
@@ -232,9 +252,12 @@ export function sentenceSegment(input: string): string[] {
             }
           }
         }
-      } else if (chunks[idx + 1] && abbrvReg.test(chunk.suffix)) {
+      } else if (chunks[idx + 1] && abbrvReg.test(gateSuffix)) {
         const nextChunk = chunks[idx + 1];
-        if (strIsTitleCase(nextChunk) && !excepReg.test(chunk.suffix)) {
+        if (
+          (caseNeutral ? startsWithCasedCharacter(nextChunk) : strIsTitleCase(nextChunk)) &&
+          !excepReg.test(gateSuffix)
+        ) {
           // Catch abbreviations followed by a capital letter and treat as a boundary.
           acc.push(chunk.text());
         } else {
@@ -242,26 +265,37 @@ export function sentenceSegment(input: string): string[] {
           chunk.append(` ${trimSpaces(nextChunk.replace(/ +/g, ' '))}`);
           pending = chunk;
         }
-      } else if (chunks[idx + 1] && acronymReg.test(chunk.suffix)) {
-        if (chunk.lastWordIsLowerCase) {
+      } else if (chunks[idx + 1] && matchesAcronymSuffix(suffix, lastWord, caseNeutral)) {
+        const nextSentence = chunks[idx + 2];
+        if (caseNeutral) {
+          const continuation = nextSentence || chunks[idx + 1];
+          if (isPageNumberContinuation(lastWord, continuation)) {
+            // Preserve the p./P. page-number convention without treating every initial alike.
+            chunk.append(chunks[idx + 1].replace(/\s+/g, ' ') + (nextSentence || ''));
+            pending = chunk;
+            if (nextSentence) {
+              idx++;
+            }
+          } else {
+            // Casing cannot distinguish a name initial from an ordinary sentence boundary.
+            acc.push(chunk.text());
+          }
+        } else if (chunk.lastWordIsLowerCase) {
           // Catch small-letter abbreviations and merge them.
           chunk.append(` ${chunks[idx + 1].replace(/ +/g, ' ')}`);
           pending = chunk;
+        } else if (nextSentence && chunk.previousWordIsTitleCase && strIsTitleCase(nextSentence)) {
+          // Catch name abbreviations (e.g. Albert I. Jones) by checking if
+          // the previous and next words are all capitalized. Normalize line
+          // wrapping in the separator so it cannot split the joined name again.
+          chunk.append(chunks[idx + 1].replace(/\s+/g, ' ') + nextSentence);
+          pending = chunk;
+          idx++;
         } else {
-          const nextSentence = chunks[idx + 2];
-          if (nextSentence && chunk.previousWordIsTitleCase && strIsTitleCase(nextSentence)) {
-            // Catch name abbreviations (e.g. Albert I. Jones) by checking if
-            // the previous and next words are all capitalized. Normalize line
-            // wrapping in the separator so it cannot split the joined name again.
-            chunk.append(chunks[idx + 1].replace(/\s+/g, ' ') + nextSentence);
-            pending = chunk;
-            idx++;
-          } else {
-            // Retain a boundary for other entities and unterminated final fragments.
-            acc.push(chunk.text());
-          }
+          // Retain a boundary for other entities and unterminated final fragments.
+          acc.push(chunk.text());
         }
-      } else if (chunks[idx + 1] && ellipseReg.test(chunk.suffix)) {
+      } else if (chunks[idx + 1] && ellipseReg.test(suffix)) {
         // Catch mid-sentence ellipses (and their derivatives) and merge them
         const nextChunk = chunks[idx + 1];
         chunk.append(nextChunk.replace(/ +/g, ' '));
@@ -281,8 +315,14 @@ export function sentenceSegment(input: string): string[] {
   return acc.length === 0 ? [input] : acc;
 }
 
+/** Options for rule-based sentence segmentation. */
+export interface SentenceSegmentOptions {
+  /** Ignore letter casing when applying sentence-boundary heuristics (default: false). */
+  caseNeutral?: boolean;
+}
+
 /** Scan sentence boundaries once, preserving the former captured-split layout. */
-function sentenceChunks(input: string): string[] {
+function sentenceChunks(input: string, caseNeutral: boolean): string[] {
   const chunks: string[] = [];
   let lastEnd = 0;
   let start = -1;
@@ -315,7 +355,7 @@ function sentenceChunks(input: string): string[] {
       continue;
     }
     if (char === '.' || char === '?' || char === '!') {
-      const end = sentenceEnd(input, index, insideQuotes, brackets);
+      const end = sentenceEnd(input, index, insideQuotes, brackets, caseNeutral);
       if (end === -1) {
         continue;
       }
@@ -365,6 +405,7 @@ function sentenceEnd(
   index: number,
   insideQuotes: boolean,
   brackets: { depth: number; standalone: boolean },
+  caseNeutral: boolean,
 ): number {
   const end = closingDelimiterEnd(input, index, insideQuotes);
   if (end < input.length && !/\s/.test(input[end])) {
@@ -395,16 +436,18 @@ function sentenceEnd(
   if (next === input.length) {
     return end;
   }
-  if (!charIsUpperCase(input[next])) {
+  const nextCharacter = characterAt(input, next);
+  if (!(caseNeutral ? isCasedCharacter(nextCharacter) : charIsUpperCase(nextCharacter))) {
     return -1;
   }
 
   const suffix = input.slice(Math.max(0, index + 1 - sentenceSuffixLength), index + 1);
+  const gateSuffix = caseNeutral ? suffix.toLowerCase() : suffix;
   // Keep bracketed ellipses inside the surrounding sentence.
   if (ellipseReg.test(suffix) && closedBrackets > 0) {
     return -1;
   }
-  return abbrvReg.test(suffix) && excepReg.test(suffix) ? -1 : end;
+  return abbrvReg.test(gateSuffix) && excepReg.test(gateSuffix) ? -1 : end;
 }
 
 function trimSpaces(input: string): string {
@@ -430,7 +473,7 @@ function trimEndSpaces(input: string): string {
  * @return {boolean}              True if the string is titlecase and false otherwise
  */
 export function strIsTitleCase(input: string): boolean {
-  const firstChar = input.trim().slice(0, 1);
+  const firstChar = characterAt(input.trim(), 0);
   return firstChar.length > 0 && charIsUpperCase(firstChar);
 }
 
@@ -441,73 +484,61 @@ export function strIsTitleCase(input: string): boolean {
  * @return {boolean}            True if the character is uppercase and false otherwise.
  */
 export function charIsUpperCase(input: string): boolean {
-  if (input.length !== 1) {
+  const value = characterAt(input, 0);
+  if (value.length === 0 || value.length !== input.length) {
     throw new RangeError('Input should be a single character');
   }
 
-  // Use locale-aware comparison to support international characters
-  return input.toUpperCase() === input && input.toLowerCase() !== input;
+  // Some Uppercase-property symbols have no JavaScript case mapping; preserve the legacy result.
+  return (
+    upperOrTitleCaseLetterReg.test(value) ||
+    (upperCaseReg.test(value) && value.toUpperCase() === value && value.toLowerCase() !== value)
+  );
+}
+
+function characterAt(input: string, index: number): string {
+  const codePoint = input.codePointAt(index);
+  return codePoint === undefined ? '' : String.fromCodePoint(codePoint);
+}
+
+function isCasedCharacter(input: string): boolean {
+  return casedCharacterReg.test(input);
+}
+
+function matchesAcronymSuffix(suffix: string, lastWord: string, caseNeutral: boolean): boolean {
+  return caseNeutral ? caseNeutralAcronymReg.test(lastWord) : acronymReg.test(suffix);
+}
+
+function isPageNumberContinuation(lastWord: string, nextSentence: string): boolean {
+  return lastWord.toLowerCase() === 'p.' && pageNumberContinuationReg.test(nextSentence);
+}
+
+function startsWithCasedCharacter(input: string): boolean {
+  return isCasedCharacter(characterAt(input.trim(), 0));
 }
 
 /**
- * Memoizes a function using a Map
+ * Computes the factorial of an integer from 0 through 170.
  *
- * **Memory Warning**: The cache is unbounded and will grow indefinitely for unique inputs.
- * In long-running processes with many unique inputs, consider using a bounded cache
- * implementation (e.g., LRU cache) or periodically clearing the memoized function.
+ * Values above 170 are rejected because their factorials overflow
+ * JavaScript's finite number range.
  *
- * @method memoize
- * @param  {Function} func    The function to be memoized
- * @param  {Function} Store   The data store constructor. Defaults to the ES6-inbuilt Map function.
- *                            A store should implement `has`, `get`, and `set` methods.
- * @return {Function}         A closure of the memoization cache and the original function
+ * @method fact
+ * @param  {number} x     The integer for which the factorial is to be computed
+ * @return {number}       The finite factorial result
  */
-function memoize<T, R>(func: (arg: T) => R, Store: new () => Map<T, R> = Map): (arg: T) => R {
-  return (() => {
-    const cache = new Store();
-
-    return (n: T) => {
-      if (cache.has(n)) {
-        const cachedResult = cache.get(n);
-        if (cachedResult !== undefined) {
-          return cachedResult;
-        }
-      }
-      const result = func(n);
-      cache.set(n, result);
-      return result;
-    };
-  })();
-}
-
-/**
- * Computes the factorial of a number.
- *
- * This function uses a tail-recursive call to avoid
- * blowing the stack when computing inputs with a large
- * recursion depth.
- *
- * @method factRec
- * @param  {number} x     The number for which the factorial is to be computed
- * @param  {number} acc   The starting value for the computation. Defaults to 1.
- * @return {number}       The factorial result
- */
-function factRec(x: number, acc = 1): number {
-  if (x < 0) {
-    throw new RangeError('Input must be a positive number');
+export function fact(x: number): number {
+  if (!Number.isInteger(x) || x < 0 || x > 170) {
+    throw new RangeError('Input must be an integer between 0 and 170');
   }
-  return x < 2 ? acc : factRec(x - 1, x * acc);
-}
 
-/**
- * Memoized factorial function.
- *
- * **Memory Note**: Results are cached indefinitely. In typical ROUGE usage,
- * factorial is called with small values (≤20) so memory impact is negligible.
- * The cache size is bounded by the range of valid factorial inputs that don't
- * overflow JavaScript's number type (approximately n ≤ 170).
- */
-export const fact = memoize(factRec);
+  let result = 1;
+  // Preserve the floating-point multiplication order of the former recursive implementation.
+  for (let factor = x; factor >= 2; factor--) {
+    result *= factor;
+  }
+  return result;
+}
 
 /**
  * Returns the skip bigrams for an array of word tokens.
@@ -546,6 +577,8 @@ export const NGRAM_DEFAULT_OPTS: NGramOptions = {
   val: '<S>',
 };
 
+const MAX_NGRAM_PADDING_WORK = 1_000_000;
+
 /**
  * Returns n-grams for an array of word tokens.
  *
@@ -558,36 +591,34 @@ export const NGRAM_DEFAULT_OPTS: NGramOptions = {
 export function nGram(tokens: string[], n = 2, pad: Partial<NGramOptions> = {}): string[] {
   validateNGramSize(n);
 
-  if (tokens.length < n) {
+  const start = pad.start ?? NGRAM_DEFAULT_OPTS.start;
+  const end = pad.end ?? NGRAM_DEFAULT_OPTS.end;
+  const value = pad.val ?? NGRAM_DEFAULT_OPTS.val;
+  const paddingSize = n - 1;
+  const startPaddingSize = start ? paddingSize : 0;
+  const endPaddingSize = end ? paddingSize : 0;
+  const paddingLength = startPaddingSize + endPaddingSize;
+  const paddedLength = tokens.length + paddingLength;
+  if (paddedLength < n) {
     throw new RangeError('ngram size cannot be larger than the number of tokens available');
   }
 
-  let workingTokens = tokens;
-
-  if (Object.keys(pad).length > 0) {
-    const config = {
-      start: pad.start ?? NGRAM_DEFAULT_OPTS.start,
-      end: pad.end ?? NGRAM_DEFAULT_OPTS.end,
-      val: pad.val ?? NGRAM_DEFAULT_OPTS.val,
-    };
-
-    // Clone the input token array to avoid mutating the source data
-    workingTokens = tokens.slice();
-
-    if (config.start) {
-      for (let i = 0; i < n - 1; i++) {
-        workingTokens.unshift(config.val);
-      }
-    }
-    if (config.end) {
-      for (let i = 0; i < n - 1; i++) {
-        workingTokens.push(config.val);
-      }
-    }
+  const gramCount = paddedLength - n + 1;
+  const unpaddedGramCount = Math.max(tokens.length - n + 1, 0);
+  const paddingWork = paddingLength + n * (gramCount - unpaddedGramCount);
+  if (
+    paddingLength > 0 &&
+    (!Number.isSafeInteger(paddingWork) || paddingWork > MAX_NGRAM_PADDING_WORK)
+  ) {
+    throw new RangeError('Padded n-gram generation exceeds the materialization limit');
   }
 
+  const startPadding = new Array<string>(startPaddingSize).fill(value);
+  const endPadding = new Array<string>(endPaddingSize).fill(value);
+  const workingTokens = paddingLength === 0 ? tokens : startPadding.concat(tokens, endPadding);
+
   const acc: string[] = [];
-  for (let idx = 0; idx < workingTokens.length - n + 1; idx++) {
+  for (let idx = 0; idx < gramCount; idx++) {
     acc.push(workingTokens.slice(idx, idx + n).join(' '));
   }
 
@@ -603,10 +634,14 @@ export function nGram(tokens: string[], n = 2, pad: Partial<NGramOptions> = {}):
  * @return {number}         The number of ways in which 2 items can be chosen from `val`
  */
 export function comb2(val: number): number {
-  if (val < 2) {
-    throw new RangeError('Input must be greater than 2');
+  if (!Number.isSafeInteger(val) || val < 2) {
+    throw new RangeError('Input must be a safe integer greater than or equal to 2');
   }
-  return 0.5 * val * (val - 1);
+  const result = (val * (val - 1)) / 2;
+  if (!Number.isSafeInteger(result)) {
+    throw new RangeError('Result exceeds Number.MAX_SAFE_INTEGER');
+  }
+  return result;
 }
 
 /**
@@ -650,18 +685,22 @@ export function jackKnife(
     throw new RangeError('Candidate array must contain more than one element');
   }
 
-  const pairs: number[] = cands.map((c) => func(c, ref));
+  const scores = cands.map((candidate) => func(candidate, ref));
 
-  const acc: number[] = [];
-  for (let idx = 0; idx < pairs.length; idx++) {
-    // Clone the array and remove one element
-    const leaveOneOut = pairs.slice(0);
-    leaveOneOut.splice(idx, 1);
-
-    acc.push(Math.max(...leaveOneOut));
+  const suffixMax = new Array<number>(scores.length + 1);
+  suffixMax[scores.length] = Number.NEGATIVE_INFINITY;
+  for (let idx = scores.length - 1; idx >= 0; idx--) {
+    suffixMax[idx] = Math.max(suffixMax[idx + 1], scores[idx]);
   }
 
-  return test(acc);
+  const leaveOneOutMaxima = new Array<number>(scores.length);
+  let prefixMax = Number.NEGATIVE_INFINITY;
+  for (let idx = 0; idx < scores.length; idx++) {
+    leaveOneOutMaxima[idx] = Math.max(prefixMax, suffixMax[idx + 1]);
+    prefixMax = Math.max(prefixMax, scores[idx]);
+  }
+
+  return test(leaveOneOutMaxima);
 }
 
 /**
@@ -672,7 +711,7 @@ export function jackKnife(
  * F_β = ((1 + β²) × P × R) / (β² × P + R)
  *
  * Beta controls the tradeoff between precision and recall:
- * - beta = 0: Pure precision (F₀ = P)
+ * - beta = 0: Pure precision when recall is positive; zero when recall is zero
  * - beta = 1: F1 score (harmonic mean, equal weight)
  * - beta = 2: F2 score (weighs recall twice as much as precision)
  * - beta = Infinity: Pure recall
