@@ -302,14 +302,8 @@ describe('Utility Functions', () => {
       expect(ss('Use etc. Ⅰ begins.')).toEqual(['Use etc.', 'Ⅰ begins.']);
       expect(ss('Use etc. Ⓐ begins.')).toEqual(['Use etc.', 'Ⓐ begins.']);
       expect(ss('Use etc. 𝐀 begins.')).toEqual(['Use etc.', '𝐀 begins.']);
-      expect(ss('Use etc. 𝐀 begins.', { caseNeutral: true })).toEqual([
-        'Use etc.',
-        '𝐀 begins.',
-      ]);
-      expect(ss('Use etc. 𝐚 begins.', { caseNeutral: true })).toEqual([
-        'Use etc.',
-        '𝐚 begins.',
-      ]);
+      expect(ss('Use etc. 𝐀 begins.', { caseNeutral: true })).toEqual(['Use etc.', '𝐀 begins.']);
+      expect(ss('Use etc. 𝐚 begins.', { caseNeutral: true })).toEqual(['Use etc.', '𝐚 begins.']);
     });
 
     test('should offer case-neutral boundary classification without changing text', () => {
