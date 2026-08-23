@@ -302,6 +302,15 @@ describe('Utility Functions', () => {
       ]);
     });
 
+    test('should classify Unicode name initials without changing the default path', () => {
+      const kelvinSign = 'Albert \u212a. Jones left.';
+      const lowerCase = kelvinSign.toLowerCase();
+      expect(ss(kelvinSign)).toEqual(['Albert \u212a.', 'Jones left.']);
+      expect(ss(lowerCase)).toEqual([lowerCase]);
+      expect(ss(kelvinSign, { caseNeutral: true })).toEqual([kelvinSign]);
+      expect(ss(lowerCase, { caseNeutral: true })).toEqual([lowerCase]);
+    });
+
     test('should split end-of-sentence question marks', () => {
       expect(ss('What is your name? My name is Jonas.')).toEqual([
         'What is your name?',
@@ -1562,6 +1571,15 @@ describe('Core Functions', () => {
       const lowerCase = mixedCase.toLowerCase();
       expect(score(mixedCase, lowerCase)).toBeCloseTo(caseSensitiveScore);
       expect(score(mixedCase, lowerCase, { caseSensitive: false })).toBe(1);
+    });
+
+    test.each([
+      ['ROUGE-N', n],
+      ['ROUGE-S', s],
+      ['ROUGE-L', l],
+    ] as const)('%s treats Unicode name-initial casing neutrally', (_name, score) => {
+      const mixedCase = 'Albert \u212a. Jones left.';
+      expect(score(mixedCase, mixedCase.toLowerCase(), { caseSensitive: false })).toBe(1);
     });
 
     test('ROUGE-L passes original text to custom segmenters before case folding', () => {

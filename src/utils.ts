@@ -75,6 +75,7 @@ function escapeRegExp(input: string): string {
 
 const abbrvReg = new RegExp(`\\b(${GATE_SUBSTITUTIONS.map(escapeRegExp).join('|')})[.!?] ?$`, 'i');
 const acronymReg = /[ |.][A-Z].?$/i;
+const caseNeutralAcronymReg = /[ |.]\p{Cased}.?$/u;
 const breakReg = /[\r\n]+/;
 // Match a bounded ellipsis suffix to avoid excessive backtracking.
 const ellipseReg = /\.{2,10}$/;
@@ -251,7 +252,7 @@ export function sentenceSegment(
           chunk.append(` ${trimSpaces(nextChunk.replace(/ +/g, ' '))}`);
           pending = chunk;
         }
-      } else if (chunks[idx + 1] && acronymReg.test(chunk.suffix)) {
+      } else if (chunks[idx + 1] && matchesAcronymSuffix(chunk.suffix, caseNeutral)) {
         if (chunk.lastWordIsLowerCase) {
           // Catch small-letter abbreviations and merge them.
           chunk.append(` ${chunks[idx + 1].replace(/ +/g, ' ')}`);
@@ -478,6 +479,10 @@ function characterAt(input: string, index: number): string {
 
 function isCasedCharacter(input: string): boolean {
   return input.toUpperCase() !== input.toLowerCase();
+}
+
+function matchesAcronymSuffix(input: string, caseNeutral: boolean): boolean {
+  return (caseNeutral ? caseNeutralAcronymReg : acronymReg).test(input);
 }
 
 function startsWithCasedCharacter(input: string): boolean {
