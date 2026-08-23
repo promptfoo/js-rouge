@@ -77,6 +77,7 @@ const abbrvReg = new RegExp(`\\b(${GATE_SUBSTITUTIONS.map(escapeRegExp).join('|'
 const acronymReg = /[ |.][A-Z].?$/i;
 // Case mappings can add combining marks (for example, `İ` lowercases to `i` + dot above).
 const caseNeutralAcronymReg = /(?:^|[ |.])\p{Cased}\p{M}*.?$/u;
+const numericContinuationReg = /^\s*\p{Number}/u;
 const breakReg = /[\r\n]+/;
 // Match a bounded ellipsis suffix to avoid excessive backtracking.
 const ellipseReg = /\.{2,10}$/;
@@ -141,14 +142,16 @@ class SentenceBuffer {
     const previous = this.#words.at(-1);
     for (const match of text.matchAll(/\S+/g)) {
       const word = match[0];
-      const lowerCase = this.#caseNeutral ? !hasCasedCharacter(word) : word === word.toLowerCase();
+      const lowerCase = !this.#caseNeutral && word === word.toLowerCase();
       if (match.index === 0 && previous && !/\s/.test(this.#parts.at(-1)?.at(-1) ?? '')) {
         previous.lowerCase = previous.lowerCase && lowerCase;
         this.#trackLastWord(word, true);
       } else {
-        const titleCase = this.#caseNeutral ? startsWithCasedCharacter(word) : strIsTitleCase(word);
+        // Neutral line-wrap handling can recognize a leading letter without treating it as a
+        // title-cased name component.
+        const titleCase = !this.#caseNeutral && strIsTitleCase(word);
         if (this.empty) {
-          this.startsWithTitleCase = titleCase;
+          this.startsWithTitleCase = this.#caseNeutral ? startsWithCasedCharacter(word) : titleCase;
         }
         this.#words.push({ titleCase, lowerCase });
         this.#trackLastWord(word, false);
@@ -271,27 +274,31 @@ export function sentenceSegment(
         chunks[idx + 1] &&
         matchesAcronymSuffix(chunk.suffix, chunk.lastWord, caseNeutral)
       ) {
-        if (chunk.lastWordIsLowerCase) {
-          // Catch small-letter abbreviations and merge them.
-          chunk.append(` ${chunks[idx + 1].replace(/ +/g, ' ')}`);
-          pending = chunk;
-        } else {
-          const nextSentence = chunks[idx + 2];
-          if (
-            nextSentence &&
-            chunk.previousWordIsTitleCase &&
-            (caseNeutral ? startsWithCasedCharacter(nextSentence) : strIsTitleCase(nextSentence))
-          ) {
-            // Catch name abbreviations (e.g. Albert I. Jones) by checking if
-            // the previous and next words are all capitalized. Normalize line
-            // wrapping in the separator so it cannot split the joined name again.
+        const nextSentence = chunks[idx + 2];
+        if (caseNeutral) {
+          if (nextSentence && numericContinuationReg.test(nextSentence)) {
+            // A singleton abbreviation before a number is a continuation regardless of casing.
             chunk.append(chunks[idx + 1].replace(/\s+/g, ' ') + nextSentence);
             pending = chunk;
             idx++;
           } else {
-            // Retain a boundary for other entities and unterminated final fragments.
+            // Casing cannot distinguish a name initial from an ordinary sentence boundary.
             acc.push(chunk.text());
           }
+        } else if (chunk.lastWordIsLowerCase) {
+          // Catch small-letter abbreviations and merge them.
+          chunk.append(` ${chunks[idx + 1].replace(/ +/g, ' ')}`);
+          pending = chunk;
+        } else if (nextSentence && chunk.previousWordIsTitleCase && strIsTitleCase(nextSentence)) {
+          // Catch name abbreviations (e.g. Albert I. Jones) by checking if
+          // the previous and next words are all capitalized. Normalize line
+          // wrapping in the separator so it cannot split the joined name again.
+          chunk.append(chunks[idx + 1].replace(/\s+/g, ' ') + nextSentence);
+          pending = chunk;
+          idx++;
+        } else {
+          // Retain a boundary for other entities and unterminated final fragments.
+          acc.push(chunk.text());
         }
       } else if (chunks[idx + 1] && ellipseReg.test(chunk.suffix)) {
         // Catch mid-sentence ellipses (and their derivatives) and merge them
@@ -506,15 +513,6 @@ function matchesAcronymSuffix(suffix: string, lastWord: string, caseNeutral: boo
 function startsWithCasedCharacter(input: string): boolean {
   const firstChar = input.trim()[Symbol.iterator]().next();
   return !firstChar.done && isCasedCharacter(firstChar.value);
-}
-
-function hasCasedCharacter(input: string): boolean {
-  for (const character of input) {
-    if (isCasedCharacter(character)) {
-      return true;
-    }
-  }
-  return false;
 }
 
 /**

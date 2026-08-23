@@ -307,8 +307,8 @@ describe('Utility Functions', () => {
       const lowerCase = kelvinSign.toLowerCase();
       expect(ss(kelvinSign)).toEqual(['Albert \u212a.', 'Jones left.']);
       expect(ss(lowerCase)).toEqual([lowerCase]);
-      expect(ss(kelvinSign, { caseNeutral: true })).toEqual([kelvinSign]);
-      expect(ss(lowerCase, { caseNeutral: true })).toEqual([lowerCase]);
+      expect(ss(kelvinSign, { caseNeutral: true })).toEqual(['Albert \u212a.', 'Jones left.']);
+      expect(ss(lowerCase, { caseNeutral: true })).toEqual(['albert k.', 'jones left.']);
     });
 
     test('should keep case-expanding initials consistent without changing the default path', () => {
@@ -317,8 +317,8 @@ describe('Utility Functions', () => {
       expect(lowerCase).toBe('albert i\u0307. jones left.');
       expect(ss(dottedI)).toEqual(['Albert \u0130.', 'Jones left.']);
       expect(ss(lowerCase)).toEqual(['albert i\u0307.', 'jones left.']);
-      expect(ss(dottedI, { caseNeutral: true })).toEqual([dottedI]);
-      expect(ss(lowerCase, { caseNeutral: true })).toEqual([lowerCase]);
+      expect(ss(dottedI, { caseNeutral: true })).toEqual(['Albert \u0130.', 'Jones left.']);
+      expect(ss(lowerCase, { caseNeutral: true })).toEqual(['albert i\u0307.', 'jones left.']);
     });
 
     test.each([
@@ -329,10 +329,32 @@ describe('Utility Functions', () => {
       'I\u20dd',
       '\u{10400}\u0307',
     ])('should treat combining marks as part of a case-neutral initial: %s', (initial) => {
-      const text = `Albert ${initial}. Jones left.`;
+      const firstSentence = `Albert ${initial}.`;
+      const text = `${firstSentence} Jones left.`;
       const lowerCase = text.toLowerCase();
-      expect(ss(text, { caseNeutral: true })).toEqual([text]);
+      expect(ss(text, { caseNeutral: true })).toEqual([firstSentence, 'Jones left.']);
+      expect(ss(lowerCase, { caseNeutral: true })).toEqual([
+        firstSentence.toLowerCase(),
+        'jones left.',
+      ]);
+    });
+
+    test('should split ambiguous singleton initials consistently in case-neutral mode', () => {
+      const mixedCase = 'We chose option A. Next step.';
+      const lowerCase = mixedCase.toLowerCase();
+      expect(ss(mixedCase)).toEqual(['We chose option A.', 'Next step.']);
+      expect(ss(lowerCase)).toEqual([lowerCase]);
+      expect(ss(mixedCase, { caseNeutral: true })).toEqual(['We chose option A.', 'Next step.']);
+      expect(ss(lowerCase, { caseNeutral: true })).toEqual(['we chose option a.', 'next step.']);
+    });
+
+    test('should retain numeric continuations case-neutrally without changing the default path', () => {
+      const lowerCase = 'Please turn to p. 10 for details.';
+      const upperCase = 'Please turn to P. 10 for details.';
+      expect(ss(lowerCase)).toEqual([lowerCase]);
+      expect(ss(upperCase)).toEqual(['Please turn to P.', '10 for details.']);
       expect(ss(lowerCase, { caseNeutral: true })).toEqual([lowerCase]);
+      expect(ss(upperCase, { caseNeutral: true })).toEqual([upperCase]);
     });
 
     test('should split end-of-sentence question marks', () => {
@@ -1616,6 +1638,36 @@ describe('Core Functions', () => {
     ] as const)('%s handles lowercase expansions in name initials', (_name, score) => {
       const mixedCase = 'Albert \u0130. Jones left.';
       expect(score(mixedCase, mixedCase.toLowerCase(), { caseSensitive: false })).toBe(1);
+    });
+
+    test.each([
+      ['ROUGE-N', n],
+      ['ROUGE-L', l],
+    ] as const)(
+      '%s preserves reordered singleton-initial boundaries case-insensitively',
+      (_name, score) => {
+        const reference = 'We chose option A. Next step.';
+        const candidate = 'Next step. We chose option A.';
+        expect(score(candidate, reference)).toBe(1);
+        expect(score(candidate, reference, { caseSensitive: false })).toBe(1);
+      },
+    );
+
+    test.each(['p', 'P'])('ROUGE-N retains %s. before a numeric continuation', (letter) => {
+      const summary = `Please see ${letter}. 10 for details.`;
+      expect(n('p', summary, { caseSensitive: false })).toBe(0);
+
+      const nGram = jest.fn((tokens: string[]): string[] => tokens);
+      expect(
+        n(summary, 'please see p . 10 for details .', {
+          caseSensitive: false,
+          nGram,
+        }),
+      ).toBe(0.8);
+      expect(nGram.mock.calls).toEqual([
+        [['please', 'see', 'p.', '10', 'for', 'details', '.'], 1],
+        [['please', 'see', 'p', '.', '10', 'for', 'details', '.'], 1],
+      ]);
     });
 
     test('ROUGE-L passes original text to custom segmenters before case folding', () => {
