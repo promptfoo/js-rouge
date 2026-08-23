@@ -41,10 +41,8 @@ export interface RougeLOptions {
   /**
    * Custom LCS function returning an ordered token subsequence.
    *
-   * Returned values must identify a unique sequence of reference positions. Use
-   * `lcsIndices` when repeated reference tokens make that alignment ambiguous.
-   *
-   * @deprecated Prefer `lcsIndices`, which preserves reference positions directly.
+   * Returned values are aligned to successive reference occurrences from left to
+   * right. Use `lcsIndices` to select exact positions when the reference repeats tokens.
    */
   lcs?: (a: string[], b: string[]) => string[];
   /** Custom LCS function returning exact, strictly increasing reference indices */
@@ -314,7 +312,7 @@ function matchedReferenceIndices(
     return builtInLcsIndices(candidate, reference);
   }
 
-  return alignUniqueReferenceIndices(candidate, reference, getLcs(candidate, reference));
+  return alignReferenceIndices(candidate, reference, getLcs(candidate, reference));
 }
 
 function validateCustomLcsIndices(
@@ -354,7 +352,7 @@ function validateCustomLcsIndices(
   return indices;
 }
 
-function alignUniqueReferenceIndices(
+function alignReferenceIndices(
   candidate: string[],
   reference: string[],
   result: string[],
@@ -374,7 +372,7 @@ function alignUniqueReferenceIndices(
     throw new RangeError('Custom lcs must return a common subsequence of candidate and reference');
   }
 
-  const earliest: number[] = [];
+  const indices: number[] = [];
   let next = 0;
   for (const token of tokens) {
     const index = reference.indexOf(token, next);
@@ -383,25 +381,10 @@ function alignUniqueReferenceIndices(
         'Custom lcs must return a common subsequence of candidate and reference',
       );
     }
-    earliest.push(index);
+    indices.push(index);
     next = index + 1;
   }
-
-  const latest = new Array<number>(tokens.length);
-  let before = reference.length;
-  for (let i = tokens.length - 1; i >= 0; i--) {
-    const index = reference.lastIndexOf(tokens[i], before - 1);
-    latest[i] = index;
-    before = index;
-  }
-  for (let i = 0; i < earliest.length; i++) {
-    if (earliest[i] !== latest[i]) {
-      throw new RangeError(
-        'Custom lcs returned tokens with ambiguous reference positions; use lcsIndices to return exact reference indices',
-      );
-    }
-  }
-  return earliest;
+  return indices;
 }
 
 function isSubsequence(tokens: string[], sequence: string[]): boolean {

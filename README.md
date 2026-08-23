@@ -79,7 +79,7 @@ rougeL(candidate, reference); // => 0.75
 
 The exported `lcs(a, b)` utility still returns token values. For position-aware customization, use `lcsIndices`: the callback receives candidate and reference sentence-token arrays and returns the exact, strictly increasing reference indices selected by the match. The selected reference tokens must form a subsequence of the candidate.
 
-The legacy `lcs` callback remains supported when its ordered token subsequence identifies exactly one sequence of reference positions. When repeated reference tokens make those positions ambiguous, `l()` throws `RangeError` instead of guessing; use `lcsIndices` to provide the intended alignment. The built-in implementation retains the exact reference positions from its LCS alignment.
+The value-returning `lcs` callback remains supported and aligns its ordered token subsequence to successive reference occurrences from left to right. This preserves the existing callback behavior when repeated reference tokens admit more than one alignment. Use `lcsIndices` to provide a different exact alignment. The built-in implementation retains the exact reference positions from its LCS alignment.
 
 These corrections change ROUGE-L scores for repeated words and multi-sentence summaries. Rerun evaluation baselines when comparing versions.
 
@@ -145,7 +145,7 @@ Omitted options and fields explicitly set to `undefined` use the documented defa
 | `caseSensitive` | boolean  | `true`        | Whether comparison is case-sensitive |
 | `tokenizer`     | function | Penn Treebank | Custom tokenizer function            |
 | `segmenter`     | function | built-in      | Custom sentence segmenter            |
-| `lcs`           | function | built-in      | Legacy value-returning LCS function  |
+| `lcs`           | function | built-in      | Value-returning LCS function         |
 | `lcsIndices`    | function | `undefined`   | Position-aware LCS function          |
 
 ### ROUGE-S Options

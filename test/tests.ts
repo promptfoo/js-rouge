@@ -1487,11 +1487,9 @@ describe('Core Functions', () => {
       expect(l('a a a', 'a a', { lcs: customLcs })).toBeCloseTo(4 / 5);
     });
 
-    test('should reject ambiguous reference positions from a value-only LCS callback', () => {
+    test('should preserve left-to-right alignment for value-only LCS callbacks', () => {
       const customLcs = (a: string[], b: string[]): string[] => rouge.lcs(a, b);
-      expect(() => l('a\nb a', 'a b a', { lcs: customLcs })).toThrow(
-        /ambiguous reference positions.*lcsIndices/,
-      );
+      expect(l('a\nb a', 'a b a', { lcs: customLcs })).toBe(1);
     });
 
     test('should use exact reference positions from a custom LCS-index callback', () => {
@@ -1510,14 +1508,24 @@ describe('Core Functions', () => {
       ).toThrow(/cannot specify both lcs and lcsIndices/);
     });
 
-    test.each([
-      [-1],
-      [2],
-      [0.5],
-      [0, 0],
-      [1, 0],
-    ])('should reject malformed custom LCS indices: %j', (indices) => {
-      expect(() => l('a b', 'a b', { lcsIndices: () => indices })).toThrow(RangeError);
+    test('should reject a non-array custom LCS-index result', () => {
+      const customLcsIndices = (): number[] => 'not an array' as unknown as number[];
+      expect(() => l('a b', 'a b', { lcsIndices: customLcsIndices })).toThrow(
+        /must return an array/,
+      );
+    });
+
+    const malformedIndexResults = [
+      { name: 'negative out-of-range index', indices: [-1] },
+      { name: 'upper out-of-range index', indices: [2] },
+      { name: 'fractional index', indices: [0.5] },
+      { name: 'duplicate indices', indices: [0, 0] },
+      { name: 'descending indices', indices: [1, 0] },
+    ];
+    test.each(malformedIndexResults)('should reject $name', ({ indices }) => {
+      expect(() => l('a b', 'a b', { lcsIndices: () => indices })).toThrow(
+        /strictly increasing integer indices within the reference/,
+      );
     });
 
     test('should reject custom LCS indices whose tokens are not a candidate subsequence', () => {
