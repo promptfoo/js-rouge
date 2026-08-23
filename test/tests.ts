@@ -348,14 +348,32 @@ describe('Utility Functions', () => {
       expect(ss(lowerCase, { caseNeutral: true })).toEqual(['we chose option a.', 'next step.']);
     });
 
-    test('should retain numeric continuations case-neutrally without changing the default path', () => {
-      const lowerCase = 'Please turn to p. 10 for details.';
-      const upperCase = 'Please turn to P. 10 for details.';
+    test('should not treat arbitrary singleton initials as numeric continuations', () => {
+      const mixedCase = 'We chose option A. 10 people agreed.';
+      const lowerCase = mixedCase.toLowerCase();
+      expect(ss(mixedCase)).toEqual(['We chose option A.', '10 people agreed.']);
       expect(ss(lowerCase)).toEqual([lowerCase]);
-      expect(ss(upperCase)).toEqual(['Please turn to P.', '10 for details.']);
-      expect(ss(lowerCase, { caseNeutral: true })).toEqual([lowerCase]);
-      expect(ss(upperCase, { caseNeutral: true })).toEqual([upperCase]);
+      expect(ss(mixedCase, { caseNeutral: true })).toEqual([
+        'We chose option A.',
+        '10 people agreed.',
+      ]);
+      expect(ss(lowerCase, { caseNeutral: true })).toEqual([
+        'we chose option a.',
+        '10 people agreed.',
+      ]);
     });
+
+    test.each(['10', '(10)', '#10', '-10'])(
+      'should retain the page-number continuation %s case-neutrally without changing the default path',
+      (continuation) => {
+        const lowerCase = `Please turn to p. ${continuation} for details.`;
+        const upperCase = `Please turn to P. ${continuation} for details.`;
+        expect(ss(lowerCase)).toEqual([lowerCase]);
+        expect(ss(upperCase)).toEqual(['Please turn to P.', `${continuation} for details.`]);
+        expect(ss(lowerCase, { caseNeutral: true })).toEqual([lowerCase]);
+        expect(ss(upperCase, { caseNeutral: true })).toEqual([upperCase]);
+      },
+    );
 
     test('should split end-of-sentence question marks', () => {
       expect(ss('What is your name? My name is Jonas.')).toEqual([
@@ -1653,6 +1671,19 @@ describe('Core Functions', () => {
       },
     );
 
+    test.each([
+      ['ROUGE-N', n],
+      ['ROUGE-L', l],
+    ] as const)(
+      '%s preserves numeric boundaries after non-page singleton initials',
+      (_name, score) => {
+        const reference = 'We chose option A. 10 people agreed.';
+        const candidate = '10 people agreed. We chose option A.';
+        expect(score(candidate, reference)).toBe(1);
+        expect(score(candidate, reference, { caseSensitive: false })).toBe(1);
+      },
+    );
+
     test.each(['p', 'P'])('ROUGE-N retains %s. before a numeric continuation', (letter) => {
       const summary = `Please see ${letter}. 10 for details.`;
       expect(n('p', summary, { caseSensitive: false })).toBe(0);
@@ -1669,6 +1700,27 @@ describe('Core Functions', () => {
         [['please', 'see', 'p', '.', '10', 'for', 'details', '.'], 1],
       ]);
     });
+
+    test.each([
+      ['(10)', ['please', 'see', 'p.', '(', '10', ')', 'for', 'details', '.']],
+      ['#10', ['please', 'see', 'p.', '#', '10', 'for', 'details', '.']],
+      ['-10', ['please', 'see', 'p.', '-10', 'for', 'details', '.']],
+    ] as const)(
+      'ROUGE-N retains p./P. before the wrapped or signed continuation %s',
+      (continuation, expectedTokens) => {
+        for (const letter of ['p', 'P']) {
+          const summary = `Please see ${letter}. ${continuation} for details.`;
+          expect(n('p', summary, { caseSensitive: false })).toBe(0);
+
+          const nGram = jest.fn((tokens: string[]): string[] => tokens);
+          expect(n(summary, summary.toLowerCase(), { caseSensitive: false, nGram })).toBe(1);
+          expect(nGram.mock.calls).toEqual([
+            [expectedTokens, 1],
+            [expectedTokens, 1],
+          ]);
+        }
+      },
+    );
 
     test('ROUGE-L passes original text to custom segmenters before case folding', () => {
       const segmenter = jest.fn((input: string): string[] => [input]);

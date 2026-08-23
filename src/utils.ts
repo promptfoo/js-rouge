@@ -77,7 +77,8 @@ const abbrvReg = new RegExp(`\\b(${GATE_SUBSTITUTIONS.map(escapeRegExp).join('|'
 const acronymReg = /[ |.][A-Z].?$/i;
 // Case mappings can add combining marks (for example, `İ` lowercases to `i` + dot above).
 const caseNeutralAcronymReg = /(?:^|[ |.])\p{Cased}\p{M}*.?$/u;
-const numericContinuationReg = /^\s*\p{Number}/u;
+// Page references may wrap or prefix the number, e.g. p. (10), p. #10, or p. -10.
+const pageNumberContinuationReg = /^\s*(?:[\p{Ps}\p{Sc}\p{Pd}<#№+\u2212]\s*)*\p{Number}/u;
 const breakReg = /[\r\n]+/;
 // Match a bounded ellipsis suffix to avoid excessive backtracking.
 const ellipseReg = /\.{2,10}$/;
@@ -276,8 +277,8 @@ export function sentenceSegment(
       ) {
         const nextSentence = chunks[idx + 2];
         if (caseNeutral) {
-          if (nextSentence && numericContinuationReg.test(nextSentence)) {
-            // A singleton abbreviation before a number is a continuation regardless of casing.
+          if (nextSentence && isPageNumberContinuation(chunk.lastWord, nextSentence)) {
+            // Preserve the p./P. page-number convention without treating every initial alike.
             chunk.append(chunks[idx + 1].replace(/\s+/g, ' ') + nextSentence);
             pending = chunk;
             idx++;
@@ -508,6 +509,10 @@ function isCasedCharacter(input: string): boolean {
 
 function matchesAcronymSuffix(suffix: string, lastWord: string, caseNeutral: boolean): boolean {
   return caseNeutral ? caseNeutralAcronymReg.test(lastWord) : acronymReg.test(suffix);
+}
+
+function isPageNumberContinuation(lastWord: string, nextSentence: string): boolean {
+  return lastWord.toLowerCase() === 'p.' && pageNumberContinuationReg.test(nextSentence);
 }
 
 function startsWithCasedCharacter(input: string): boolean {
