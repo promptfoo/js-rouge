@@ -298,9 +298,18 @@ describe('Utility Functions', () => {
       expect(ss('ǅuro\ncontinued.')).toEqual(['ǅuro continued.']);
     });
 
-    test('should recognize Unicode Other_Uppercase characters at sentence boundaries', () => {
+    test('should recognize Unicode uppercase characters at sentence boundaries', () => {
       expect(ss('Use etc. Ⅰ begins.')).toEqual(['Use etc.', 'Ⅰ begins.']);
       expect(ss('Use etc. Ⓐ begins.')).toEqual(['Use etc.', 'Ⓐ begins.']);
+      expect(ss('Use etc. 𝐀 begins.')).toEqual(['Use etc.', '𝐀 begins.']);
+      expect(ss('Use etc. 𝐀 begins.', { caseNeutral: true })).toEqual([
+        'Use etc.',
+        '𝐀 begins.',
+      ]);
+      expect(ss('Use etc. 𝐚 begins.', { caseNeutral: true })).toEqual([
+        'Use etc.',
+        '𝐚 begins.',
+      ]);
     });
 
     test('should offer case-neutral boundary classification without changing text', () => {
@@ -1218,12 +1227,14 @@ describe('Utility Functions', () => {
       expect(isUpper('ǅ')).toBe(true);
       expect(isUpper('ǆ')).toBe(false);
     });
-    test('should preserve mapping behavior for Unicode Other_Uppercase characters', () => {
+    test('should recognize Unicode uppercase characters without misclassifying lowercase forms', () => {
       expect(isUpper('Ⅰ')).toBe(true);
       expect(isUpper('Ⓐ')).toBe(true);
+      expect(isUpper('𝐀')).toBe(true);
       expect(isUpper('ⅰ')).toBe(false);
       expect(isUpper('ⓐ')).toBe(false);
-      expect(isUpper('ℂ')).toBe(false);
+      expect(isUpper('𝐚')).toBe(false);
+      expect(isUpper('ℂ')).toBe(true);
     });
   });
 
@@ -1272,6 +1283,19 @@ describe('Core Functions', () => {
       const reference = 'Use etc. Ⅰ begins.';
       const candidate = 'Ⅰ begins. Use etc.';
       expect(score(candidate, reference)).toBe(expected);
+    },
+  );
+
+  test.each([
+    ['ROUGE-N', rouge.n, 1],
+    ['ROUGE-S', rouge.s, 7 / 15],
+    ['ROUGE-L', rouge.l, 1],
+  ] as const)(
+    '%s preserves reordered mapping-less cased sentences case-insensitively',
+    (_name, score, expected) => {
+      const reference = 'Use etc. 𝐀 begins.';
+      const candidate = '𝐀 begins. Use etc.';
+      expect(score(candidate, reference, { caseSensitive: false })).toBe(expected);
     },
   );
 
