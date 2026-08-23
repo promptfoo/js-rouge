@@ -19,16 +19,12 @@ describe('Utility Functions', () => {
   describe('fact', () => {
     const { fact } = rouge;
 
-    test.each([
-      -1,
-      -1.5,
-      1.5,
-      Number.NaN,
-      Number.POSITIVE_INFINITY,
-      Number.NEGATIVE_INFINITY,
-    ])('should throw RangeError for invalid input %p', (input) => {
-      expect(() => fact(input)).toThrow(RangeError);
-    });
+    test.each([-1, -1.5, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
+      'should throw RangeError for invalid input %p',
+      (input) => {
+        expect(() => fact(input)).toThrow(RangeError);
+      },
+    );
 
     test.each([171, 10_000])('should reject unsupported input %i before computation', (input) => {
       expect(() => fact(input)).toThrow(RangeError);
