@@ -64,7 +64,6 @@ function countMatchingGrams(candidate: string[], reference: string[]): number {
 }
 
 interface SharedTokenPositions {
-  token: string;
   candidate: number[];
   reference: number[];
 }
@@ -101,7 +100,7 @@ function countUnboundedSkipPairs(first: number[], second: number[]): number {
 function countFollowingSharedTokens(
   tokens: string[],
   firstPositions: number[],
-  sharedTokens: Set<string>,
+  sharedPositions: ReadonlyMap<string, number[]>,
   maxSkip: number,
 ): Map<string, number> {
   const counts = new Map<string, number>();
@@ -109,7 +108,7 @@ function countFollowingSharedTokens(
     const lastPosition = Math.min(firstPosition + maxSkip, tokens.length - 1);
     for (let secondPosition = firstPosition + 1; secondPosition <= lastPosition; secondPosition++) {
       const token = tokens[secondPosition];
-      if (sharedTokens.has(token)) {
+      if (sharedPositions.has(token)) {
         counts.set(token, (counts.get(token) ?? 0) + 1);
       }
     }
@@ -131,7 +130,6 @@ function countMatchingSkipBigrams(
     const referenceTokenPositions = referencePositions.get(token);
     if (referenceTokenPositions) {
       shared.push({
-        token,
         candidate: candidateTokenPositions,
         reference: referenceTokenPositions,
       });
@@ -140,18 +138,17 @@ function countMatchingSkipBigrams(
 
   let matches = 0;
   if (maxSkip !== Number.POSITIVE_INFINITY) {
-    const sharedTokens = new Set(shared.map(({ token }) => token));
     for (const first of shared) {
       const candidateCounts = countFollowingSharedTokens(
         candidate,
         first.candidate,
-        sharedTokens,
+        referencePositions,
         maxSkip,
       );
       const referenceCounts = countFollowingSharedTokens(
         reference,
         first.reference,
-        sharedTokens,
+        candidatePositions,
         maxSkip,
       );
       for (const [secondToken, candidateCount] of candidateCounts) {
