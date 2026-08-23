@@ -77,6 +77,7 @@ const abbrvReg = new RegExp(`\\b(${GATE_SUBSTITUTIONS.map(escapeRegExp).join('|'
 const acronymReg = /[ |.][A-Z].?$/i;
 // Case mappings can add combining marks (for example, `İ` lowercases to `i` + dot above).
 const caseNeutralAcronymReg = /(?:^|[ |.])\p{Cased}\p{M}*.?$/u;
+const upperOrTitleCaseReg = /^[\p{Lu}\p{Lt}]$/u;
 // Page references may wrap or prefix the number, e.g. p. (10), p. "10", or p. ±10.
 const pageNumberContinuationReg =
   /^\s*(?:[\p{Ps}\p{Pi}\p{Pf}\p{Sc}\p{Pd}\p{Sm}#№"']\s*)*\p{Number}/u;
@@ -495,8 +496,7 @@ export function charIsUpperCase(input: string): boolean {
     throw new RangeError('Input should be a single character');
   }
 
-  // Use locale-aware comparison to support international characters
-  return character.value.toUpperCase() === character.value && isCasedCharacter(character.value);
+  return upperOrTitleCaseReg.test(character.value);
 }
 
 function characterAt(input: string, index: number): string {

@@ -291,6 +291,12 @@ describe('Utility Functions', () => {
       expect(ss('Use etc. \u{10428} continues it.')).toEqual(['Use etc. \u{10428} continues it.']);
     });
 
+    test('should recognize Unicode titlecase letters at sentence boundaries', () => {
+      expect(ss('First. ǅuro follows.')).toEqual(['First.', 'ǅuro follows.']);
+      expect(ss('"First." ǅecond.')).toEqual(['"First."', 'ǅecond.']);
+      expect(ss('ǅuro\ncontinued.')).toEqual(['ǅuro continued.']);
+    });
+
     test('should offer case-neutral boundary classification without changing text', () => {
       expect(ss('Use etc. Another sentence.', { caseNeutral: true })).toEqual([
         'Use etc.',
@@ -1161,6 +1167,11 @@ describe('Utility Functions', () => {
       expect(isUpper('\u{10428}')).toBe(false);
       expect(() => isUpper('\u{10400}A')).toThrow(RangeError);
     });
+    test('should recognize Unicode titlecase characters', () => {
+      expect(isUpper('Ǆ')).toBe(true);
+      expect(isUpper('ǅ')).toBe(true);
+      expect(isUpper('ǆ')).toBe(false);
+    });
   });
 
   describe('strIsTitleCase', () => {
@@ -1184,6 +1195,9 @@ describe('Utility Functions', () => {
     test('should inspect the first Unicode code point', () => {
       expect(isTitle('  \u{10400}bc')).toBe(true);
       expect(isTitle('  \u{10428}bc')).toBe(false);
+    });
+    test('should recognize a Unicode titlecase first character', () => {
+      expect(isTitle('ǅuro')).toBe(true);
     });
   });
 });
