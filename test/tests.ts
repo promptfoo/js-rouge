@@ -298,6 +298,11 @@ describe('Utility Functions', () => {
       expect(ss('ǅuro\ncontinued.')).toEqual(['ǅuro continued.']);
     });
 
+    test('should recognize Unicode Other_Uppercase characters at sentence boundaries', () => {
+      expect(ss('Use etc. Ⅰ begins.')).toEqual(['Use etc.', 'Ⅰ begins.']);
+      expect(ss('Use etc. Ⓐ begins.')).toEqual(['Use etc.', 'Ⓐ begins.']);
+    });
+
     test('should offer case-neutral boundary classification without changing text', () => {
       expect(ss('Use etc. Another sentence.', { caseNeutral: true })).toEqual([
         'Use etc.',
@@ -1213,6 +1218,13 @@ describe('Utility Functions', () => {
       expect(isUpper('ǅ')).toBe(true);
       expect(isUpper('ǆ')).toBe(false);
     });
+    test('should preserve mapping behavior for Unicode Other_Uppercase characters', () => {
+      expect(isUpper('Ⅰ')).toBe(true);
+      expect(isUpper('Ⓐ')).toBe(true);
+      expect(isUpper('ⅰ')).toBe(false);
+      expect(isUpper('ⓐ')).toBe(false);
+      expect(isUpper('ℂ')).toBe(false);
+    });
   });
 
   describe('strIsTitleCase', () => {
@@ -1249,6 +1261,20 @@ describe('Core Functions', () => {
     ['ROUGE-S', rouge.s],
     ['ROUGE-L', rouge.l],
   ] as const;
+
+  test.each([
+    ['ROUGE-N', rouge.n, 1],
+    ['ROUGE-S', rouge.s, 7 / 15],
+    ['ROUGE-L', rouge.l, 1],
+  ] as const)(
+    '%s preserves reordered sentences beginning with Other_Uppercase characters',
+    (_name, score, expected) => {
+      const reference = 'Use etc. Ⅰ begins.';
+      const candidate = 'Ⅰ begins. Use etc.';
+      expect(score(candidate, reference)).toBe(expected);
+    },
+  );
+
   describe.each(metrics)('%s input handling', (_name, score) => {
     test.each(['\n', '\r\n', '\r'])('keeps wrapped quotes (%j)', (lineBreak) => {
       expect(score(`He said "Stop.${lineBreak}" Next.`, 'He said "Stop." Next.')).toBe(1);
