@@ -29,6 +29,15 @@ export default {
   // A list of reporter names that Jest uses when writing coverage reports
   coverageReporters: ['json', 'text', 'lcov', 'clover'],
 
+  coverageThreshold: {
+    global: {
+      branches: 98,
+      functions: 100,
+      lines: 99,
+      statements: 99,
+    },
+  },
+
   // The maximum amount of workers used to run your tests
   maxWorkers: '50%',
 

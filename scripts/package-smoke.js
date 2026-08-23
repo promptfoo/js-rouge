@@ -1,0 +1,117 @@
+const assert = require('node:assert/strict');
+const { execFileSync } = require('node:child_process');
+const {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  writeFileSync,
+} = require('node:fs');
+const { tmpdir } = require('node:os');
+const { dirname, join, resolve } = require('node:path');
+
+const repositoryRoot = resolve(__dirname, '..');
+const temporaryRoot = mkdtempSync(join(tmpdir(), 'js-rouge-package-'));
+const consumerRoot = join(temporaryRoot, 'consumer');
+const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+
+function run(command, args, cwd) {
+  execFileSync(command, args, { cwd, stdio: 'inherit' });
+}
+
+try {
+  assert.ok(existsSync(join(repositoryRoot, 'dist', 'rouge.js')), 'Build the package first');
+  run(
+    npmCommand,
+    ['pack', '--ignore-scripts', '--pack-destination', temporaryRoot],
+    repositoryRoot,
+  );
+
+  const tarballs = readdirSync(temporaryRoot).filter((file) => file.endsWith('.tgz'));
+  assert.equal(tarballs.length, 1, 'npm pack should create exactly one tarball');
+  const tarball = join(temporaryRoot, tarballs[0]);
+
+  mkdirSync(consumerRoot);
+  writeFileSync(
+    join(consumerRoot, 'package.json'),
+    `${JSON.stringify({ name: 'js-rouge-smoke', private: true, type: 'module' }, null, 2)}\n`,
+  );
+  writeFileSync(
+    join(consumerRoot, 'commonjs.cjs'),
+    `const assert = require('node:assert/strict');
+const { l, n, s } = require('js-rouge');
+assert.equal(n('a b', 'a b', { n: 2 }), 1);
+assert.equal(l('a b', 'a b'), 1);
+assert.equal(s('a b', 'a b'), 1);
+`,
+  );
+  writeFileSync(
+    join(consumerRoot, 'module.mjs'),
+    `import assert from 'node:assert/strict';
+import { l, n, s } from 'js-rouge';
+assert.equal(n('a b', 'a b', { n: 2 }), 1);
+assert.equal(l('a b', 'a b'), 1);
+assert.equal(s('a b', 'a b'), 1);
+`,
+  );
+  writeFileSync(
+    join(consumerRoot, 'types.ts'),
+    `import { n, type RougeNOptions } from 'js-rouge';
+const options: RougeNOptions = { n: 2, caseSensitive: false };
+const score: number = n('a b', 'A B', options);
+void score;
+`,
+  );
+  writeFileSync(
+    join(consumerRoot, 'tsconfig.json'),
+    `${JSON.stringify(
+      {
+        compilerOptions: {
+          module: 'NodeNext',
+          moduleResolution: 'NodeNext',
+          noEmit: true,
+          strict: true,
+          target: 'ES2022',
+        },
+        include: ['types.ts'],
+      },
+      null,
+      2,
+    )}\n`,
+  );
+
+  run(
+    npmCommand,
+    ['install', '--ignore-scripts', '--no-audit', '--no-fund', '--no-package-lock', tarball],
+    consumerRoot,
+  );
+  run(process.execPath, ['commonjs.cjs'], consumerRoot);
+  run(process.execPath, ['module.mjs'], consumerRoot);
+  run(
+    process.execPath,
+    [join(repositoryRoot, 'node_modules', 'typescript', 'bin', 'tsc'), '-p', consumerRoot],
+    repositoryRoot,
+  );
+
+  const installedRoot = join(consumerRoot, 'node_modules', 'js-rouge');
+  const installedPackage = JSON.parse(readFileSync(join(installedRoot, 'package.json'), 'utf8'));
+  assert.equal(installedPackage.dependencies, undefined, 'The package must remain dependency-free');
+
+  const declarationMaps = readdirSync(join(installedRoot, 'dist')).filter((file) =>
+    file.endsWith('.d.ts.map'),
+  );
+  assert.ok(declarationMaps.length > 0, 'The package should contain declaration maps');
+  for (const declarationMap of declarationMaps) {
+    const mapPath = join(installedRoot, 'dist', declarationMap);
+    const map = JSON.parse(readFileSync(mapPath, 'utf8'));
+    for (const source of map.sources) {
+      const sourcePath = resolve(dirname(mapPath), map.sourceRoot ?? '', source);
+      assert.ok(existsSync(sourcePath), `${declarationMap} should resolve ${source}`);
+      assert.ok(readFileSync(sourcePath, 'utf8').length > 0, `${source} should not be empty`);
+    }
+  }
+} finally {
+  rmSync(temporaryRoot, { force: true, recursive: true });
+}

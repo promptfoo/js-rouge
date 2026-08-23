@@ -43,6 +43,7 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
       - run: npm ci
+      - run: npm run type-check
       - name: Biome CI check
         run: npx biome ci . --error-on-warnings
       - run: npm run build
@@ -51,6 +52,7 @@ jobs:
           test -f dist/rouge.js || (echo "Missing dist/rouge.js" && exit 1)
           test -f dist/rouge.mjs || (echo "Missing dist/rouge.mjs" && exit 1)
           test -f dist/rouge.d.ts || (echo "Missing dist/rouge.d.ts" && exit 1)
+      - run: npm run test:package
       - run: npm test
 
   ci-success:

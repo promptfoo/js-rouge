@@ -14,11 +14,12 @@
   },
   "scripts": {
     "test": "jest",
+    "test:package": "node scripts/package-smoke.js",
     "build": "npm run clean && npm run build:js && npm run build:types",
-    "build:js": "esbuild src/rouge.ts --bundle --minify --sourcemap --platform=node --target=node18 --outfile=dist/rouge.js && esbuild src/rouge.ts --bundle --minify --sourcemap --platform=neutral --format=esm --outfile=dist/rouge.mjs",
+    "build:js": "esbuild src/rouge.ts --bundle --minify --sourcemap --platform=node --target=node18 --outfile=dist/rouge.js && esbuild src/rouge.ts --bundle --minify --sourcemap --platform=neutral --format=esm --target=node18 --outfile=dist/rouge.mjs",
     "build:types": "tsc -p tsconfig.json --emitDeclarationOnly --outDir dist",
-    "clean": "rimraf dist",
-    "type-check": "tsc --noEmit",
+    "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
+    "type-check": "tsc --noEmit && tsc -p tsconfig.test.json",
     "lint": "biome lint .",
     "format": "biome format --write . && prettier --write \"**/*.md\"",
     "check": "biome check --write . && prettier --write \"**/*.md\"",
@@ -49,19 +50,20 @@
     "@swc/core": "^1.15.5",
     "@swc/jest": "^0.2.39",
     "@types/jest": "^30.0.0",
+    "@types/node": "18.19.130",
     "esbuild": "^0.28.1",
     "husky": "^9.1.7",
     "jest": "^30.2.0",
-    "lint-staged": "^17.0.0",
+    "lint-staged": "15.5.2",
     "prettier": "3.9.6",
-    "rimraf": "^6.1.2",
     "typescript": "^7.0.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.14.0"
   },
   "files": [
     "dist",
+    "src",
     "README.md",
     "LICENSE"
   ],

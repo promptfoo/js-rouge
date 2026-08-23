@@ -76,6 +76,8 @@ jobs:
           test -f dist/rouge.mjs || (echo "Missing dist/rouge.mjs" && exit 1)
           test -f dist/rouge.d.ts || (echo "Missing dist/rouge.d.ts" && exit 1)
           echo "Build artifacts verified successfully"
+      - name: Verify packed consumers
+        run: npm run test:package
       # Publishing uses npm's OIDC trusted publishers for authentication.
       # This requires npm 11.5.1+ (Node 24 includes npm 11.6.0) and the package
       # must be configured on npmjs.com to trust this GitHub repository/workflow.
