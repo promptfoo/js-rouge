@@ -363,7 +363,22 @@ describe('Utility Functions', () => {
       ]);
     });
 
-    test.each(['10', '(10)', '#10', '-10'])(
+    test.each([
+      '10',
+      '(10)',
+      '#10',
+      '-10',
+      '±10',
+      '∓10',
+      '＋10',
+      '﹢10',
+      '⁺10',
+      '₊10',
+      '"10"',
+      "'10'",
+      '“10”',
+      '«10»',
+    ])(
       'should retain the page-number continuation %s case-neutrally without changing the default path',
       (continuation) => {
         const lowerCase = `Please turn to p. ${continuation} for details.`;
@@ -1705,8 +1720,16 @@ describe('Core Functions', () => {
       ['(10)', ['please', 'see', 'p.', '(', '10', ')', 'for', 'details', '.']],
       ['#10', ['please', 'see', 'p.', '#', '10', 'for', 'details', '.']],
       ['-10', ['please', 'see', 'p.', '-10', 'for', 'details', '.']],
+      ['±10', ['please', 'see', 'p.', '±10', 'for', 'details', '.']],
+      ['∓10', ['please', 'see', 'p.', '∓10', 'for', 'details', '.']],
+      ['＋10', ['please', 'see', 'p.', '＋10', 'for', 'details', '.']],
+      ['⁺10', ['please', 'see', 'p.', '⁺10', 'for', 'details', '.']],
+      ['"10"', ['please', 'see', 'p.', '``', '10', "''", 'for', 'details', '.']],
+      ["'10'", ['please', 'see', 'p.', "'10", "'", 'for', 'details', '.']],
+      ['“10”', ['please', 'see', 'p.', '“10”', 'for', 'details', '.']],
+      ['«10»', ['please', 'see', 'p.', '«10»', 'for', 'details', '.']],
     ] as const)(
-      'ROUGE-N retains p./P. before the wrapped or signed continuation %s',
+      'ROUGE-N retains p./P. before the wrapped, quoted, or signed continuation %s',
       (continuation, expectedTokens) => {
         for (const letter of ['p', 'P']) {
           const summary = `Please see ${letter}. ${continuation} for details.`;

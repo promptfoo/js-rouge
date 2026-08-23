@@ -77,8 +77,8 @@ const abbrvReg = new RegExp(`\\b(${GATE_SUBSTITUTIONS.map(escapeRegExp).join('|'
 const acronymReg = /[ |.][A-Z].?$/i;
 // Case mappings can add combining marks (for example, `İ` lowercases to `i` + dot above).
 const caseNeutralAcronymReg = /(?:^|[ |.])\p{Cased}\p{M}*.?$/u;
-// Page references may wrap or prefix the number, e.g. p. (10), p. #10, or p. -10.
-const pageNumberContinuationReg = /^\s*(?:[\p{Ps}\p{Sc}\p{Pd}<#№+\u2212]\s*)*\p{Number}/u;
+// Page references may wrap or prefix the number, e.g. p. (10), p. "10", or p. ±10.
+const pageNumberContinuationReg = /^\s*(?:[\p{Ps}\p{Pi}\p{Sc}\p{Pd}\p{Sm}#№"']\s*)*\p{Number}/u;
 const breakReg = /[\r\n]+/;
 // Match a bounded ellipsis suffix to avoid excessive backtracking.
 const ellipseReg = /\.{2,10}$/;
