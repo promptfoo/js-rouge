@@ -50,6 +50,13 @@ describe('Utility Functions', () => {
     test('should throw RangeError for C(1,2)', () => {
       expect(() => comb2(1)).toThrow(RangeError);
     });
+    test.each([...nonFiniteNumbers, 2.5])('should reject invalid item count %s', (value) => {
+      expect(() => comb2(value)).toThrow(RangeError);
+    });
+    test('should reject results that exceed the safe integer range', () => {
+      expect(() => comb2(134_217_729)).toThrow(RangeError);
+      expect(() => comb2(Number.MAX_SAFE_INTEGER)).toThrow(RangeError);
+    });
 
     test('should return 1 for C(2,2)', () => {
       expect(comb2(2)).toBe(1);
@@ -59,6 +66,9 @@ describe('Utility Functions', () => {
     });
     test('should return 499500 for C(1000,2)', () => {
       expect(comb2(1000)).toBe(499_500);
+    });
+    test('should return the largest safe boundary result', () => {
+      expect(comb2(134_217_728)).toBe(9_007_199_187_632_128);
     });
   });
 
@@ -226,6 +236,19 @@ describe('Utility Functions', () => {
         'c d',
       ]);
       expect(nGram(data, 2, { start: undefined, end: undefined })).toEqual(nGram(data, 2));
+    });
+
+    test('should apply requested padding before validating short inputs', () => {
+      const oneToken = ['a'];
+      expect(nGram(oneToken, 2, { start: true })).toEqual(['<S> a']);
+      expect(nGram(oneToken, 2, { end: true })).toEqual(['a <S>']);
+      expect(nGram([], 2, { start: true, end: true })).toEqual(['<S> <S>']);
+      expect(oneToken).toEqual(['a']);
+    });
+
+    test('should still reject short inputs when padding is insufficient', () => {
+      expect(() => nGram([], 2, { start: true })).toThrow(RangeError);
+      expect(() => nGram(['a'], 3, { start: false, end: false })).toThrow(RangeError);
     });
   });
 
@@ -910,6 +933,42 @@ describe('Utility Functions', () => {
     });
     test('should return the correct result using alternative test', () => {
       expect(jk(cands, ref, evalFunc, statTest)).toBe(31);
+    });
+
+    test('should preserve leave-one-out maxima and score each candidate once', () => {
+      const scorer = jest.fn((candidate: string): number => Number(candidate));
+      let distribution: number[] = [];
+      const statistic = (input: number[]): number => {
+        distribution = input;
+        return 0;
+      };
+
+      expect(jk(['4', '3', '2'], ref, scorer, statistic)).toBe(0);
+      expect(distribution).toEqual([3, 4, 4]);
+      expect(scorer.mock.calls).toEqual([
+        ['4', ref],
+        ['3', ref],
+        ['2', ref],
+      ]);
+    });
+
+    test('should preserve NaN propagation in leave-one-out maxima', () => {
+      let distribution: number[] = [];
+      jk(
+        ['nan', '3', '1'],
+        ref,
+        (candidate) => Number(candidate),
+        (input) => {
+          distribution = input;
+          return 0;
+        },
+      );
+      expect(distribution).toEqual([3, Number.NaN, Number.NaN]);
+    });
+
+    test('should handle large candidate sets without quadratic resampling', () => {
+      const candidates = Array.from({ length: 50_000 }, (_, index) => String(index));
+      expect(jk(candidates, ref, () => 1)).toBe(1);
     });
 
     test('should adapt multiple references without reversing an asymmetric scorer', () => {

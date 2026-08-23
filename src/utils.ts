@@ -558,10 +558,6 @@ export const NGRAM_DEFAULT_OPTS: NGramOptions = {
 export function nGram(tokens: string[], n = 2, pad: Partial<NGramOptions> = {}): string[] {
   validateNGramSize(n);
 
-  if (tokens.length < n) {
-    throw new RangeError('ngram size cannot be larger than the number of tokens available');
-  }
-
   let workingTokens = tokens;
 
   if (Object.keys(pad).length > 0) {
@@ -586,6 +582,10 @@ export function nGram(tokens: string[], n = 2, pad: Partial<NGramOptions> = {}):
     }
   }
 
+  if (workingTokens.length < n) {
+    throw new RangeError('ngram size cannot be larger than the number of tokens available');
+  }
+
   const acc: string[] = [];
   for (let idx = 0; idx < workingTokens.length - n + 1; idx++) {
     acc.push(workingTokens.slice(idx, idx + n).join(' '));
@@ -603,10 +603,14 @@ export function nGram(tokens: string[], n = 2, pad: Partial<NGramOptions> = {}):
  * @return {number}         The number of ways in which 2 items can be chosen from `val`
  */
 export function comb2(val: number): number {
-  if (val < 2) {
-    throw new RangeError('Input must be greater than 2');
+  if (!Number.isSafeInteger(val) || val < 2) {
+    throw new RangeError('Input must be a safe integer greater than or equal to 2');
   }
-  return 0.5 * val * (val - 1);
+  const result = (val * (val - 1)) / 2;
+  if (!Number.isSafeInteger(result)) {
+    throw new RangeError('Result exceeds Number.MAX_SAFE_INTEGER');
+  }
+  return result;
 }
 
 /**
@@ -652,15 +656,18 @@ export function jackKnife(
 
   const pairs: number[] = cands.map((c) => func(c, ref));
 
-  const acc: number[] = [];
+  const prefixMax = new Array<number>(pairs.length + 1);
+  const suffixMax = new Array<number>(pairs.length + 1);
+  prefixMax[0] = Number.NEGATIVE_INFINITY;
+  suffixMax[pairs.length] = Number.NEGATIVE_INFINITY;
   for (let idx = 0; idx < pairs.length; idx++) {
-    // Clone the array and remove one element
-    const leaveOneOut = pairs.slice(0);
-    leaveOneOut.splice(idx, 1);
-
-    acc.push(Math.max(...leaveOneOut));
+    prefixMax[idx + 1] = Math.max(prefixMax[idx], pairs[idx]);
+  }
+  for (let idx = pairs.length - 1; idx >= 0; idx--) {
+    suffixMax[idx] = Math.max(suffixMax[idx + 1], pairs[idx]);
   }
 
+  const acc = pairs.map((_, idx) => Math.max(prefixMax[idx], suffixMax[idx + 1]));
   return test(acc);
 }
 
@@ -672,7 +679,7 @@ export function jackKnife(
  * F_β = ((1 + β²) × P × R) / (β² × P + R)
  *
  * Beta controls the tradeoff between precision and recall:
- * - beta = 0: Pure precision (F₀ = P)
+ * - beta = 0: Pure precision when recall is positive; zero when recall is zero
  * - beta = 1: F1 score (harmonic mean, equal weight)
  * - beta = 2: F2 score (weighs recall twice as much as precision)
  * - beta = Infinity: Pure recall
