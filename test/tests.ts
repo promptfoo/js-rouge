@@ -1494,9 +1494,9 @@ describe('Core Functions', () => {
 
     test('should use exact reference positions from a custom LCS-index callback', () => {
       const customLcsIndices = (candidate: string[]): number[] =>
-        candidate.length === 1 ? [2] : [1, 2];
+        candidate.length === 1 ? [0] : [1, 2];
       expect(l('a\nb a', 'a b a')).toBeCloseTo(2 / 3);
-      expect(l('a\nb a', 'a b a', { lcsIndices: customLcsIndices })).toBeCloseTo(2 / 3);
+      expect(l('a\nb a', 'a b a', { lcsIndices: customLcsIndices })).toBe(1);
     });
 
     test('should reject specifying both custom LCS callback forms', () => {
@@ -1515,14 +1515,13 @@ describe('Core Functions', () => {
       );
     });
 
-    const malformedIndexResults = [
+    test.each([
       { name: 'negative out-of-range index', indices: [-1] },
       { name: 'upper out-of-range index', indices: [2] },
       { name: 'fractional index', indices: [0.5] },
       { name: 'duplicate indices', indices: [0, 0] },
       { name: 'descending indices', indices: [1, 0] },
-    ];
-    test.each(malformedIndexResults)('should reject $name', ({ indices }) => {
+    ])('should reject $name', ({ indices }) => {
       expect(() => l('a b', 'a b', { lcsIndices: () => indices })).toThrow(
         /strictly increasing integer indices within the reference/,
       );

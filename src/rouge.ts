@@ -38,17 +38,9 @@ export interface RougeLOptions {
   beta?: number;
   /** Whether comparison is case-sensitive (default: true) */
   caseSensitive?: boolean;
-  /**
-   * Custom LCS function returning an ordered token subsequence.
-   *
-   * Returned values are aligned to successive reference occurrences from left to
-   * right. Use `lcsIndices` to select exact positions when the reference repeats tokens.
-   */
+  /** Custom LCS returning values aligned to reference occurrences from left to right. */
   lcs?: (a: string[], b: string[]) => string[];
-  /**
-   * Custom LCS function returning exact, strictly increasing reference indices.
-   * Cannot be specified with `lcs`; providing both throws `RangeError`.
-   */
+  /** Custom LCS returning exact, strictly increasing reference indices; cannot be combined with `lcs`. */
   lcsIndices?: (candidate: string[], reference: string[]) => number[];
   /** Custom sentence segmenter */
   segmenter?: (input: string) => string[];
