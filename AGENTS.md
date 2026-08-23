@@ -136,11 +136,11 @@ F_β = ((1 + β²) × P × R) / (β² × P + R)
 
 GitHub Actions runs on push/PR to main:
 
-1. Matrix test: Node 18, 20, 22
-2. Format check
-3. Lint check
-4. Build
-5. Test
+1. Matrix test: Node 18, 20, 22, 24
+2. Source and test type checks
+3. Format and lint checks
+4. Build and packed-package consumer smoke tests
+5. Unit tests with coverage thresholds
 
 All checks must pass before merge.
 
