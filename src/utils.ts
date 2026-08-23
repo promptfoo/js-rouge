@@ -450,47 +450,16 @@ export function charIsUpperCase(input: string): boolean {
 }
 
 /**
- * Memoizes a function using a Map
- *
- * **Memory Warning**: The cache is unbounded and will grow indefinitely for unique inputs.
- * In long-running processes with many unique inputs, consider using a bounded cache
- * implementation (e.g., LRU cache) or periodically clearing the memoized function.
- *
- * @method memoize
- * @param  {Function} func    The function to be memoized
- * @param  {Function} Store   The data store constructor. Defaults to the ES6-inbuilt Map function.
- *                            A store should implement `has`, `get`, and `set` methods.
- * @return {Function}         A closure of the memoization cache and the original function
- */
-function memoize<T, R>(func: (arg: T) => R, Store: new () => Map<T, R> = Map): (arg: T) => R {
-  return (() => {
-    const cache = new Store();
-
-    return (n: T) => {
-      if (cache.has(n)) {
-        const cachedResult = cache.get(n);
-        if (cachedResult !== undefined) {
-          return cachedResult;
-        }
-      }
-      const result = func(n);
-      cache.set(n, result);
-      return result;
-    };
-  })();
-}
-
-/**
  * Computes the factorial of an integer from 0 through 170.
  *
  * Values above 170 are rejected because their factorials overflow
  * JavaScript's finite number range.
  *
- * @method factorial
+ * @method fact
  * @param  {number} x     The integer for which the factorial is to be computed
  * @return {number}       The finite factorial result
  */
-function factorial(x: number): number {
+export function fact(x: number): number {
   if (!Number.isInteger(x) || x < 0 || x > 170) {
     throw new RangeError('Input must be an integer between 0 and 170');
   }
@@ -502,14 +471,6 @@ function factorial(x: number): number {
   }
   return result;
 }
-
-/**
- * Memoized factorial function.
- *
- * Accepts only finite, non-negative integers through 170. Results are cached
- * indefinitely, so the cache contains at most 171 entries.
- */
-export const fact = memoize(factorial);
 
 /**
  * Returns the skip bigrams for an array of word tokens.

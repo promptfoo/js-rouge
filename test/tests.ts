@@ -19,41 +19,29 @@ describe('Utility Functions', () => {
   describe('fact', () => {
     const { fact } = rouge;
 
-    test.each([-1, -1.5, 1.5, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY])(
-      'should throw RangeError for invalid input %p',
-      (input) => {
-        expect(() => fact(input)).toThrow(RangeError);
-      },
-    );
-
-    test.each([171, 10_000])('should reject unsupported input %i before computation', (input) => {
+    test.each([
+      -1,
+      -1.5,
+      1.5,
+      171,
+      10_000,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+    ])('should throw RangeError for invalid input %p', (input) => {
       expect(() => fact(input)).toThrow(RangeError);
     });
 
-    test('should return 1 for 0!', () => {
-      expect(fact(0)).toBe(1);
-    });
-    test('should return 1 for 1!', () => {
-      expect(fact(1)).toBe(1);
-    });
-
-    test('should return 120 for 5!', () => {
-      expect(fact(5)).toBe(120);
-    });
-    test('should return 3628800 for 10!', () => {
-      expect(fact(10)).toBe(3_628_800);
-    });
-    test('should return 2432902008176640000 for 20!', () => {
-      expect(fact(20)).toBe(2_432_902_008_176_640_000);
-    });
-    test('should return 2432902008176640000 for 20! using cache', () => {
-      expect(fact(20)).toBe(2_432_902_008_176_640_000);
-    });
-    test('should preserve the legacy multiplication order for 98!', () => {
-      expect(fact(98)).toBe(9.426_890_448_883_248e153);
-    });
-    test('should return a finite result for the maximum supported input', () => {
-      expect(fact(170)).toBe(7.257_415_615_308_004e306);
+    test.each([
+      [0, 1],
+      [1, 1],
+      [5, 120],
+      [10, 3_628_800],
+      [20, 2_432_902_008_176_640_000],
+      [98, 9.426_890_448_883_248e153],
+      [170, 7.257_415_615_308_004e306],
+    ])('should return %p for %i!', (input, expected) => {
+      expect(fact(input)).toBe(expected);
     });
   });
 
