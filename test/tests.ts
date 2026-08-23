@@ -1590,12 +1590,15 @@ describe('Core Functions', () => {
       ['ROUGE-N', n, 4 / 11],
       ['ROUGE-S', s, 2 / 25],
       ['ROUGE-L', l, 4 / 11],
-    ] as const)('%s keeps case-sensitive scoring while making case-insensitive boundaries casing-neutral', (_name, score, caseSensitiveScore) => {
-      const mixedCase = 'Use etc. Another sentence.';
-      const lowerCase = mixedCase.toLowerCase();
-      expect(score(mixedCase, lowerCase)).toBeCloseTo(caseSensitiveScore);
-      expect(score(mixedCase, lowerCase, { caseSensitive: false })).toBe(1);
-    });
+    ] as const)(
+      '%s keeps case-sensitive scoring while making case-insensitive boundaries casing-neutral',
+      (_name, score, caseSensitiveScore) => {
+        const mixedCase = 'Use etc. Another sentence.';
+        const lowerCase = mixedCase.toLowerCase();
+        expect(score(mixedCase, lowerCase)).toBeCloseTo(caseSensitiveScore);
+        expect(score(mixedCase, lowerCase, { caseSensitive: false })).toBe(1);
+      },
+    );
 
     test.each([
       ['ROUGE-N', n],
