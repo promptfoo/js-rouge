@@ -16,6 +16,36 @@ const invalidNGramSizes = [...nonFiniteNumbers, -1, 0, 1.5];
 const invalidMaxSkips = [Number.NaN, Number.NEGATIVE_INFINITY, -1, 0.5, 1.5];
 const invalidBetas = [Number.NaN, Number.NEGATIVE_INFINITY, -1];
 
+function legacyLcsIndices(a: string[], b: string[]): number[] {
+  const lengths = Array.from({ length: a.length + 1 }, () =>
+    new Array<number>(b.length + 1).fill(0),
+  );
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      lengths[i][j] =
+        a[i - 1] === b[j - 1]
+          ? lengths[i - 1][j - 1] + 1
+          : Math.max(lengths[i - 1][j], lengths[i][j - 1]);
+    }
+  }
+
+  const indices: number[] = [];
+  let i = a.length;
+  let j = b.length;
+  while (i > 0 && j > 0) {
+    if (a[i - 1] === b[j - 1]) {
+      indices.push(j - 1);
+      i--;
+      j--;
+    } else if (lengths[i - 1][j] > lengths[i][j - 1]) {
+      i--;
+    } else {
+      j--;
+    }
+  }
+  return indices.reverse();
+}
+
 describe('Utility Functions', () => {
   describe('fact', () => {
     const { fact } = rouge;
@@ -144,11 +174,19 @@ describe('Utility Functions', () => {
     test('should preserve its choice when multiple longest subsequences exist', () => {
       expect(lcs(['a', 'b'], ['b', 'a'])).toEqual(['b']);
     });
-    test('should preserve reference-position choices when duplicate tokens tie', () => {
-      expect(lcsIndices(['a'], ['a', 'a'])).toEqual([1]);
-      expect(lcsIndices(['a', 'b'], ['b', 'a'])).toEqual([0]);
-      expect(lcsIndices(['a', 'a'], ['a', 'a', 'a'])).toEqual([1, 2]);
-      expect(lcsIndices(['a', 'b'], ['a', 'a'])).toEqual([0]);
+    test('should preserve legacy reference-position choices', () => {
+      const sequences: string[][] = [[]];
+      for (let length = 1; length <= 5; length++) {
+        for (let bits = 0; bits < 2 ** length; bits++) {
+          sequences.push(Array.from({ length }, (_, index) => ((bits >> index) & 1 ? 'b' : 'a')));
+        }
+      }
+
+      for (const candidate of sequences) {
+        for (const reference of sequences) {
+          expect(lcsIndices(candidate, reference)).toEqual(legacyLcsIndices(candidate, reference));
+        }
+      }
     });
     test('should return ["w1", "w3", "w5"] for ["w1", "w2", "w3", "w4", "w5"] and ["w1", "w3", "w8", "w9", "w5"]', () => {
       expect(lcs(['w1', 'w2', 'w3', 'w4', 'w5'], ['w1', 'w3', 'w8', 'w9', 'w5'])).toEqual([
