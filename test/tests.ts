@@ -378,6 +378,8 @@ describe('Utility Functions', () => {
       "'10'",
       '“10”',
       '«10»',
+      '»10«',
+      '»10»',
     ])(
       'should retain the page-number continuation %s case-neutrally without changing the default path',
       (continuation) => {
@@ -1728,6 +1730,8 @@ describe('Core Functions', () => {
       ["'10'", ['please', 'see', 'p.', "'10", "'", 'for', 'details', '.']],
       ['“10”', ['please', 'see', 'p.', '“10”', 'for', 'details', '.']],
       ['«10»', ['please', 'see', 'p.', '«10»', 'for', 'details', '.']],
+      ['»10«', ['please', 'see', 'p.', '»10«', 'for', 'details', '.']],
+      ['»10»', ['please', 'see', 'p.', '»10»', 'for', 'details', '.']],
     ] as const)(
       'ROUGE-N retains p./P. before the wrapped, quoted, or signed continuation %s',
       (continuation, expectedTokens) => {
