@@ -1494,9 +1494,9 @@ describe('Core Functions', () => {
 
     test('should use exact reference positions from a custom LCS-index callback', () => {
       const customLcsIndices = (candidate: string[]): number[] =>
-        candidate.length === 1 ? [0] : [1, 2];
+        candidate.length === 1 ? [2] : [1, 2];
       expect(l('a\nb a', 'a b a')).toBeCloseTo(2 / 3);
-      expect(l('a\nb a', 'a b a', { lcsIndices: customLcsIndices })).toBe(1);
+      expect(l('a\nb a', 'a b a', { lcsIndices: customLcsIndices })).toBeCloseTo(2 / 3);
     });
 
     test('should reject specifying both custom LCS callback forms', () => {

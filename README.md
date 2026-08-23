@@ -148,6 +148,8 @@ Omitted options and fields explicitly set to `undefined` use the documented defa
 | `lcs`           | function | built-in      | Value-returning LCS function         |
 | `lcsIndices`    | function | `undefined`   | Position-aware LCS function          |
 
+`lcs` and `lcsIndices` are mutually exclusive. Specifying both throws `RangeError`.
+
 ### ROUGE-S Options
 
 | Option          | Type     | Default       | Description                          |

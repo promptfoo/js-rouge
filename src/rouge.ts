@@ -45,7 +45,10 @@ export interface RougeLOptions {
    * right. Use `lcsIndices` to select exact positions when the reference repeats tokens.
    */
   lcs?: (a: string[], b: string[]) => string[];
-  /** Custom LCS function returning exact, strictly increasing reference indices */
+  /**
+   * Custom LCS function returning exact, strictly increasing reference indices.
+   * Cannot be specified with `lcs`; providing both throws `RangeError`.
+   */
   lcsIndices?: (candidate: string[], reference: string[]) => number[];
   /** Custom sentence segmenter */
   segmenter?: (input: string) => string[];
