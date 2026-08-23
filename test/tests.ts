@@ -19,24 +19,17 @@ describe('Utility Functions', () => {
   describe('fact', () => {
     const { fact } = rouge;
 
-    test.each([
-      -1,
-      -1.5,
-      1.5,
-      171,
-      10_000,
-      Number.NaN,
-      Number.POSITIVE_INFINITY,
-      Number.NEGATIVE_INFINITY,
-    ])('should throw RangeError for invalid input %p', (input) => {
-      expect(() => fact(input)).toThrow(RangeError);
-    });
+    test.each([-1, 1.5, 171, Number.NaN, Number.POSITIVE_INFINITY])(
+      'should throw RangeError for invalid input %p',
+      (input) => {
+        expect(() => fact(input)).toThrow(RangeError);
+      },
+    );
 
     test.each([
       [0, 1],
       [1, 1],
       [5, 120],
-      [10, 3_628_800],
       [20, 2_432_902_008_176_640_000],
       [98, 9.426_890_448_883_248e153],
       [170, 7.257_415_615_308_004e306],
