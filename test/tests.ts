@@ -1538,6 +1538,24 @@ describe('Core Functions', () => {
       expect(() => l('a b', 'a b', { lcs: () => ['b', 'a'] })).toThrow(/common subsequence/);
     });
 
+    test('should not rescan candidate tokens for an empty custom LCS result', () => {
+      let candidateIterations = 0;
+      const candidateTokens = new Proxy(['a', 'b'], {
+        get(target, property, receiver) {
+          if (property === Symbol.iterator) {
+            candidateIterations++;
+          }
+          return Reflect.get(target, property, receiver);
+        },
+      });
+      const tokenizer = (input: string): string[] =>
+        input === 'candidate' ? candidateTokens : ['reference'];
+      const segmenter = (input: string): string[] => [input];
+
+      expect(l('candidate', 'reference', { lcs: () => [], tokenizer, segmenter })).toBe(0);
+      expect(candidateIterations).toBe(1);
+    });
+
     test('should return zero when custom tokenization removes every token', () => {
       expect(l('a', 'b', { tokenizer: () => [] })).toBe(0);
     });

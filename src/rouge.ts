@@ -391,6 +391,10 @@ function alignReferenceIndices(
 }
 
 function isSubsequence(tokens: string[], sequence: string[]): boolean {
+  if (tokens.length === 0) {
+    return true;
+  }
+
   let tokenIndex = 0;
   for (const token of sequence) {
     if (token === tokens[tokenIndex]) {
@@ -400,5 +404,5 @@ function isSubsequence(tokens: string[], sequence: string[]): boolean {
       }
     }
   }
-  return tokens.length === 0;
+  return false;
 }
