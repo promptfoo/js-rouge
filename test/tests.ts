@@ -405,44 +405,35 @@ describe('Utility Functions', () => {
       ]);
     });
 
-    test.each([
-      '10',
-      '(10)',
-      '#10',
-    ])('should retain the page-number continuation %s case-neutrally', (continuation) => {
-      const lowerCase = `Please turn to p. ${continuation} for details.`;
-      const upperCase = `Please turn to P. ${continuation} for details.`;
-      expect(ss(lowerCase)).toEqual([lowerCase]);
-      expect(ss(upperCase)).toEqual(['Please turn to P.', `${continuation} for details.`]);
-      expect(ss(lowerCase, { caseNeutral: true })).toEqual([lowerCase]);
-      expect(ss(upperCase, { caseNeutral: true })).toEqual([upperCase]);
+    test.each(['10', '(10)', '#10'])(
+      'should retain the page-number continuation %s case-neutrally',
+      (continuation) => {
+        const lowerCase = `Please turn to p. ${continuation} for details.`;
+        const upperCase = `Please turn to P. ${continuation} for details.`;
+        expect(ss(lowerCase)).toEqual([lowerCase]);
+        expect(ss(upperCase)).toEqual(['Please turn to P.', `${continuation} for details.`]);
+        expect(ss(lowerCase, { caseNeutral: true })).toEqual([lowerCase]);
+        expect(ss(upperCase, { caseNeutral: true })).toEqual([upperCase]);
 
-      for (const terminal of ['', '.']) {
-        const finalLowerCase = `Please turn to p. ${continuation}${terminal}`;
-        const finalUpperCase = `Please turn to P. ${continuation}${terminal}`;
-        expect(ss(finalUpperCase)).toEqual(['Please turn to P.', `${continuation}${terminal}`]);
-        expect(ss(finalLowerCase, { caseNeutral: true })).toEqual([finalLowerCase]);
-        expect(ss(finalUpperCase, { caseNeutral: true })).toEqual([finalUpperCase]);
-      }
-    });
+        for (const terminal of ['', '.']) {
+          const finalLowerCase = `Please turn to p. ${continuation}${terminal}`;
+          const finalUpperCase = `Please turn to P. ${continuation}${terminal}`;
+          expect(ss(finalUpperCase)).toEqual(['Please turn to P.', `${continuation}${terminal}`]);
+          expect(ss(finalLowerCase, { caseNeutral: true })).toEqual([finalLowerCase]);
+          expect(ss(finalUpperCase, { caseNeutral: true })).toEqual([finalUpperCase]);
+        }
+      },
+    );
 
-    test.each([
-      '$10',
-      '€10',
-      '∫10',
-      '→10',
-      '-10',
-      '±10',
-      '"10"',
-      '№10',
-      '10abc',
-      '(10)abc',
-    ])('should not treat %s as a page number', (continuation) => {
-      expect(ss(`First P. ${continuation} follows.`, { caseNeutral: true })).toEqual([
-        'First P.',
-        `${continuation} follows.`,
-      ]);
-    });
+    test.each(['$10', '€10', '∫10', '→10', '-10', '±10', '"10"', '№10', '10abc', '(10)abc'])(
+      'should not treat %s as a page number',
+      (continuation) => {
+        expect(ss(`First P. ${continuation} follows.`, { caseNeutral: true })).toEqual([
+          'First P.',
+          `${continuation} follows.`,
+        ]);
+      },
+    );
 
     test('should split end-of-sentence question marks', () => {
       expect(ss('What is your name? My name is Jonas.')).toEqual([
@@ -1268,21 +1259,27 @@ describe('Core Functions', () => {
     ['ROUGE-N', rouge.n, 1],
     ['ROUGE-S', rouge.s, 7 / 15],
     ['ROUGE-L', rouge.l, 1],
-  ] as const)('%s preserves reordered sentences beginning with Other_Uppercase characters', (_name, score, expected) => {
-    const reference = 'Use etc. Ⅰ begins.';
-    const candidate = 'Ⅰ begins. Use etc.';
-    expect(score(candidate, reference)).toBe(expected);
-  });
+  ] as const)(
+    '%s preserves reordered sentences beginning with Other_Uppercase characters',
+    (_name, score, expected) => {
+      const reference = 'Use etc. Ⅰ begins.';
+      const candidate = 'Ⅰ begins. Use etc.';
+      expect(score(candidate, reference)).toBe(expected);
+    },
+  );
 
   test.each([
     ['ROUGE-N', rouge.n, 1],
     ['ROUGE-S', rouge.s, 7 / 15],
     ['ROUGE-L', rouge.l, 1],
-  ] as const)('%s preserves reordered mapping-less cased sentences case-insensitively', (_name, score, expected) => {
-    const reference = 'Use etc. 𝐀 begins.';
-    const candidate = '𝐀 begins. Use etc.';
-    expect(score(candidate, reference, { caseSensitive: false })).toBe(expected);
-  });
+  ] as const)(
+    '%s preserves reordered mapping-less cased sentences case-insensitively',
+    (_name, score, expected) => {
+      const reference = 'Use etc. 𝐀 begins.';
+      const candidate = '𝐀 begins. Use etc.';
+      expect(score(candidate, reference, { caseSensitive: false })).toBe(expected);
+    },
+  );
 
   describe.each(metrics)('%s input handling', (_name, score) => {
     test.each(['\n', '\r\n', '\r'])('keeps wrapped quotes (%j)', (lineBreak) => {
@@ -1737,12 +1734,15 @@ describe('Core Functions', () => {
       ['ROUGE-N', n, 4 / 11],
       ['ROUGE-S', s, 2 / 25],
       ['ROUGE-L', l, 4 / 11],
-    ] as const)('%s keeps case-sensitive scoring while making case-insensitive boundaries casing-neutral', (_name, score, caseSensitiveScore) => {
-      const mixedCase = 'Use etc. Another sentence.';
-      const lowerCase = mixedCase.toLowerCase();
-      expect(score(mixedCase, lowerCase)).toBeCloseTo(caseSensitiveScore);
-      expect(score(mixedCase, lowerCase, { caseSensitive: false })).toBe(1);
-    });
+    ] as const)(
+      '%s keeps case-sensitive scoring while making case-insensitive boundaries casing-neutral',
+      (_name, score, caseSensitiveScore) => {
+        const mixedCase = 'Use etc. Another sentence.';
+        const lowerCase = mixedCase.toLowerCase();
+        expect(score(mixedCase, lowerCase)).toBeCloseTo(caseSensitiveScore);
+        expect(score(mixedCase, lowerCase, { caseSensitive: false })).toBe(1);
+      },
+    );
 
     test.each([
       ['ROUGE-N', n],
@@ -1765,40 +1765,48 @@ describe('Core Functions', () => {
     test.each([
       ['ROUGE-N', n],
       ['ROUGE-L', l],
-    ] as const)('%s preserves reordered singleton-initial boundaries case-insensitively', (_name, score) => {
-      const reference = 'We chose option A. Next step.';
-      const candidate = 'Next step. We chose option A.';
-      expect(score(candidate, reference)).toBe(1);
-      expect(score(candidate, reference, { caseSensitive: false })).toBe(1);
-    });
+    ] as const)(
+      '%s preserves reordered singleton-initial boundaries case-insensitively',
+      (_name, score) => {
+        const reference = 'We chose option A. Next step.';
+        const candidate = 'Next step. We chose option A.';
+        expect(score(candidate, reference)).toBe(1);
+        expect(score(candidate, reference, { caseSensitive: false })).toBe(1);
+      },
+    );
 
     test.each([
       ['ROUGE-N', n],
       ['ROUGE-S', s],
       ['ROUGE-L', l],
-    ] as const)('%s matches lowercase-equivalent Unicode abbreviations case-insensitively', (_name, score) => {
-      const mixedCase = 'Da\u212a.\nNext.';
-      expect(score(mixedCase, mixedCase.toLowerCase(), { caseSensitive: false })).toBe(1);
-    });
+    ] as const)(
+      '%s matches lowercase-equivalent Unicode abbreviations case-insensitively',
+      (_name, score) => {
+        const mixedCase = 'Da\u212a.\nNext.';
+        expect(score(mixedCase, mixedCase.toLowerCase(), { caseSensitive: false })).toBe(1);
+      },
+    );
 
     test.each([
       ['ROUGE-N', n],
       ['ROUGE-L', l],
-    ] as const)('%s preserves numeric boundaries after non-page singleton initials', (_name, score) => {
-      const reference = 'We chose option A. 10 people agreed.';
-      const candidate = '10 people agreed. We chose option A.';
-      expect(score(candidate, reference)).toBe(1);
-      expect(score(candidate, reference, { caseSensitive: false })).toBe(1);
-    });
+    ] as const)(
+      '%s preserves numeric boundaries after non-page singleton initials',
+      (_name, score) => {
+        const reference = 'We chose option A. 10 people agreed.';
+        const candidate = '10 people agreed. We chose option A.';
+        expect(score(candidate, reference)).toBe(1);
+        expect(score(candidate, reference, { caseSensitive: false })).toBe(1);
+      },
+    );
 
-    test.each([
-      '10',
-      '(10)',
-      '#10',
-    ])('ROUGE-N keeps the page abbreviation before %s case-insensitively', (continuation) => {
-      const summary = `Please see P. ${continuation} for details.`;
-      expect(n(summary, summary.toLowerCase(), { caseSensitive: false })).toBe(1);
-    });
+    test.each(['10', '(10)', '#10'])(
+      'ROUGE-N keeps the page abbreviation before %s case-insensitively',
+      (continuation) => {
+        const summary = `Please see P. ${continuation} for details.`;
+        expect(n(summary, summary.toLowerCase(), { caseSensitive: false })).toBe(1);
+      },
+    );
 
     test('ROUGE-L passes original text to custom segmenters before case folding', () => {
       const segmenter = jest.fn((input: string): string[] => [input]);
