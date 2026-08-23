@@ -80,8 +80,9 @@ const caseNeutralAcronymReg = /(?:^|[ |.])\p{Cased}\p{M}*.?$/u;
 const casedCharacterReg = /^\p{Cased}$/u;
 const upperOrTitleCaseLetterReg = /^[\p{Lu}\p{Lt}]$/u;
 const upperCaseReg = /^\p{Uppercase}$/u;
-// Page references may wrap or prefix the number, e.g. p. (10), p. "10", or p. #10.
-const pageNumberContinuationReg = /^\s*(?:[\p{Ps}\p{Pi}\p{Pf}"']\s*)?(?:[#№+−±-]\s*)?\p{Number}/u;
+// Recognize unambiguous page-reference forms: p. 10, p. (10), and p. #10.
+const pageNumberContinuationReg =
+  /^\s*(?:\(\s*\p{Number}+\s*\)|#\s*\p{Number}+|\p{Number}+)(?=\s|[.,;:!?)]|$)/u;
 const breakReg = /[\r\n]+/;
 // Match a bounded ellipsis suffix to avoid excessive backtracking.
 const ellipseReg = /\.{2,10}$/;
@@ -94,10 +95,9 @@ const closingBracketReg = /[\])}>]/;
 /** Keep merged fragments separate; boundary rules only need a suffix and word casing. */
 class SentenceBuffer {
   readonly #caseNeutral: boolean;
-  #lastWord = '';
   #parts: string[] = [];
   #normalizedThrough = 0;
-  #words: { titleCase: boolean; lowerCase: boolean }[] = [];
+  #words: { text: string; titleCase: boolean; lowerCase: boolean }[] = [];
   hasLineBreaks = false;
   startsWithTitleCase = false;
 
@@ -115,7 +115,7 @@ class SentenceBuffer {
   }
 
   get lastWord(): string {
-    return this.#lastWord;
+    return this.#words.at(-1)?.text ?? '';
   }
 
   get previousWordIsTitleCase(): boolean {
@@ -130,13 +130,6 @@ class SentenceBuffer {
     return suffix;
   }
 
-  #trackLastWord(word: string, continuesPreviousWord: boolean): void {
-    if (!this.#caseNeutral) {
-      return;
-    }
-    this.#lastWord = continuesPreviousWord ? `${this.#lastWord}${word}` : word;
-  }
-
   append(text: string): void {
     if (text.length === 0) {
       return;
@@ -148,8 +141,8 @@ class SentenceBuffer {
       const word = match[0];
       const lowerCase = !this.#caseNeutral && word === word.toLowerCase();
       if (match.index === 0 && previous && !/\s/.test(this.#parts.at(-1)?.at(-1) ?? '')) {
+        previous.text += word;
         previous.lowerCase = previous.lowerCase && lowerCase;
-        this.#trackLastWord(word, true);
       } else {
         // Neutral line-wrap handling can recognize a leading letter without treating it as a
         // title-cased name component.
@@ -157,8 +150,7 @@ class SentenceBuffer {
         if (this.empty) {
           this.startsWithTitleCase = this.#caseNeutral ? startsWithCasedCharacter(word) : titleCase;
         }
-        this.#words.push({ titleCase, lowerCase });
-        this.#trackLastWord(word, false);
+        this.#words.push({ text: word, titleCase, lowerCase });
         if (this.#words.length > 2) {
           this.#words.shift();
         }

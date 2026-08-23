@@ -409,35 +409,20 @@ describe('Utility Functions', () => {
       '10',
       '(10)',
       '#10',
-      '№10',
-      '-10',
-      '−10',
-      '±10',
-      '"10"',
-      "'10'",
-      '“10”',
-      '«10»',
-      '»10«',
-    ])('should retain the page-number continuation %s case-neutrally without changing the default path', (continuation) => {
+    ])('should retain the page-number continuation %s case-neutrally', (continuation) => {
       const lowerCase = `Please turn to p. ${continuation} for details.`;
       const upperCase = `Please turn to P. ${continuation} for details.`;
       expect(ss(lowerCase)).toEqual([lowerCase]);
       expect(ss(upperCase)).toEqual(['Please turn to P.', `${continuation} for details.`]);
       expect(ss(lowerCase, { caseNeutral: true })).toEqual([lowerCase]);
       expect(ss(upperCase, { caseNeutral: true })).toEqual([upperCase]);
-    });
 
-    test.each([
-      '10',
-      '(10)',
-      '#10',
-    ])('should retain the final page-number continuation %s with or without a terminal', (continuation) => {
       for (const terminal of ['', '.']) {
-        const lowerCase = `Please turn to p. ${continuation}${terminal}`;
-        const upperCase = `Please turn to P. ${continuation}${terminal}`;
-        expect(ss(upperCase)).toEqual(['Please turn to P.', `${continuation}${terminal}`]);
-        expect(ss(lowerCase, { caseNeutral: true })).toEqual([lowerCase]);
-        expect(ss(upperCase, { caseNeutral: true })).toEqual([upperCase]);
+        const finalLowerCase = `Please turn to p. ${continuation}${terminal}`;
+        const finalUpperCase = `Please turn to P. ${continuation}${terminal}`;
+        expect(ss(finalUpperCase)).toEqual(['Please turn to P.', `${continuation}${terminal}`]);
+        expect(ss(finalLowerCase, { caseNeutral: true })).toEqual([finalLowerCase]);
+        expect(ss(finalUpperCase, { caseNeutral: true })).toEqual([finalUpperCase]);
       }
     });
 
@@ -446,7 +431,13 @@ describe('Utility Functions', () => {
       '€10',
       '∫10',
       '→10',
-    ])('should not treat the symbol-prefixed value %s as a page number', (continuation) => {
+      '-10',
+      '±10',
+      '"10"',
+      '№10',
+      '10abc',
+      '(10)abc',
+    ])('should not treat %s as a page number', (continuation) => {
       expect(ss(`First P. ${continuation} follows.`, { caseNeutral: true })).toEqual([
         'First P.',
         `${continuation} follows.`,
@@ -1804,11 +1795,6 @@ describe('Core Functions', () => {
       '10',
       '(10)',
       '#10',
-      '№10',
-      '-10',
-      '−10',
-      '±10',
-      '“10”',
     ])('ROUGE-N keeps the page abbreviation before %s case-insensitively', (continuation) => {
       const summary = `Please see P. ${continuation} for details.`;
       expect(n(summary, summary.toLowerCase(), { caseSensitive: false })).toBe(1);
