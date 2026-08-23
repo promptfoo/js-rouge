@@ -40,7 +40,7 @@ describe('Utility Functions', () => {
       [20, 2_432_902_008_176_640_000],
       [98, 9.426_890_448_883_248e153],
       [170, 7.257_415_615_308_004e306],
-    ])('should return %p for %i!', (input, expected) => {
+    ])('should compute %i!', (input, expected) => {
       expect(fact(input)).toBe(expected);
     });
   });
