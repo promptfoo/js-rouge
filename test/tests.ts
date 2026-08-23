@@ -1594,6 +1594,60 @@ describe('Core Functions', () => {
       expect(l('a a a', 'a a', { lcs: customLcs })).toBeCloseTo(4 / 5);
     });
 
+    test('should preserve left-to-right alignment for value-only LCS callbacks', () => {
+      const customLcs = (a: string[], b: string[]): string[] => rouge.lcs(a, b);
+      expect(l('a\nb a', 'a b a', { lcs: customLcs })).toBe(1);
+    });
+
+    test('should use exact reference positions from a custom LCS-index callback', () => {
+      const customLcsIndices = (candidate: string[]): number[] =>
+        candidate.length === 1 ? [0] : [1, 2];
+      expect(l('a\nb a', 'a b a')).toBeCloseTo(2 / 3);
+      expect(l('a\nb a', 'a b a', { lcsIndices: customLcsIndices })).toBe(1);
+    });
+
+    test('should reject specifying both custom LCS callback forms', () => {
+      expect(() =>
+        l('a', 'a', {
+          lcs: () => ['a'],
+          lcsIndices: () => [0],
+        }),
+      ).toThrow(/cannot specify both lcs and lcsIndices/);
+    });
+
+    test('should reject a non-array custom LCS-index result', () => {
+      const customLcsIndices = (): number[] => 'not an array' as unknown as number[];
+      expect(() => l('a b', 'a b', { lcsIndices: customLcsIndices })).toThrow(
+        /must return an array/,
+      );
+    });
+
+    test.each([
+      { name: 'negative out-of-range index', indices: [-1] },
+      { name: 'upper out-of-range index', indices: [2] },
+      { name: 'fractional index', indices: [0.5] },
+      { name: 'duplicate indices', indices: [0, 0] },
+      { name: 'descending indices', indices: [1, 0] },
+    ])('should reject $name', ({ indices }) => {
+      expect(() => l('a b', 'a b', { lcsIndices: () => indices })).toThrow(
+        /strictly increasing integer indices within the reference/,
+      );
+    });
+
+    test('should reject custom LCS indices whose tokens are not a candidate subsequence', () => {
+      expect(() => l('a', 'a b', { lcsIndices: () => [1] })).toThrow(
+        /subsequence of the candidate/,
+      );
+    });
+
+    test('should preserve best-effort alignment for legacy value-only callbacks', () => {
+      expect(l('a b', 'a c', { lcs: () => ['a', 'missing'] })).toBeCloseTo(1 / 2);
+    });
+
+    test('should accept an empty custom LCS result', () => {
+      expect(l('candidate', 'reference', { lcs: () => [] })).toBe(0);
+    });
+
     test('should return zero when custom tokenization removes every token', () => {
       expect(l('a', 'b', { tokenizer: () => [] })).toBe(0);
     });

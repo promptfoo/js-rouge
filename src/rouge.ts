@@ -1,4 +1,4 @@
-import { lcsIndices } from './lcs';
+import { lcsIndices as builtInLcsIndices } from './lcs';
 import * as utils from './utils';
 import { validateBeta, validateMaxSkip, validateNGramSize } from './validation';
 
@@ -38,8 +38,10 @@ export interface RougeLOptions {
   beta?: number;
   /** Whether comparison is case-sensitive (default: true) */
   caseSensitive?: boolean;
-  /** Custom LCS function returning an ordered token subsequence */
+  /** Custom LCS returning values aligned to reference occurrences from left to right. */
   lcs?: (a: string[], b: string[]) => string[];
+  /** Custom LCS returning exact, strictly increasing reference indices; cannot be combined with `lcs`. */
+  lcsIndices?: (candidate: string[], reference: string[]) => number[];
   /** Custom sentence segmenter */
   segmenter?: (input: string) => string[];
   /** Custom string tokenizer */
@@ -335,12 +337,14 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
  * 	beta: 1.0                           // The beta value used for the f-measure
  * 	caseSensitive: true                 // Whether comparison is case-sensitive
  * 	lcs: <inbuilt function>             // The longest common subsequence function
+ * 	lcsIndices: undefined                // A position-aware custom LCS function
  * 	segmenter: <inbuilt function>,      // The sentence segmenter
  * 	tokenizer: <inbuilt function>       // The string tokenizer
  * }
  * ```
  *
  * `lcs` has a type signature of ((Array<string>, Array<string>) => Array<string>)
+ * `lcsIndices` has a type signature of ((Array<string>, Array<string>) => Array<number>)
  * `segmenter` has a type signature of ((string) => Array<string)
  * `tokenizer` has a type signature of ((string) => Array<string)
  *
@@ -362,9 +366,13 @@ export function l(cand: string, ref: string, opts?: RougeLOptions): number {
     beta = 1.0,
     caseSensitive = true,
     lcs: getLcs = utils.lcs,
+    lcsIndices: getLcsIndices,
     segmenter = utils.sentenceSegment,
     tokenizer = utils.treeBankTokenize,
   } = opts ?? {};
+  if (opts?.lcs !== undefined && getLcsIndices !== undefined) {
+    throw new RangeError('ROUGE-L options cannot specify both lcs and lcsIndices');
+  }
   validateBeta(beta);
 
   const tokenizeSentence = (sentence: string): string[] =>
@@ -390,7 +398,7 @@ export function l(cand: string, ref: string, opts?: RougeLOptions): number {
   for (const reference of refSents) {
     const union = new Set<number>();
     for (const candidate of candSents) {
-      for (const index of matchedReferenceIndices(candidate, reference, getLcs)) {
+      for (const index of matchedReferenceIndices(candidate, reference, getLcs, getLcsIndices)) {
         union.add(index);
       }
     }
@@ -416,12 +424,16 @@ function matchedReferenceIndices(
   candidate: string[],
   reference: string[],
   getLcs: (a: string[], b: string[]) => string[],
+  getLcsIndices?: (candidate: string[], reference: string[]) => number[],
 ): number[] {
+  if (getLcsIndices !== undefined) {
+    return validateCustomLcsIndices(candidate, reference, getLcsIndices(candidate, reference));
+  }
   if (getLcs === utils.lcs) {
-    return lcsIndices(candidate, reference);
+    return builtInLcsIndices(candidate, reference);
   }
 
-  // The public callback returns values, so align them to successive reference occurrences.
+  // Preserve the value-only callback's legacy best-effort alignment.
   const indices: number[] = [];
   let next = 0;
   for (const token of getLcs(candidate, reference)) {
@@ -432,4 +444,33 @@ function matchedReferenceIndices(
     }
   }
   return indices;
+}
+
+function validateCustomLcsIndices(
+  candidate: string[],
+  reference: string[],
+  result: number[],
+): number[] {
+  if (!Array.isArray(result)) {
+    throw new RangeError('Custom lcsIndices must return an array of reference token indices');
+  }
+
+  let previous = -1;
+  let nextCandidate = 0;
+  for (const index of result) {
+    if (!Number.isInteger(index) || index < 0 || index >= reference.length || index <= previous) {
+      throw new RangeError(
+        'Custom lcsIndices must return strictly increasing integer indices within the reference',
+      );
+    }
+    const candidateIndex = candidate.indexOf(reference[index], nextCandidate);
+    if (candidateIndex === -1) {
+      throw new RangeError(
+        'Custom lcsIndices must select reference tokens that form a subsequence of the candidate',
+      );
+    }
+    previous = index;
+    nextCandidate = candidateIndex + 1;
+  }
+  return result;
 }

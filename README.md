@@ -79,7 +79,7 @@ rougeL(candidate, reference); // => 0.75
 
 `l()` computes summary-level union LCS (called `rougeLsum` in Google's ROUGE package). It unions matched reference-token positions across candidate sentences and clips credit to the candidate's token counts. Sentence tokenization supplies both the matches and their denominators. Case-insensitive comparison preserves sentence boundaries by applying case folding after segmentation.
 
-The exported `lcs(a, b)` utility still returns token values. A custom `lcs` callback must return an ordered token subsequence; its values are aligned to successive reference occurrences from left to right. The built-in implementation retains the exact reference positions from its LCS alignment.
+The exported `lcs(a, b)` utility still returns token values. The value-returning `lcs` callback remains supported and aligns its ordered subsequence to successive reference occurrences from left to right, preserving legacy behavior for repeated tokens. For an exact alignment, use `lcsIndices`: it receives candidate and reference sentence-token arrays and returns strictly increasing reference indices whose selected tokens form a subsequence of the candidate. The built-in implementation retains exact reference positions.
 
 These corrections change ROUGE-L scores for repeated words and multi-sentence summaries. Rerun evaluation baselines when comparing versions.
 
@@ -145,7 +145,10 @@ Omitted options and fields explicitly set to `undefined` use the documented defa
 | `caseSensitive` | boolean  | `true`        | Whether comparison is case-sensitive |
 | `tokenizer`     | function | Penn Treebank | Custom tokenizer function            |
 | `segmenter`     | function | built-in      | Custom sentence segmenter            |
-| `lcs`           | function | built-in      | Custom LCS function                  |
+| `lcs`           | function | built-in      | Value-returning LCS function         |
+| `lcsIndices`    | function | `undefined`   | Position-aware LCS function          |
+
+`lcs` and `lcsIndices` are mutually exclusive. Specifying both throws `RangeError`.
 
 ### ROUGE-S Options
 
