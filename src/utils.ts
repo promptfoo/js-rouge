@@ -558,24 +558,19 @@ export const NGRAM_DEFAULT_OPTS: NGramOptions = {
 export function nGram(tokens: string[], n = 2, pad: Partial<NGramOptions> = {}): string[] {
   validateNGramSize(n);
 
-  const config = {
-    start: pad.start ?? NGRAM_DEFAULT_OPTS.start,
-    end: pad.end ?? NGRAM_DEFAULT_OPTS.end,
-    val: pad.val ?? NGRAM_DEFAULT_OPTS.val,
-  };
+  const start = pad.start ?? NGRAM_DEFAULT_OPTS.start;
+  const end = pad.end ?? NGRAM_DEFAULT_OPTS.end;
+  const value = pad.val ?? NGRAM_DEFAULT_OPTS.val;
   const paddingSize = n - 1;
-  const paddedLength =
-    tokens.length + (config.start ? paddingSize : 0) + (config.end ? paddingSize : 0);
+  const paddedLength = tokens.length + (start ? paddingSize : 0) + (end ? paddingSize : 0);
   if (paddedLength < n) {
     throw new RangeError('ngram size cannot be larger than the number of tokens available');
   }
 
-  const startPadding = config.start ? new Array<string>(paddingSize).fill(config.val) : [];
-  const endPadding = config.end ? new Array<string>(paddingSize).fill(config.val) : [];
+  const startPadding = start ? new Array<string>(paddingSize).fill(value) : [];
+  const endPadding = end ? new Array<string>(paddingSize).fill(value) : [];
   const workingTokens =
-    startPadding.length === 0 && endPadding.length === 0
-      ? tokens
-      : startPadding.concat(tokens, endPadding);
+    paddedLength === tokens.length ? tokens : startPadding.concat(tokens, endPadding);
 
   const acc: string[] = [];
   for (let idx = 0; idx < workingTokens.length - n + 1; idx++) {
@@ -645,21 +640,22 @@ export function jackKnife(
     throw new RangeError('Candidate array must contain more than one element');
   }
 
-  const pairs: number[] = cands.map((c) => func(c, ref));
+  const scores = cands.map((candidate) => func(candidate, ref));
 
-  const prefixMax = new Array<number>(pairs.length + 1);
-  const suffixMax = new Array<number>(pairs.length + 1);
-  prefixMax[0] = Number.NEGATIVE_INFINITY;
-  suffixMax[pairs.length] = Number.NEGATIVE_INFINITY;
-  for (let idx = 0; idx < pairs.length; idx++) {
-    prefixMax[idx + 1] = Math.max(prefixMax[idx], pairs[idx]);
-  }
-  for (let idx = pairs.length - 1; idx >= 0; idx--) {
-    suffixMax[idx] = Math.max(suffixMax[idx + 1], pairs[idx]);
+  const suffixMax = new Array<number>(scores.length + 1);
+  suffixMax[scores.length] = Number.NEGATIVE_INFINITY;
+  for (let idx = scores.length - 1; idx >= 0; idx--) {
+    suffixMax[idx] = Math.max(suffixMax[idx + 1], scores[idx]);
   }
 
-  const acc = pairs.map((_, idx) => Math.max(prefixMax[idx], suffixMax[idx + 1]));
-  return test(acc);
+  const leaveOneOutMaxima = new Array<number>(scores.length);
+  let prefixMax = Number.NEGATIVE_INFINITY;
+  for (let idx = 0; idx < scores.length; idx++) {
+    leaveOneOutMaxima[idx] = Math.max(prefixMax, suffixMax[idx + 1]);
+    prefixMax = Math.max(prefixMax, scores[idx]);
+  }
+
+  return test(leaveOneOutMaxima);
 }
 
 /**

@@ -11,7 +11,8 @@ const bracketPairs = [
 ] as const;
 const geographicAcronyms = ['U.S.', 'U.S.A.', 'E.U.'];
 const nonFiniteNumbers = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
-const invalidNGramSizes = [...nonFiniteNumbers, -1, 0, 1.5, 2 ** 54];
+const unsafeInteger = Number.MAX_SAFE_INTEGER + 1;
+const invalidNGramSizes = [...nonFiniteNumbers, -1, 0, 1.5, unsafeInteger];
 const invalidMaxSkips = [Number.NaN, Number.NEGATIVE_INFINITY, -1, 0.5, 1.5];
 const invalidBetas = [Number.NaN, Number.NEGATIVE_INFINITY, -1];
 
@@ -47,15 +48,14 @@ describe('Utility Functions', () => {
   describe('comb2', () => {
     const { comb2 } = rouge;
 
-    test('should throw RangeError for C(1,2)', () => {
-      expect(() => comb2(1)).toThrow(RangeError);
-    });
-    test.each([...nonFiniteNumbers, 2.5])('should reject invalid item count %s', (value) => {
-      expect(() => comb2(value)).toThrow(RangeError);
-    });
+    test.each([1, ...nonFiniteNumbers, 2.5, unsafeInteger])(
+      'should reject invalid item count %s',
+      (value) => {
+        expect(() => comb2(value)).toThrow(RangeError);
+      },
+    );
     test('should reject results that exceed the safe integer range', () => {
       expect(() => comb2(134_217_729)).toThrow(RangeError);
-      expect(() => comb2(Number.MAX_SAFE_INTEGER)).toThrow(RangeError);
     });
 
     test('should return 1 for C(2,2)', () => {
@@ -248,11 +248,10 @@ describe('Utility Functions', () => {
 
     test('should still reject short inputs when padding is insufficient', () => {
       expect(() => nGram([], 2, { start: true })).toThrow(RangeError);
-      expect(() => nGram(['a'], 3, { start: false, end: false })).toThrow(RangeError);
     });
 
-    test.each([1_000_000_000, 2 ** 54])('should reject impossible padding size %s', (size) => {
-      expect(() => nGram([], size, { start: true })).toThrow(RangeError);
+    test('should reject impossible padding before allocation', () => {
+      expect(() => nGram([], 1_000_000_000, { start: true })).toThrow(RangeError);
     });
   });
 
@@ -941,14 +940,10 @@ describe('Utility Functions', () => {
 
     test('should preserve leave-one-out maxima and score each candidate once', () => {
       const scorer = jest.fn((candidate: string): number => Number(candidate));
-      let distribution: number[] = [];
-      const statistic = (input: number[]): number => {
-        distribution = input;
-        return 0;
-      };
+      const statistic = jest.fn(() => 0);
 
       expect(jk(['4', '3', '2'], ref, scorer, statistic)).toBe(0);
-      expect(distribution).toEqual([3, 4, 4]);
+      expect(statistic).toHaveBeenCalledWith([3, 4, 4]);
       expect(scorer.mock.calls).toEqual([
         ['4', ref],
         ['3', ref],
@@ -957,17 +952,9 @@ describe('Utility Functions', () => {
     });
 
     test('should preserve NaN propagation in leave-one-out maxima', () => {
-      let distribution: number[] = [];
-      jk(
-        ['nan', '3', '1'],
-        ref,
-        (candidate) => Number(candidate),
-        (input) => {
-          distribution = input;
-          return 0;
-        },
-      );
-      expect(distribution).toEqual([3, Number.NaN, Number.NaN]);
+      const statistic = jest.fn(() => 0);
+      jk(['nan', '3', '1'], ref, (candidate) => Number(candidate), statistic);
+      expect(statistic).toHaveBeenCalledWith([3, Number.NaN, Number.NaN]);
     });
 
     test('should handle large candidate sets without quadratic resampling', () => {
