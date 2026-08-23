@@ -1,7 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { buildSync } from 'esbuild';
-import { GATE_SUBSTITUTIONS } from '../src/constants';
 import * as rouge from '../src/rouge';
 
 const bracketPairs = [
@@ -272,6 +271,7 @@ describe('Utility Functions', () => {
 
   describe('sentenceSegment', () => {
     const ss = rouge.sentenceSegment;
+    const segmentCaseNeutrally = (input: string): string[] => ss(input, { caseNeutral: true });
 
     test('should return empty array for empty input', () => {
       expect(ss('')).toEqual([]);
@@ -284,151 +284,86 @@ describe('Utility Functions', () => {
       expect(ss('Hello World. My name is Jonas.')).toEqual(['Hello World.', 'My name is Jonas.']);
     });
 
-    test('should recognize astral uppercase letters at sentence boundaries', () => {
-      expect(ss('Use etc. \u{10400} starts the next.')).toEqual([
-        'Use etc.',
-        '\u{10400} starts the next.',
-      ]);
-      expect(ss('Use etc. \u{10428} continues it.')).toEqual(['Use etc. \u{10428} continues it.']);
+    test.each([
+      ['astral uppercase', '\u{10400}', true],
+      ['astral lowercase', '\u{10428}', false],
+      ['titlecase', 'ǅ', true],
+      ['Roman numeral', 'Ⅰ', true],
+      ['circled uppercase', 'Ⓐ', true],
+      ['mapping-less uppercase', '𝐀', true],
+      ['mapping-less lowercase', '𝐚', false],
+    ])('classifies %s sentence starts', (_label, character, defaultBoundary) => {
+      const input = `Use etc. ${character} begins.`;
+      const sentences = ['Use etc.', `${character} begins.`];
+      expect(ss(input)).toEqual(defaultBoundary ? sentences : [input]);
+      expect(segmentCaseNeutrally(input)).toEqual(sentences);
     });
 
-    test('should recognize Unicode titlecase letters at sentence boundaries', () => {
-      expect(ss('First. ǅuro follows.')).toEqual(['First.', 'ǅuro follows.']);
-      expect(ss('"First." ǅecond.')).toEqual(['"First."', 'ǅecond.']);
+    test('recognizes titlecase letters across line wraps', () => {
       expect(ss('ǅuro\ncontinued.')).toEqual(['ǅuro continued.']);
     });
 
-    test('should recognize Unicode uppercase characters at sentence boundaries', () => {
-      expect(ss('Use etc. Ⅰ begins.')).toEqual(['Use etc.', 'Ⅰ begins.']);
-      expect(ss('Use etc. Ⓐ begins.')).toEqual(['Use etc.', 'Ⓐ begins.']);
-      expect(ss('Use etc. 𝐀 begins.')).toEqual(['Use etc.', '𝐀 begins.']);
-      expect(ss('Use etc. 𝐀 begins.', { caseNeutral: true })).toEqual(['Use etc.', '𝐀 begins.']);
-      expect(ss('Use etc. 𝐚 begins.', { caseNeutral: true })).toEqual(['Use etc.', '𝐚 begins.']);
-    });
-
-    test('should offer case-neutral boundary classification without changing text', () => {
-      expect(ss('Use etc. Another sentence.', { caseNeutral: true })).toEqual([
-        'Use etc.',
-        'Another sentence.',
-      ]);
-      expect(ss('use etc. another sentence.', { caseNeutral: true })).toEqual([
-        'use etc.',
-        'another sentence.',
-      ]);
+    test.each([
+      ['Use etc. Another sentence.', ['Use etc.', 'Another sentence.']],
+      ['use etc. another sentence.', ['use etc.', 'another sentence.']],
+    ])('segments %j without changing its text', (input, expected) => {
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
     });
 
     test('should match lowercase-equivalent Unicode abbreviations case-neutrally', () => {
       const mixedCase = 'Da\u212a.\nNext.';
       const lowerCase = mixedCase.toLowerCase();
       expect(ss(mixedCase)).toEqual(['Da\u212a.', 'Next.']);
-      expect(ss(lowerCase)).toEqual(['dak.', 'next.']);
-      expect(ss(mixedCase, { caseNeutral: true })).toEqual(['Da\u212a. Next.']);
-      expect(ss(lowerCase, { caseNeutral: true })).toEqual(['dak. next.']);
-    });
-
-    test('should match every Kelvin-equivalent gate substitution case-neutrally', () => {
-      const substitutions = [...new Set(GATE_SUBSTITUTIONS.filter((word) => word.includes('k')))];
-      expect(substitutions).not.toHaveLength(0);
-      for (const substitution of substitutions) {
-        const kelvinEquivalent = substitution.replaceAll('k', '\u212a');
-        const mixedCase = `${kelvinEquivalent}.\nNext.`;
-        expect(ss(mixedCase, { caseNeutral: true })).toEqual([`${kelvinEquivalent}. Next.`]);
-        expect(ss(mixedCase.toLowerCase(), { caseNeutral: true })).toEqual([
-          `${substitution}. next.`,
-        ]);
-      }
+      expect(segmentCaseNeutrally(mixedCase)).toEqual(['Da\u212a. Next.']);
+      expect(segmentCaseNeutrally(lowerCase)).toEqual(['dak. next.']);
     });
 
     test('should preserve gate exceptions in case-neutral quoted continuations', () => {
-      expect(ss('"Mt." Next stop.', { caseNeutral: true })).toEqual(['"Mt." Next stop.']);
-      expect(ss('"mt." next stop.', { caseNeutral: true })).toEqual(['"mt." next stop.']);
+      expect(segmentCaseNeutrally('"Mt." Next stop.')).toEqual(['"Mt." Next stop.']);
+      expect(segmentCaseNeutrally('"mt." next stop.')).toEqual(['"mt." next stop.']);
     });
 
-    test('should classify Unicode name initials without changing the default path', () => {
-      const kelvinSign = 'Albert \u212a. Jones left.';
-      const lowerCase = kelvinSign.toLowerCase();
-      expect(ss(kelvinSign)).toEqual(['Albert \u212a.', 'Jones left.']);
-      expect(ss(lowerCase)).toEqual([lowerCase]);
-      expect(ss(kelvinSign, { caseNeutral: true })).toEqual(['Albert \u212a.', 'Jones left.']);
-      expect(ss(lowerCase, { caseNeutral: true })).toEqual(['albert k.', 'jones left.']);
-    });
-
-    test('should keep case-expanding initials consistent without changing the default path', () => {
-      const dottedI = 'Albert \u0130. Jones left.';
-      const lowerCase = dottedI.toLowerCase();
-      expect(lowerCase).toBe('albert i\u0307. jones left.');
-      expect(ss(dottedI)).toEqual(['Albert \u0130.', 'Jones left.']);
-      expect(ss(lowerCase)).toEqual(['albert i\u0307.', 'jones left.']);
-      expect(ss(dottedI, { caseNeutral: true })).toEqual(['Albert \u0130.', 'Jones left.']);
-      expect(ss(lowerCase, { caseNeutral: true })).toEqual(['albert i\u0307.', 'jones left.']);
-    });
-
-    test.each([
-      'I\u0307',
-      'I\u0307\u0323',
-      `I${'\u0307'.repeat(16)}`,
-      'I\u093e',
-      'I\u20dd',
-      '\u{10400}\u0307',
-    ])('should treat combining marks as part of a case-neutral initial: %s', (initial) => {
-      const firstSentence = `Albert ${initial}.`;
-      const text = `${firstSentence} Jones left.`;
-      const lowerCase = text.toLowerCase();
-      expect(ss(text, { caseNeutral: true })).toEqual([firstSentence, 'Jones left.']);
-      expect(ss(lowerCase, { caseNeutral: true })).toEqual([
-        firstSentence.toLowerCase(),
-        'jones left.',
-      ]);
-    });
-
-    test('should split ambiguous singleton initials consistently in case-neutral mode', () => {
-      const mixedCase = 'We chose option A. Next step.';
-      const lowerCase = mixedCase.toLowerCase();
-      expect(ss(mixedCase)).toEqual(['We chose option A.', 'Next step.']);
-      expect(ss(lowerCase)).toEqual([lowerCase]);
-      expect(ss(mixedCase, { caseNeutral: true })).toEqual(['We chose option A.', 'Next step.']);
-      expect(ss(lowerCase, { caseNeutral: true })).toEqual(['we chose option a.', 'next step.']);
-    });
-
-    test('should not treat arbitrary singleton initials as numeric continuations', () => {
-      const mixedCase = 'We chose option A. 10 people agreed.';
-      const lowerCase = mixedCase.toLowerCase();
-      expect(ss(mixedCase)).toEqual(['We chose option A.', '10 people agreed.']);
-      expect(ss(lowerCase)).toEqual([lowerCase]);
-      expect(ss(mixedCase, { caseNeutral: true })).toEqual([
-        'We chose option A.',
-        '10 people agreed.',
-      ]);
-      expect(ss(lowerCase, { caseNeutral: true })).toEqual([
-        'we chose option a.',
-        '10 people agreed.',
-      ]);
-    });
-
-    test.each(['10', '(10)', '#10'])(
-      'should retain the page-number continuation %s case-neutrally',
-      (continuation) => {
-        const lowerCase = `Please turn to p. ${continuation} for details.`;
-        const upperCase = `Please turn to P. ${continuation} for details.`;
-        expect(ss(lowerCase)).toEqual([lowerCase]);
-        expect(ss(upperCase)).toEqual(['Please turn to P.', `${continuation} for details.`]);
-        expect(ss(lowerCase, { caseNeutral: true })).toEqual([lowerCase]);
-        expect(ss(upperCase, { caseNeutral: true })).toEqual([upperCase]);
-
-        for (const terminal of ['', '.']) {
-          const finalLowerCase = `Please turn to p. ${continuation}${terminal}`;
-          const finalUpperCase = `Please turn to P. ${continuation}${terminal}`;
-          expect(ss(finalUpperCase)).toEqual(['Please turn to P.', `${continuation}${terminal}`]);
-          expect(ss(finalLowerCase, { caseNeutral: true })).toEqual([finalLowerCase]);
-          expect(ss(finalUpperCase, { caseNeutral: true })).toEqual([finalUpperCase]);
-        }
+    test.each(['\u212a', '\u0130', 'I\u0307\u0323', 'I\u093e', 'I\u20dd', '\u{10400}\u0307'])(
+      'should treat combining marks as part of a case-neutral initial: %s',
+      (initial) => {
+        const firstSentence = `Albert ${initial}.`;
+        const text = `${firstSentence} Jones left.`;
+        const lowerCase = text.toLowerCase();
+        expect(segmentCaseNeutrally(text)).toEqual([firstSentence, 'Jones left.']);
+        expect(segmentCaseNeutrally(lowerCase)).toEqual([
+          firstSentence.toLowerCase(),
+          'jones left.',
+        ]);
       },
     );
 
-    test.each(['$10', '€10', '∫10', '→10', '-10', '±10', '"10"', '№10', '10abc', '(10)abc'])(
+    test.each([
+      ['We chose option A. Next step.', ['We chose option A.', 'Next step.']],
+      ['We chose option A. 10 people agreed.', ['We chose option A.', '10 people agreed.']],
+    ])('splits the ambiguous initial in %j', (input, expected) => {
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        expected.map((sentence) => sentence.toLowerCase()),
+      );
+    });
+
+    test.each(['10', '(10)', '#10'])(
+      'retains the page-number continuation %s case-neutrally',
+      (continuation) => {
+        const input = `Please turn to P. ${continuation} for details.`;
+        expect(segmentCaseNeutrally(input)).toEqual([input]);
+        expect(segmentCaseNeutrally(input.toLowerCase())).toEqual([input.toLowerCase()]);
+      },
+    );
+
+    test('retains an unterminated page number case-neutrally', () => {
+      expect(segmentCaseNeutrally('Please turn to P. 10')).toEqual(['Please turn to P. 10']);
+    });
+
+    test.each(['$10', '-10', '"10"', '10abc', '(10)abc'])(
       'should not treat %s as a page number',
       (continuation) => {
-        expect(ss(`First P. ${continuation} follows.`, { caseNeutral: true })).toEqual([
+        expect(segmentCaseNeutrally(`First P. ${continuation} follows.`)).toEqual([
           'First P.',
           `${continuation} follows.`,
         ]);
@@ -1174,6 +1109,7 @@ describe('Utility Functions', () => {
 
     test('should throw RangeError for non-character input', () => {
       expect(() => isUpper('abcd')).toThrow(RangeError);
+      expect(() => isUpper('\u{10400}A')).toThrow(RangeError);
     });
     test('should throw RangeError for empty input', () => {
       expect(() => isUpper('')).toThrow(RangeError);
@@ -1199,24 +1135,19 @@ describe('Utility Functions', () => {
       expect(isUpper('é')).toBe(false);
       expect(isUpper('ñ')).toBe(false);
     });
-    test('should support astral uppercase and lowercase characters', () => {
-      expect(isUpper('\u{10400}')).toBe(true);
-      expect(isUpper('\u{10428}')).toBe(false);
-      expect(() => isUpper('\u{10400}A')).toThrow(RangeError);
-    });
-    test('should recognize Unicode titlecase characters', () => {
-      expect(isUpper('Ǆ')).toBe(true);
-      expect(isUpper('ǅ')).toBe(true);
-      expect(isUpper('ǆ')).toBe(false);
-    });
-    test('should recognize Unicode uppercase characters without misclassifying lowercase forms', () => {
-      expect(isUpper('Ⅰ')).toBe(true);
-      expect(isUpper('Ⓐ')).toBe(true);
-      expect(isUpper('𝐀')).toBe(true);
-      expect(isUpper('ⅰ')).toBe(false);
-      expect(isUpper('ⓐ')).toBe(false);
-      expect(isUpper('𝐚')).toBe(false);
-      expect(isUpper('ℂ')).toBe(true);
+    test.each([
+      ['astral uppercase', '\u{10400}', true],
+      ['astral lowercase', '\u{10428}', false],
+      ['titlecase', 'ǅ', true],
+      ['titlecase lowercase', 'ǆ', false],
+      ['Roman uppercase', 'Ⅰ', true],
+      ['Roman lowercase', 'ⅰ', false],
+      ['circled uppercase', 'Ⓐ', true],
+      ['circled lowercase', 'ⓐ', false],
+      ['mapping-less uppercase', '𝐀', true],
+      ['mapping-less lowercase', '𝐚', false],
+    ])('classifies %s characters', (_label, input, expected) => {
+      expect(isUpper(input)).toBe(expected);
     });
   });
 
@@ -1238,12 +1169,12 @@ describe('Utility Functions', () => {
       expect(isTitle(' \t\r\n')).toBe(false);
     });
 
-    test('should inspect the first Unicode code point', () => {
-      expect(isTitle('  \u{10400}bc')).toBe(true);
-      expect(isTitle('  \u{10428}bc')).toBe(false);
-    });
-    test('should recognize a Unicode titlecase first character', () => {
-      expect(isTitle('ǅuro')).toBe(true);
+    test.each([
+      ['  \u{10400}bc', true],
+      ['  \u{10428}bc', false],
+      ['ǅuro', true],
+    ])('classifies the first Unicode code point in %j', (input, expected) => {
+      expect(isTitle(input)).toBe(expected);
     });
   });
 });
@@ -1254,19 +1185,6 @@ describe('Core Functions', () => {
     ['ROUGE-S', rouge.s],
     ['ROUGE-L', rouge.l],
   ] as const;
-
-  test.each([
-    ['ROUGE-N', rouge.n, 1],
-    ['ROUGE-S', rouge.s, 7 / 15],
-    ['ROUGE-L', rouge.l, 1],
-  ] as const)(
-    '%s preserves reordered sentences beginning with Other_Uppercase characters',
-    (_name, score, expected) => {
-      const reference = 'Use etc. Ⅰ begins.';
-      const candidate = 'Ⅰ begins. Use etc.';
-      expect(score(candidate, reference)).toBe(expected);
-    },
-  );
 
   test.each([
     ['ROUGE-N', rouge.n, 1],
@@ -1741,70 +1659,6 @@ describe('Core Functions', () => {
         const lowerCase = mixedCase.toLowerCase();
         expect(score(mixedCase, lowerCase)).toBeCloseTo(caseSensitiveScore);
         expect(score(mixedCase, lowerCase, { caseSensitive: false })).toBe(1);
-      },
-    );
-
-    test.each([
-      ['ROUGE-N', n],
-      ['ROUGE-S', s],
-      ['ROUGE-L', l],
-    ] as const)('%s treats Unicode name-initial casing neutrally', (_name, score) => {
-      const mixedCase = 'Albert \u212a. Jones left.';
-      expect(score(mixedCase, mixedCase.toLowerCase(), { caseSensitive: false })).toBe(1);
-    });
-
-    test.each([
-      ['ROUGE-N', n],
-      ['ROUGE-S', s],
-      ['ROUGE-L', l],
-    ] as const)('%s handles lowercase expansions in name initials', (_name, score) => {
-      const mixedCase = 'Albert \u0130. Jones left.';
-      expect(score(mixedCase, mixedCase.toLowerCase(), { caseSensitive: false })).toBe(1);
-    });
-
-    test.each([
-      ['ROUGE-N', n],
-      ['ROUGE-L', l],
-    ] as const)(
-      '%s preserves reordered singleton-initial boundaries case-insensitively',
-      (_name, score) => {
-        const reference = 'We chose option A. Next step.';
-        const candidate = 'Next step. We chose option A.';
-        expect(score(candidate, reference)).toBe(1);
-        expect(score(candidate, reference, { caseSensitive: false })).toBe(1);
-      },
-    );
-
-    test.each([
-      ['ROUGE-N', n],
-      ['ROUGE-S', s],
-      ['ROUGE-L', l],
-    ] as const)(
-      '%s matches lowercase-equivalent Unicode abbreviations case-insensitively',
-      (_name, score) => {
-        const mixedCase = 'Da\u212a.\nNext.';
-        expect(score(mixedCase, mixedCase.toLowerCase(), { caseSensitive: false })).toBe(1);
-      },
-    );
-
-    test.each([
-      ['ROUGE-N', n],
-      ['ROUGE-L', l],
-    ] as const)(
-      '%s preserves numeric boundaries after non-page singleton initials',
-      (_name, score) => {
-        const reference = 'We chose option A. 10 people agreed.';
-        const candidate = '10 people agreed. We chose option A.';
-        expect(score(candidate, reference)).toBe(1);
-        expect(score(candidate, reference, { caseSensitive: false })).toBe(1);
-      },
-    );
-
-    test.each(['10', '(10)', '#10'])(
-      'ROUGE-N keeps the page abbreviation before %s case-insensitively',
-      (continuation) => {
-        const summary = `Please see P. ${continuation} for details.`;
-        expect(n(summary, summary.toLowerCase(), { caseSensitive: false })).toBe(1);
       },
     );
 

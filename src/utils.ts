@@ -97,7 +97,7 @@ class SentenceBuffer {
   readonly #caseNeutral: boolean;
   #parts: string[] = [];
   #normalizedThrough = 0;
-  #words: { text: string; titleCase: boolean; lowerCase: boolean }[] = [];
+  #words: { titleCase: boolean; lowerCase: boolean }[] = [];
   hasLineBreaks = false;
   startsWithTitleCase = false;
 
@@ -112,10 +112,6 @@ class SentenceBuffer {
 
   get lastWordIsLowerCase(): boolean {
     return this.#words.at(-1)?.lowerCase ?? true;
-  }
-
-  get lastWord(): string {
-    return this.#words.at(-1)?.text ?? '';
   }
 
   get previousWordIsTitleCase(): boolean {
@@ -141,7 +137,6 @@ class SentenceBuffer {
       const word = match[0];
       const lowerCase = !this.#caseNeutral && word === word.toLowerCase();
       if (match.index === 0 && previous && !/\s/.test(this.#parts.at(-1)?.at(-1) ?? '')) {
-        previous.text += word;
         previous.lowerCase = previous.lowerCase && lowerCase;
       } else {
         // Neutral line-wrap handling can recognize a leading letter without treating it as a
@@ -150,7 +145,7 @@ class SentenceBuffer {
         if (this.empty) {
           this.startsWithTitleCase = this.#caseNeutral ? startsWithCasedCharacter(word) : titleCase;
         }
-        this.#words.push({ text: word, titleCase, lowerCase });
+        this.#words.push({ titleCase, lowerCase });
         if (this.#words.length > 2) {
           this.#words.shift();
         }
@@ -235,6 +230,10 @@ export function sentenceSegment(
         continue;
       }
 
+      const suffix = chunk.suffix;
+      const gateSuffix = caseNeutral ? suffix.toLowerCase() : suffix;
+      const lastWord = suffix.match(/\S+$/)?.[0] ?? '';
+
       if (chunk.hasLineBreaks) {
         if (chunks[idx + 1] && chunk.startsWithTitleCase) {
           // Catch line breaks embedded within valid sentences
@@ -253,11 +252,11 @@ export function sentenceSegment(
             }
           }
         }
-      } else if (chunks[idx + 1] && matchesGateSuffix(chunk.suffix, abbrvReg, caseNeutral)) {
+      } else if (chunks[idx + 1] && abbrvReg.test(gateSuffix)) {
         const nextChunk = chunks[idx + 1];
         if (
           (caseNeutral ? startsWithCasedCharacter(nextChunk) : strIsTitleCase(nextChunk)) &&
-          !matchesGateSuffix(chunk.suffix, excepReg, caseNeutral)
+          !excepReg.test(gateSuffix)
         ) {
           // Catch abbreviations followed by a capital letter and treat as a boundary.
           acc.push(chunk.text());
@@ -266,21 +265,17 @@ export function sentenceSegment(
           chunk.append(` ${trimSpaces(nextChunk.replace(/ +/g, ' '))}`);
           pending = chunk;
         }
-      } else if (
-        chunks[idx + 1] &&
-        matchesAcronymSuffix(chunk.suffix, chunk.lastWord, caseNeutral)
-      ) {
+      } else if (chunks[idx + 1] && matchesAcronymSuffix(suffix, lastWord, caseNeutral)) {
         const nextSentence = chunks[idx + 2];
         if (caseNeutral) {
-          if (nextSentence && isPageNumberContinuation(chunk.lastWord, nextSentence)) {
+          const continuation = nextSentence || chunks[idx + 1];
+          if (isPageNumberContinuation(lastWord, continuation)) {
             // Preserve the p./P. page-number convention without treating every initial alike.
-            chunk.append(chunks[idx + 1].replace(/\s+/g, ' ') + nextSentence);
+            chunk.append(chunks[idx + 1].replace(/\s+/g, ' ') + (nextSentence || ''));
             pending = chunk;
-            idx++;
-          } else if (!nextSentence && isPageNumberContinuation(chunk.lastWord, chunks[idx + 1])) {
-            // The unterminated remainder shares the separator slot when there is no later terminal.
-            chunk.append(chunks[idx + 1].replace(/\s+/g, ' '));
-            pending = chunk;
+            if (nextSentence) {
+              idx++;
+            }
           } else {
             // Casing cannot distinguish a name initial from an ordinary sentence boundary.
             acc.push(chunk.text());
@@ -300,7 +295,7 @@ export function sentenceSegment(
           // Retain a boundary for other entities and unterminated final fragments.
           acc.push(chunk.text());
         }
-      } else if (chunks[idx + 1] && ellipseReg.test(chunk.suffix)) {
+      } else if (chunks[idx + 1] && ellipseReg.test(suffix)) {
         // Catch mid-sentence ellipses (and their derivatives) and merge them
         const nextChunk = chunks[idx + 1];
         chunk.append(nextChunk.replace(/ +/g, ' '));
@@ -447,14 +442,12 @@ function sentenceEnd(
   }
 
   const suffix = input.slice(Math.max(0, index + 1 - sentenceSuffixLength), index + 1);
+  const gateSuffix = caseNeutral ? suffix.toLowerCase() : suffix;
   // Keep bracketed ellipses inside the surrounding sentence.
   if (ellipseReg.test(suffix) && closedBrackets > 0) {
     return -1;
   }
-  return matchesGateSuffix(suffix, abbrvReg, caseNeutral) &&
-    matchesGateSuffix(suffix, excepReg, caseNeutral)
-    ? -1
-    : end;
+  return abbrvReg.test(gateSuffix) && excepReg.test(gateSuffix) ? -1 : end;
 }
 
 function trimSpaces(input: string): string {
@@ -480,8 +473,8 @@ function trimEndSpaces(input: string): string {
  * @return {boolean}              True if the string is titlecase and false otherwise
  */
 export function strIsTitleCase(input: string): boolean {
-  const firstChar = input.trim()[Symbol.iterator]().next();
-  return !firstChar.done && charIsUpperCase(firstChar.value);
+  const firstChar = characterAt(input.trim(), 0);
+  return firstChar.length > 0 && charIsUpperCase(firstChar);
 }
 
 /**
@@ -491,12 +484,11 @@ export function strIsTitleCase(input: string): boolean {
  * @return {boolean}            True if the character is uppercase and false otherwise.
  */
 export function charIsUpperCase(input: string): boolean {
-  const character = input[Symbol.iterator]().next();
-  if (character.done || character.value.length !== input.length) {
+  const value = characterAt(input, 0);
+  if (value.length === 0 || value.length !== input.length) {
     throw new RangeError('Input should be a single character');
   }
 
-  const value = character.value;
   // Some Uppercase-property symbols have no JavaScript case mapping; preserve the legacy result.
   return (
     upperOrTitleCaseLetterReg.test(value) ||
@@ -517,17 +509,12 @@ function matchesAcronymSuffix(suffix: string, lastWord: string, caseNeutral: boo
   return caseNeutral ? caseNeutralAcronymReg.test(lastWord) : acronymReg.test(suffix);
 }
 
-function matchesGateSuffix(suffix: string, pattern: RegExp, caseNeutral: boolean): boolean {
-  return pattern.test(caseNeutral ? suffix.toLowerCase() : suffix);
-}
-
 function isPageNumberContinuation(lastWord: string, nextSentence: string): boolean {
   return lastWord.toLowerCase() === 'p.' && pageNumberContinuationReg.test(nextSentence);
 }
 
 function startsWithCasedCharacter(input: string): boolean {
-  const firstChar = input.trim()[Symbol.iterator]().next();
-  return !firstChar.done && isCasedCharacter(firstChar.value);
+  return isCasedCharacter(characterAt(input.trim(), 0));
 }
 
 /**
