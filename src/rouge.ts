@@ -1,4 +1,4 @@
-import { lcsIndices } from './lcs';
+import { lcsIndices as builtInLcsIndices } from './lcs';
 import * as utils from './utils';
 import { validateBeta, validateMaxSkip, validateNGramSize } from './validation';
 
@@ -38,8 +38,17 @@ export interface RougeLOptions {
   beta?: number;
   /** Whether comparison is case-sensitive (default: true) */
   caseSensitive?: boolean;
-  /** Custom LCS function returning an ordered token subsequence */
+  /**
+   * Custom LCS function returning an ordered token subsequence.
+   *
+   * Returned values must identify a unique sequence of reference positions. Use
+   * `lcsIndices` when repeated reference tokens make that alignment ambiguous.
+   *
+   * @deprecated Prefer `lcsIndices`, which preserves reference positions directly.
+   */
   lcs?: (a: string[], b: string[]) => string[];
+  /** Custom LCS function returning exact, strictly increasing reference indices */
+  lcsIndices?: (candidate: string[], reference: string[]) => number[];
   /** Custom sentence segmenter */
   segmenter?: (input: string) => string[];
   /** Custom string tokenizer */
@@ -209,12 +218,14 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
  * 	beta: 1.0                           // The beta value used for the f-measure
  * 	caseSensitive: true                 // Whether comparison is case-sensitive
  * 	lcs: <inbuilt function>             // The longest common subsequence function
+ * 	lcsIndices: undefined                // A position-aware custom LCS function
  * 	segmenter: <inbuilt function>,      // The sentence segmenter
  * 	tokenizer: <inbuilt function>       // The string tokenizer
  * }
  * ```
  *
  * `lcs` has a type signature of ((Array<string>, Array<string>) => Array<string>)
+ * `lcsIndices` has a type signature of ((Array<string>, Array<string>) => Array<number>)
  * `segmenter` has a type signature of ((string) => Array<string)
  * `tokenizer` has a type signature of ((string) => Array<string)
  *
@@ -236,9 +247,13 @@ export function l(cand: string, ref: string, opts?: RougeLOptions): number {
     beta = 1.0,
     caseSensitive = true,
     lcs: getLcs = utils.lcs,
+    lcsIndices: getLcsIndices,
     segmenter = utils.sentenceSegment,
     tokenizer = utils.treeBankTokenize,
   } = opts ?? {};
+  if (opts?.lcs !== undefined && getLcsIndices !== undefined) {
+    throw new RangeError('ROUGE-L options cannot specify both lcs and lcsIndices');
+  }
   validateBeta(beta);
 
   const tokenizeSentence = (sentence: string): string[] =>
@@ -264,7 +279,7 @@ export function l(cand: string, ref: string, opts?: RougeLOptions): number {
   for (const reference of refSents) {
     const union = new Set<number>();
     for (const candidate of candSents) {
-      for (const index of matchedReferenceIndices(candidate, reference, getLcs)) {
+      for (const index of matchedReferenceIndices(candidate, reference, getLcs, getLcsIndices)) {
         union.add(index);
       }
     }
@@ -290,20 +305,114 @@ function matchedReferenceIndices(
   candidate: string[],
   reference: string[],
   getLcs: (a: string[], b: string[]) => string[],
+  getLcsIndices?: (candidate: string[], reference: string[]) => number[],
 ): number[] {
+  if (getLcsIndices !== undefined) {
+    return validateCustomLcsIndices(candidate, reference, getLcsIndices(candidate, reference));
+  }
   if (getLcs === utils.lcs) {
-    return lcsIndices(candidate, reference);
+    return builtInLcsIndices(candidate, reference);
   }
 
-  // The public callback returns values, so align them to successive reference occurrences.
+  return alignUniqueReferenceIndices(candidate, reference, getLcs(candidate, reference));
+}
+
+function validateCustomLcsIndices(
+  candidate: string[],
+  reference: string[],
+  result: number[],
+): number[] {
+  if (!Array.isArray(result)) {
+    throw new RangeError('Custom lcsIndices must return an array of reference token indices');
+  }
+
   const indices: number[] = [];
-  let next = 0;
-  for (const token of getLcs(candidate, reference)) {
-    const index = reference.indexOf(token, next);
-    if (index !== -1) {
-      indices.push(index);
-      next = index + 1;
+  const tokens: string[] = [];
+  let previous = -1;
+  for (const index of result) {
+    if (
+      typeof index !== 'number' ||
+      !Number.isInteger(index) ||
+      index < 0 ||
+      index >= reference.length ||
+      index <= previous
+    ) {
+      throw new RangeError(
+        'Custom lcsIndices must return strictly increasing integer indices within the reference',
+      );
     }
+    indices.push(index);
+    tokens.push(reference[index]);
+    previous = index;
+  }
+
+  if (!isSubsequence(tokens, candidate)) {
+    throw new RangeError(
+      'Custom lcsIndices must select reference tokens that form a subsequence of the candidate',
+    );
   }
   return indices;
+}
+
+function alignUniqueReferenceIndices(
+  candidate: string[],
+  reference: string[],
+  result: string[],
+): number[] {
+  if (!Array.isArray(result)) {
+    throw new RangeError('Custom lcs must return an array of token strings');
+  }
+
+  const tokens: string[] = [];
+  for (const token of result) {
+    if (typeof token !== 'string') {
+      throw new RangeError('Custom lcs must return an array of token strings');
+    }
+    tokens.push(token);
+  }
+  if (!isSubsequence(tokens, candidate)) {
+    throw new RangeError('Custom lcs must return a common subsequence of candidate and reference');
+  }
+
+  const earliest: number[] = [];
+  let next = 0;
+  for (const token of tokens) {
+    const index = reference.indexOf(token, next);
+    if (index === -1) {
+      throw new RangeError(
+        'Custom lcs must return a common subsequence of candidate and reference',
+      );
+    }
+    earliest.push(index);
+    next = index + 1;
+  }
+
+  const latest = new Array<number>(tokens.length);
+  let before = reference.length;
+  for (let i = tokens.length - 1; i >= 0; i--) {
+    const index = reference.lastIndexOf(tokens[i], before - 1);
+    latest[i] = index;
+    before = index;
+  }
+  for (let i = 0; i < earliest.length; i++) {
+    if (earliest[i] !== latest[i]) {
+      throw new RangeError(
+        'Custom lcs returned tokens with ambiguous reference positions; use lcsIndices to return exact reference indices',
+      );
+    }
+  }
+  return earliest;
+}
+
+function isSubsequence(tokens: string[], sequence: string[]): boolean {
+  let tokenIndex = 0;
+  for (const token of sequence) {
+    if (token === tokens[tokenIndex]) {
+      tokenIndex++;
+      if (tokenIndex === tokens.length) {
+        return true;
+      }
+    }
+  }
+  return tokens.length === 0;
 }

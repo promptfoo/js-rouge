@@ -1487,6 +1487,49 @@ describe('Core Functions', () => {
       expect(l('a a a', 'a a', { lcs: customLcs })).toBeCloseTo(4 / 5);
     });
 
+    test('should reject ambiguous reference positions from a value-only LCS callback', () => {
+      const customLcs = (a: string[], b: string[]): string[] => rouge.lcs(a, b);
+      expect(() => l('a\nb a', 'a b a', { lcs: customLcs })).toThrow(
+        /ambiguous reference positions.*lcsIndices/,
+      );
+    });
+
+    test('should use exact reference positions from a custom LCS-index callback', () => {
+      const customLcsIndices = (candidate: string[]): number[] =>
+        candidate.length === 1 ? [0] : [1, 2];
+      expect(l('a\nb a', 'a b a')).toBeCloseTo(2 / 3);
+      expect(l('a\nb a', 'a b a', { lcsIndices: customLcsIndices })).toBe(1);
+    });
+
+    test('should reject specifying both custom LCS callback forms', () => {
+      expect(() =>
+        l('a', 'a', {
+          lcs: () => ['a'],
+          lcsIndices: () => [0],
+        }),
+      ).toThrow(/cannot specify both lcs and lcsIndices/);
+    });
+
+    test.each([
+      [-1],
+      [2],
+      [0.5],
+      [0, 0],
+      [1, 0],
+    ])('should reject malformed custom LCS indices: %j', (indices) => {
+      expect(() => l('a b', 'a b', { lcsIndices: () => indices })).toThrow(RangeError);
+    });
+
+    test('should reject custom LCS indices whose tokens are not a candidate subsequence', () => {
+      expect(() => l('a', 'a b', { lcsIndices: () => [1] })).toThrow(
+        /subsequence of the candidate/,
+      );
+    });
+
+    test('should reject values that are not a common subsequence from a custom LCS callback', () => {
+      expect(() => l('a b', 'a b', { lcs: () => ['b', 'a'] })).toThrow(/common subsequence/);
+    });
+
     test('should return zero when custom tokenization removes every token', () => {
       expect(l('a', 'b', { tokenizer: () => [] })).toBe(0);
     });
