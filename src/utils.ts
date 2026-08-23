@@ -80,9 +80,8 @@ const caseNeutralAcronymReg = /(?:^|[ |.])\p{Cased}\p{M}*.?$/u;
 const casedCharacterReg = /^\p{Cased}$/u;
 const upperOrTitleCaseLetterReg = /^[\p{Lu}\p{Lt}]$/u;
 const upperCaseReg = /^\p{Uppercase}$/u;
-// Page references may wrap or prefix the number, e.g. p. (10), p. "10", or p. ±10.
-const pageNumberContinuationReg =
-  /^\s*(?:[\p{Ps}\p{Pi}\p{Pf}\p{Sc}\p{Pd}\p{Sm}#№"']\s*)*\p{Number}/u;
+// Page references may wrap or prefix the number, e.g. p. (10), p. "10", or p. #10.
+const pageNumberContinuationReg = /^\s*(?:[\p{Ps}\p{Pi}\p{Pf}"']\s*)?(?:[#№+−±-]\s*)?\p{Number}/u;
 const breakReg = /[\r\n]+/;
 // Match a bounded ellipsis suffix to avoid excessive backtracking.
 const ellipseReg = /\.{2,10}$/;
