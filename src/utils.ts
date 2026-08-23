@@ -86,13 +86,15 @@ const closingBracketReg = /[\])}>]/;
 
 /** Keep merged fragments separate; boundary rules only need a suffix and word casing. */
 class SentenceBuffer {
+  readonly #caseNeutral: boolean;
   #parts: string[] = [];
   #normalizedThrough = 0;
   #words: { titleCase: boolean; lowerCase: boolean }[] = [];
   hasLineBreaks = false;
   startsWithTitleCase = false;
 
-  constructor(text: string) {
+  constructor(text: string, caseNeutral: boolean) {
+    this.#caseNeutral = caseNeutral;
     this.append(trimSpaces(text));
   }
 
@@ -125,11 +127,11 @@ class SentenceBuffer {
     const previous = this.#words.at(-1);
     for (const match of text.matchAll(/\S+/g)) {
       const word = match[0];
-      const lowerCase = word === word.toLowerCase();
+      const lowerCase = this.#caseNeutral ? !hasCasedCharacter(word) : word === word.toLowerCase();
       if (match.index === 0 && previous && !/\s/.test(this.#parts.at(-1)?.at(-1) ?? '')) {
         previous.lowerCase = previous.lowerCase && lowerCase;
       } else {
-        const titleCase = strIsTitleCase(word);
+        const titleCase = this.#caseNeutral ? startsWithCasedCharacter(word) : strIsTitleCase(word);
         if (this.empty) {
           this.startsWithTitleCase = titleCase;
         }
@@ -189,22 +191,26 @@ class SentenceBuffer {
  *
  * @method sentenceSegment
  * @param  {string}         input     The document to be segmented
+ * @param  {Object}         options   Optional sentence-boundary behavior
  * @return {Array<string>}            An array of sentences
  */
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Sentence segmentation requires complex NLP logic
-export function sentenceSegment(input: string): string[] {
+export function sentenceSegment(
+  input: string,
+  { caseNeutral = false }: SentenceSegmentOptions = {},
+): string[] {
   if (input.length === 0) {
     return [];
   }
 
   // Scan terminals before applying abbreviation and line-wrap rules.
-  const chunks = sentenceChunks(input);
+  const chunks = sentenceChunks(input, caseNeutral);
 
   const acc: string[] = [];
   let pending: SentenceBuffer | undefined;
   for (let idx = 0; idx < chunks.length; idx++) {
     if (pending || chunks[idx]) {
-      const chunk = pending ?? new SentenceBuffer(chunks[idx]);
+      const chunk = pending ?? new SentenceBuffer(chunks[idx], caseNeutral);
       pending = undefined;
       // Trim only spaces (i.e. preserve line breaks/carriage feeds)
       chunk.trimEnd();
@@ -234,7 +240,10 @@ export function sentenceSegment(input: string): string[] {
         }
       } else if (chunks[idx + 1] && abbrvReg.test(chunk.suffix)) {
         const nextChunk = chunks[idx + 1];
-        if (strIsTitleCase(nextChunk) && !excepReg.test(chunk.suffix)) {
+        if (
+          (caseNeutral ? startsWithCasedCharacter(nextChunk) : strIsTitleCase(nextChunk)) &&
+          !excepReg.test(chunk.suffix)
+        ) {
           // Catch abbreviations followed by a capital letter and treat as a boundary.
           acc.push(chunk.text());
         } else {
@@ -249,7 +258,11 @@ export function sentenceSegment(input: string): string[] {
           pending = chunk;
         } else {
           const nextSentence = chunks[idx + 2];
-          if (nextSentence && chunk.previousWordIsTitleCase && strIsTitleCase(nextSentence)) {
+          if (
+            nextSentence &&
+            chunk.previousWordIsTitleCase &&
+            (caseNeutral ? startsWithCasedCharacter(nextSentence) : strIsTitleCase(nextSentence))
+          ) {
             // Catch name abbreviations (e.g. Albert I. Jones) by checking if
             // the previous and next words are all capitalized. Normalize line
             // wrapping in the separator so it cannot split the joined name again.
@@ -281,8 +294,14 @@ export function sentenceSegment(input: string): string[] {
   return acc.length === 0 ? [input] : acc;
 }
 
+/** Options for rule-based sentence segmentation. */
+export interface SentenceSegmentOptions {
+  /** Ignore letter casing when applying sentence-boundary heuristics (default: false). */
+  caseNeutral?: boolean;
+}
+
 /** Scan sentence boundaries once, preserving the former captured-split layout. */
-function sentenceChunks(input: string): string[] {
+function sentenceChunks(input: string, caseNeutral: boolean): string[] {
   const chunks: string[] = [];
   let lastEnd = 0;
   let start = -1;
@@ -315,7 +334,7 @@ function sentenceChunks(input: string): string[] {
       continue;
     }
     if (char === '.' || char === '?' || char === '!') {
-      const end = sentenceEnd(input, index, insideQuotes, brackets);
+      const end = sentenceEnd(input, index, insideQuotes, brackets, caseNeutral);
       if (end === -1) {
         continue;
       }
@@ -365,6 +384,7 @@ function sentenceEnd(
   index: number,
   insideQuotes: boolean,
   brackets: { depth: number; standalone: boolean },
+  caseNeutral: boolean,
 ): number {
   const end = closingDelimiterEnd(input, index, insideQuotes);
   if (end < input.length && !/\s/.test(input[end])) {
@@ -395,7 +415,8 @@ function sentenceEnd(
   if (next === input.length) {
     return end;
   }
-  if (!charIsUpperCase(input[next])) {
+  const nextCharacter = characterAt(input, next);
+  if (!(caseNeutral ? isCasedCharacter(nextCharacter) : charIsUpperCase(nextCharacter))) {
     return -1;
   }
 
@@ -430,8 +451,8 @@ function trimEndSpaces(input: string): string {
  * @return {boolean}              True if the string is titlecase and false otherwise
  */
 export function strIsTitleCase(input: string): boolean {
-  const firstChar = input.trim().slice(0, 1);
-  return firstChar.length > 0 && charIsUpperCase(firstChar);
+  const firstChar = input.trim()[Symbol.iterator]().next();
+  return !firstChar.done && charIsUpperCase(firstChar.value);
 }
 
 /**
@@ -441,12 +462,36 @@ export function strIsTitleCase(input: string): boolean {
  * @return {boolean}            True if the character is uppercase and false otherwise.
  */
 export function charIsUpperCase(input: string): boolean {
-  if (input.length !== 1) {
+  const character = input[Symbol.iterator]().next();
+  if (character.done || character.value.length !== input.length) {
     throw new RangeError('Input should be a single character');
   }
 
   // Use locale-aware comparison to support international characters
-  return input.toUpperCase() === input && input.toLowerCase() !== input;
+  return character.value.toUpperCase() === character.value && isCasedCharacter(character.value);
+}
+
+function characterAt(input: string, index: number): string {
+  const codePoint = input.codePointAt(index);
+  return codePoint === undefined ? '' : String.fromCodePoint(codePoint);
+}
+
+function isCasedCharacter(input: string): boolean {
+  return input.toUpperCase() !== input.toLowerCase();
+}
+
+function startsWithCasedCharacter(input: string): boolean {
+  const firstChar = input.trim()[Symbol.iterator]().next();
+  return !firstChar.done && isCasedCharacter(firstChar.value);
+}
+
+function hasCasedCharacter(input: string): boolean {
+  for (const character of input) {
+    if (isCasedCharacter(character)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**

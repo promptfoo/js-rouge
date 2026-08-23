@@ -283,6 +283,25 @@ describe('Utility Functions', () => {
       expect(ss('Hello World. My name is Jonas.')).toEqual(['Hello World.', 'My name is Jonas.']);
     });
 
+    test('should recognize astral uppercase letters at sentence boundaries', () => {
+      expect(ss('Use etc. \u{10400} starts the next.')).toEqual([
+        'Use etc.',
+        '\u{10400} starts the next.',
+      ]);
+      expect(ss('Use etc. \u{10428} continues it.')).toEqual(['Use etc. \u{10428} continues it.']);
+    });
+
+    test('should offer case-neutral boundary classification without changing text', () => {
+      expect(ss('Use etc. Another sentence.', { caseNeutral: true })).toEqual([
+        'Use etc.',
+        'Another sentence.',
+      ]);
+      expect(ss('use etc. another sentence.', { caseNeutral: true })).toEqual([
+        'use etc.',
+        'another sentence.',
+      ]);
+    });
+
     test('should split end-of-sentence question marks', () => {
       expect(ss('What is your name? My name is Jonas.')).toEqual([
         'What is your name?',
@@ -1047,6 +1066,11 @@ describe('Utility Functions', () => {
       expect(isUpper('é')).toBe(false);
       expect(isUpper('ñ')).toBe(false);
     });
+    test('should support astral uppercase and lowercase characters', () => {
+      expect(isUpper('\u{10400}')).toBe(true);
+      expect(isUpper('\u{10428}')).toBe(false);
+      expect(() => isUpper('\u{10400}A')).toThrow(RangeError);
+    });
   });
 
   describe('strIsTitleCase', () => {
@@ -1065,6 +1089,11 @@ describe('Utility Functions', () => {
     test('should return false when there is no first character', () => {
       expect(isTitle('')).toBe(false);
       expect(isTitle(' \t\r\n')).toBe(false);
+    });
+
+    test('should inspect the first Unicode code point', () => {
+      expect(isTitle('  \u{10400}bc')).toBe(true);
+      expect(isTitle('  \u{10428}bc')).toBe(false);
     });
   });
 });
@@ -1523,6 +1552,31 @@ describe('Core Functions', () => {
 
   describe('caseSensitive option', () => {
     const { n, s, l } = rouge;
+
+    test.each([
+      ['ROUGE-N', n, 4 / 11],
+      ['ROUGE-S', s, 2 / 25],
+      ['ROUGE-L', l, 4 / 11],
+    ] as const)('%s keeps case-sensitive scoring while making case-insensitive boundaries casing-neutral', (_name, score, caseSensitiveScore) => {
+      const mixedCase = 'Use etc. Another sentence.';
+      const lowerCase = mixedCase.toLowerCase();
+      expect(score(mixedCase, lowerCase)).toBeCloseTo(caseSensitiveScore);
+      expect(score(mixedCase, lowerCase, { caseSensitive: false })).toBe(1);
+    });
+
+    test('ROUGE-L passes original text to custom segmenters before case folding', () => {
+      const segmenter = jest.fn((input: string): string[] => [input]);
+      expect(
+        l('Use etc. Another sentence.', 'use etc. another sentence.', {
+          caseSensitive: false,
+          segmenter,
+        }),
+      ).toBe(1);
+      expect(segmenter.mock.calls).toEqual([
+        ['Use etc. Another sentence.'],
+        ['use etc. another sentence.'],
+      ]);
+    });
 
     test('ROUGE-N should be case-sensitive by default', () => {
       expect(n('Hello World', 'hello world')).toBe(0);
