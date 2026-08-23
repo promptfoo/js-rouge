@@ -12,7 +12,6 @@ function prefixLengths(
   let current = new Uint32Array(width + 1);
 
   for (let i = aStart; i < aEnd; i++) {
-    current[0] = 0;
     for (let j = 1; j <= width; j++) {
       current[j] =
         a[i] === b[bStart + j - 1] ? previous[j - 1] + 1 : Math.max(previous[j], current[j - 1]);
@@ -37,17 +36,15 @@ function findSplit(
   bEnd: number,
 ): number {
   const width = bEnd - bStart;
-  let previousLengths: Uint32Array = prefixLengths(a, aStart, aMiddle, b, bStart, bEnd);
+  let previousLengths = prefixLengths(a, aStart, aMiddle, b, bStart, bEnd);
   let currentLengths: Uint32Array = new Uint32Array(width + 1);
-  let previousOrigins: Uint32Array = new Uint32Array(width + 1);
-  let currentOrigins: Uint32Array = new Uint32Array(width + 1);
+  let previousOrigins = new Uint32Array(width + 1);
+  let currentOrigins = new Uint32Array(width + 1);
   for (let j = 0; j <= width; j++) {
     previousOrigins[j] = j;
   }
 
   for (let i = aMiddle; i < aEnd; i++) {
-    currentLengths[0] = 0;
-    currentOrigins[0] = 0;
     for (let j = 1; j <= width; j++) {
       if (a[i] === b[bStart + j - 1]) {
         currentLengths[j] = previousLengths[j - 1] + 1;
