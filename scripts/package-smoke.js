@@ -21,6 +21,14 @@ function run(command, args, cwd) {
   execFileSync(command, args, { cwd, stdio: 'inherit' });
 }
 
+function writeConsumerFile(file, contents) {
+  writeFileSync(join(consumerRoot, file), contents);
+}
+
+function writeConsumerJson(file, value) {
+  writeConsumerFile(file, `${JSON.stringify(value, null, 2)}\n`);
+}
+
 try {
   assert.ok(npmCli, 'Run the package smoke test through npm');
   assert.ok(existsSync(join(repositoryRoot, 'dist', 'rouge.js')), 'Build the package first');
@@ -35,53 +43,41 @@ try {
   const tarball = join(temporaryRoot, tarballs[0]);
 
   mkdirSync(consumerRoot);
-  writeFileSync(
-    join(consumerRoot, 'package.json'),
-    `${JSON.stringify({ name: 'js-rouge-smoke', private: true, type: 'module' }, null, 2)}\n`,
-  );
-  writeFileSync(
-    join(consumerRoot, 'commonjs.cjs'),
+  writeConsumerJson('package.json', { name: 'js-rouge-smoke', private: true, type: 'module' });
+  const runtimeAssertions = `assert.equal(n('a b', 'a b', { n: 2 }), 1);
+assert.equal(l('a b', 'a b'), 1);
+assert.equal(s('a b', 'a b'), 1);
+`;
+  writeConsumerFile(
+    'commonjs.cjs',
     `const assert = require('node:assert/strict');
 const { l, n, s } = require('js-rouge');
-assert.equal(n('a b', 'a b', { n: 2 }), 1);
-assert.equal(l('a b', 'a b'), 1);
-assert.equal(s('a b', 'a b'), 1);
-`,
+${runtimeAssertions}`,
   );
-  writeFileSync(
-    join(consumerRoot, 'module.mjs'),
+  writeConsumerFile(
+    'module.mjs',
     `import assert from 'node:assert/strict';
 import { l, n, s } from 'js-rouge';
-assert.equal(n('a b', 'a b', { n: 2 }), 1);
-assert.equal(l('a b', 'a b'), 1);
-assert.equal(s('a b', 'a b'), 1);
-`,
+${runtimeAssertions}`,
   );
-  writeFileSync(
-    join(consumerRoot, 'types.ts'),
+  writeConsumerFile(
+    'types.ts',
     `import { n, type RougeNOptions } from 'js-rouge';
 const options: RougeNOptions = { n: 2, caseSensitive: false };
 const score: number = n('a b', 'A B', options);
 void score;
 `,
   );
-  writeFileSync(
-    join(consumerRoot, 'tsconfig.json'),
-    `${JSON.stringify(
-      {
-        compilerOptions: {
-          module: 'NodeNext',
-          moduleResolution: 'NodeNext',
-          noEmit: true,
-          strict: true,
-          target: 'ES2022',
-        },
-        include: ['types.ts'],
-      },
-      null,
-      2,
-    )}\n`,
-  );
+  writeConsumerJson('tsconfig.json', {
+    compilerOptions: {
+      module: 'NodeNext',
+      moduleResolution: 'NodeNext',
+      noEmit: true,
+      strict: true,
+      target: 'ES2022',
+    },
+    include: ['types.ts'],
+  });
 
   run(
     process.execPath,
