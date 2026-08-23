@@ -49,8 +49,11 @@ describe('Utility Functions', () => {
     test('should return 2432902008176640000 for 20! using cache', () => {
       expect(fact(20)).toBe(2_432_902_008_176_640_000);
     });
+    test('should preserve the legacy multiplication order for 98!', () => {
+      expect(fact(98)).toBe(9.426_890_448_883_248e153);
+    });
     test('should return a finite result for the maximum supported input', () => {
-      expect(fact(170)).toBe(7.257_415_615_307_994e306);
+      expect(fact(170)).toBe(7.257_415_615_308_004e306);
     });
   });
 

@@ -496,7 +496,8 @@ function factorial(x: number): number {
   }
 
   let result = 1;
-  for (let factor = 2; factor <= x; factor++) {
+  // Preserve the floating-point multiplication order of the former recursive implementation.
+  for (let factor = x; factor >= 2; factor--) {
     result *= factor;
   }
   return result;
