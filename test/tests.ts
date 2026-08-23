@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 import { buildSync } from 'esbuild';
+import { GATE_SUBSTITUTIONS } from '../src/constants';
 import * as rouge from '../src/rouge';
 
 const bracketPairs = [
@@ -308,6 +309,33 @@ describe('Utility Functions', () => {
       ]);
     });
 
+    test('should match lowercase-equivalent Unicode abbreviations case-neutrally', () => {
+      const mixedCase = 'Da\u212a.\nNext.';
+      const lowerCase = mixedCase.toLowerCase();
+      expect(ss(mixedCase)).toEqual(['Da\u212a.', 'Next.']);
+      expect(ss(lowerCase)).toEqual(['dak.', 'next.']);
+      expect(ss(mixedCase, { caseNeutral: true })).toEqual(['Da\u212a. Next.']);
+      expect(ss(lowerCase, { caseNeutral: true })).toEqual(['dak. next.']);
+    });
+
+    test('should match every Kelvin-equivalent gate substitution case-neutrally', () => {
+      const substitutions = [...new Set(GATE_SUBSTITUTIONS.filter((word) => word.includes('k')))];
+      expect(substitutions).not.toHaveLength(0);
+      for (const substitution of substitutions) {
+        const kelvinEquivalent = substitution.replaceAll('k', '\u212a');
+        const mixedCase = `${kelvinEquivalent}.\nNext.`;
+        expect(ss(mixedCase, { caseNeutral: true })).toEqual([`${kelvinEquivalent}. Next.`]);
+        expect(ss(mixedCase.toLowerCase(), { caseNeutral: true })).toEqual([
+          `${substitution}. next.`,
+        ]);
+      }
+    });
+
+    test('should preserve gate exceptions in case-neutral quoted continuations', () => {
+      expect(ss('"Mt." Next stop.', { caseNeutral: true })).toEqual(['"Mt." Next stop.']);
+      expect(ss('"mt." next stop.', { caseNeutral: true })).toEqual(['"mt." next stop.']);
+    });
+
     test('should classify Unicode name initials without changing the default path', () => {
       const kelvinSign = 'Albert \u212a. Jones left.';
       const lowerCase = kelvinSign.toLowerCase();
@@ -395,6 +423,19 @@ describe('Utility Functions', () => {
         expect(ss(upperCase)).toEqual(['Please turn to P.', `${continuation} for details.`]);
         expect(ss(lowerCase, { caseNeutral: true })).toEqual([lowerCase]);
         expect(ss(upperCase, { caseNeutral: true })).toEqual([upperCase]);
+      },
+    );
+
+    test.each(['10', '(10)', '#10', '-10', '±10'])(
+      'should retain the final page-number continuation %s with or without a terminal',
+      (continuation) => {
+        for (const terminal of ['', '.']) {
+          const lowerCase = `Please turn to p. ${continuation}${terminal}`;
+          const upperCase = `Please turn to P. ${continuation}${terminal}`;
+          expect(ss(upperCase)).toEqual(['Please turn to P.', `${continuation}${terminal}`]);
+          expect(ss(lowerCase, { caseNeutral: true })).toEqual([lowerCase]);
+          expect(ss(upperCase, { caseNeutral: true })).toEqual([upperCase]);
+        }
       },
     );
 
@@ -1704,6 +1745,18 @@ describe('Core Functions', () => {
 
     test.each([
       ['ROUGE-N', n],
+      ['ROUGE-S', s],
+      ['ROUGE-L', l],
+    ] as const)(
+      '%s matches lowercase-equivalent Unicode abbreviations case-insensitively',
+      (_name, score) => {
+        const mixedCase = 'Da\u212a.\nNext.';
+        expect(score(mixedCase, mixedCase.toLowerCase(), { caseSensitive: false })).toBe(1);
+      },
+    );
+
+    test.each([
+      ['ROUGE-N', n],
       ['ROUGE-L', l],
     ] as const)(
       '%s preserves numeric boundaries after non-page singleton initials',
@@ -1712,6 +1765,32 @@ describe('Core Functions', () => {
         const candidate = '10 people agreed. We chose option A.';
         expect(score(candidate, reference)).toBe(1);
         expect(score(candidate, reference, { caseSensitive: false })).toBe(1);
+      },
+    );
+
+    test.each([
+      ['10', ['please', 'see', 'p.', '10']],
+      ['(10)', ['please', 'see', 'p.', '(', '10', ')']],
+      ['#10', ['please', 'see', 'p.', '#', '10']],
+      ['-10', ['please', 'see', 'p.', '-10']],
+      ['±10', ['please', 'see', 'p.', '±10']],
+    ] as const)(
+      'ROUGE-N retains p./P. before the final numeric continuation %s',
+      (continuation, baseTokens) => {
+        for (const terminal of ['', '.']) {
+          const expectedTokens = terminal ? [...baseTokens, terminal] : [...baseTokens];
+          for (const letter of ['p', 'P']) {
+            const summary = `Please see ${letter}. ${continuation}${terminal}`;
+            expect(n('p', summary, { caseSensitive: false })).toBe(0);
+
+            const nGram = jest.fn((tokens: string[]): string[] => tokens);
+            expect(n(summary, summary.toLowerCase(), { caseSensitive: false, nGram })).toBe(1);
+            expect(nGram.mock.calls).toEqual([
+              [expectedTokens, 1],
+              [expectedTokens, 1],
+            ]);
+          }
+        }
       },
     );
 

@@ -260,11 +260,11 @@ export function sentenceSegment(
             }
           }
         }
-      } else if (chunks[idx + 1] && abbrvReg.test(chunk.suffix)) {
+      } else if (chunks[idx + 1] && matchesGateSuffix(chunk.suffix, abbrvReg, caseNeutral)) {
         const nextChunk = chunks[idx + 1];
         if (
           (caseNeutral ? startsWithCasedCharacter(nextChunk) : strIsTitleCase(nextChunk)) &&
-          !excepReg.test(chunk.suffix)
+          !matchesGateSuffix(chunk.suffix, excepReg, caseNeutral)
         ) {
           // Catch abbreviations followed by a capital letter and treat as a boundary.
           acc.push(chunk.text());
@@ -284,6 +284,10 @@ export function sentenceSegment(
             chunk.append(chunks[idx + 1].replace(/\s+/g, ' ') + nextSentence);
             pending = chunk;
             idx++;
+          } else if (!nextSentence && isPageNumberContinuation(chunk.lastWord, chunks[idx + 1])) {
+            // The unterminated remainder shares the separator slot when there is no later terminal.
+            chunk.append(chunks[idx + 1].replace(/\s+/g, ' '));
+            pending = chunk;
           } else {
             // Casing cannot distinguish a name initial from an ordinary sentence boundary.
             acc.push(chunk.text());
@@ -454,7 +458,10 @@ function sentenceEnd(
   if (ellipseReg.test(suffix) && closedBrackets > 0) {
     return -1;
   }
-  return abbrvReg.test(suffix) && excepReg.test(suffix) ? -1 : end;
+  return matchesGateSuffix(suffix, abbrvReg, caseNeutral) &&
+    matchesGateSuffix(suffix, excepReg, caseNeutral)
+    ? -1
+    : end;
 }
 
 function trimSpaces(input: string): string {
@@ -510,6 +517,10 @@ function isCasedCharacter(input: string): boolean {
 
 function matchesAcronymSuffix(suffix: string, lastWord: string, caseNeutral: boolean): boolean {
   return caseNeutral ? caseNeutralAcronymReg.test(lastWord) : acronymReg.test(suffix);
+}
+
+function matchesGateSuffix(suffix: string, pattern: RegExp, caseNeutral: boolean): boolean {
+  return pattern.test(caseNeutral ? suffix.toLowerCase() : suffix);
 }
 
 function isPageNumberContinuation(lastWord: string, nextSentence: string): boolean {
