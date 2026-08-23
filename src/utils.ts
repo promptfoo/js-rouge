@@ -558,40 +558,24 @@ export const NGRAM_DEFAULT_OPTS: NGramOptions = {
 export function nGram(tokens: string[], n = 2, pad: Partial<NGramOptions> = {}): string[] {
   validateNGramSize(n);
 
-  let workingTokens = tokens;
-
-  if (Object.keys(pad).length > 0) {
-    const config = {
-      start: pad.start ?? NGRAM_DEFAULT_OPTS.start,
-      end: pad.end ?? NGRAM_DEFAULT_OPTS.end,
-      val: pad.val ?? NGRAM_DEFAULT_OPTS.val,
-    };
-
-    const paddingSize = n - 1;
-    const paddedLength =
-      tokens.length + (config.start ? paddingSize : 0) + (config.end ? paddingSize : 0);
-    if (paddedLength < n) {
-      throw new RangeError('ngram size cannot be larger than the number of tokens available');
-    }
-
-    // Clone the input token array to avoid mutating the source data
-    workingTokens = tokens.slice();
-
-    if (config.start) {
-      for (let i = 0; i < n - 1; i++) {
-        workingTokens.unshift(config.val);
-      }
-    }
-    if (config.end) {
-      for (let i = 0; i < n - 1; i++) {
-        workingTokens.push(config.val);
-      }
-    }
-  }
-
-  if (workingTokens.length < n) {
+  const config = {
+    start: pad.start ?? NGRAM_DEFAULT_OPTS.start,
+    end: pad.end ?? NGRAM_DEFAULT_OPTS.end,
+    val: pad.val ?? NGRAM_DEFAULT_OPTS.val,
+  };
+  const paddingSize = n - 1;
+  const paddedLength =
+    tokens.length + (config.start ? paddingSize : 0) + (config.end ? paddingSize : 0);
+  if (paddedLength < n) {
     throw new RangeError('ngram size cannot be larger than the number of tokens available');
   }
+
+  const startPadding = config.start ? new Array<string>(paddingSize).fill(config.val) : [];
+  const endPadding = config.end ? new Array<string>(paddingSize).fill(config.val) : [];
+  const workingTokens =
+    startPadding.length === 0 && endPadding.length === 0
+      ? tokens
+      : startPadding.concat(tokens, endPadding);
 
   const acc: string[] = [];
   for (let idx = 0; idx < workingTokens.length - n + 1; idx++) {
