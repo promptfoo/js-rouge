@@ -15,6 +15,29 @@ const invalidNGramSizes = [...nonFiniteNumbers, -1, 0, 1.5];
 const invalidMaxSkips = [Number.NaN, Number.NEGATIVE_INFINITY, -1, 0.5, 1.5];
 const invalidBetas = [Number.NaN, Number.NEGATIVE_INFINITY, -1];
 
+function expectBundledScriptToPass(script: string, timeout: number, nodeArgs: string[] = []): void {
+  const bundled = buildSync({
+    entryPoints: [join(__dirname, '../src/rouge.ts')],
+    bundle: true,
+    platform: 'node',
+    target: 'node18',
+    write: false,
+  }).outputFiles[0].text;
+  const child = spawnSync(process.execPath, nodeArgs, {
+    input: `${bundled}\n${script}`,
+    encoding: 'utf8',
+    timeout,
+  });
+  if (child.error) {
+    throw child.error;
+  }
+  if (child.status !== 0 || child.stderr !== '' || child.stdout !== 'ok') {
+    throw new Error(
+      `Bundled script failed: ${JSON.stringify({ status: child.status, stderr: child.stderr, stdout: child.stdout })}`,
+    );
+  }
+}
+
 describe('Utility Functions', () => {
   describe('fact', () => {
     const { fact } = rouge;
@@ -618,14 +641,8 @@ describe('Utility Functions', () => {
       const TIMEOUT_MS = 500;
 
       test('should segment abbreviation chains within a small heap', () => {
-        const bundled = buildSync({
-          entryPoints: [join(__dirname, '../src/rouge.ts')],
-          bundle: true,
-          platform: 'node',
-          target: 'node18',
-          write: false,
-        }).outputFiles[0].text;
-        const script = `${bundled}
+        expectBundledScriptToPass(
+          `
           for (const [fragment, normalized] of [['Dr. ', 'Dr. '], ['e.g. ', 'e.g. '], ['Dr.\\n', 'Dr. ']]) {
             const summary = fragment.repeat(5000) + 'End.';
             const sentences = module.exports.sentenceSegment(summary);
@@ -637,15 +654,10 @@ describe('Utility Functions', () => {
             }
           }
           process.stdout.write('ok');
-        `;
-        const child = spawnSync(process.execPath, ['--max-old-space-size=64'], {
-          input: script,
-          encoding: 'utf8',
-          timeout: 15_000,
-        });
-        expect(child.error).toBeUndefined();
-        expect({ status: child.status, stderr: child.stderr }).toEqual({ status: 0, stderr: '' });
-        expect(child.stdout).toBe('ok');
+        `,
+          15_000,
+          ['--max-old-space-size=64'],
+        );
       });
 
       test('should handle long strings without sentence terminators quickly', () => {
@@ -1398,11 +1410,11 @@ describe('Core Functions', () => {
       }
 
       for (const candidate of sequences) {
+        const candidateJson = JSON.stringify(candidate);
         for (const reference of sequences) {
+          const referenceJson = JSON.stringify(reference);
           for (const maxSkip of [0, 1, 2, Number.POSITIVE_INFINITY]) {
             for (const beta of [0, 1, Number.POSITIVE_INFINITY]) {
-              const candidateJson = JSON.stringify(candidate);
-              const referenceJson = JSON.stringify(reference);
               expect(s(candidateJson, referenceJson, { tokenizer, maxSkip, beta })).toBeCloseTo(
                 s(candidateJson, referenceJson, {
                   tokenizer,
@@ -1419,42 +1431,22 @@ describe('Core Functions', () => {
     });
 
     test('should score long summaries within a small heap', () => {
-      const bundled = buildSync({
-        entryPoints: [join(__dirname, '../src/rouge.ts')],
-        bundle: true,
-        platform: 'node',
-        target: 'node18',
-        write: false,
-      }).outputFiles[0].text;
-      const script = `${bundled}
+      expectBundledScriptToPass(
+        `
           const summary = Array.from({ length: 5000 }, () => 'a').join(' ');
           if (module.exports.s(summary, summary) !== 1) {
             throw new Error('ROUGE-S score changed');
           }
           process.stdout.write('ok');
-        `;
-      const child = spawnSync(process.execPath, ['--max-old-space-size=64'], {
-        input: script,
-        encoding: 'utf8',
-        timeout: 30_000,
-      });
-      expect(child.error).toBeUndefined();
-      expect({ status: child.status, stderr: child.stderr }).toEqual({
-        status: 0,
-        stderr: '',
-      });
-      expect(child.stdout).toBe('ok');
+        `,
+        30_000,
+        ['--max-old-space-size=64'],
+      );
     }, 30_000);
 
     test('should score finite windows without scanning every distinct token pair', () => {
-      const bundled = buildSync({
-        entryPoints: [join(__dirname, '../src/rouge.ts')],
-        bundle: true,
-        platform: 'node',
-        target: 'node18',
-        write: false,
-      }).outputFiles[0].text;
-      const script = `${bundled}
+      expectBundledScriptToPass(
+        `
           const summary = Array.from({ length: 30000 }, (_, index) => \`token\${index}\`).join(' ');
           if (module.exports.s(summary, summary, { maxSkip: 0 }) !== 0) {
             throw new Error('zero-window score changed');
@@ -1463,18 +1455,9 @@ describe('Core Functions', () => {
             throw new Error('finite-window score changed');
           }
           process.stdout.write('ok');
-        `;
-      const child = spawnSync(process.execPath, [], {
-        input: script,
-        encoding: 'utf8',
-        timeout: 3000,
-      });
-      expect(child.error).toBeUndefined();
-      expect({ status: child.status, stderr: child.stderr }).toEqual({
-        status: 0,
-        stderr: '',
-      });
-      expect(child.stdout).toBe('ok');
+        `,
+        3000,
+      );
     }, 10_000);
 
     test('should respect maxSkip option', () => {
