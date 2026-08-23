@@ -15,17 +15,18 @@ const { dirname, join, resolve } = require('node:path');
 const repositoryRoot = resolve(__dirname, '..');
 const temporaryRoot = mkdtempSync(join(tmpdir(), 'js-rouge-package-'));
 const consumerRoot = join(temporaryRoot, 'consumer');
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const npmCli = process.env.npm_execpath;
 
 function run(command, args, cwd) {
   execFileSync(command, args, { cwd, stdio: 'inherit' });
 }
 
 try {
+  assert.ok(npmCli, 'Run the package smoke test through npm');
   assert.ok(existsSync(join(repositoryRoot, 'dist', 'rouge.js')), 'Build the package first');
   run(
-    npmCommand,
-    ['pack', '--ignore-scripts', '--pack-destination', temporaryRoot],
+    process.execPath,
+    [npmCli, 'pack', '--ignore-scripts', '--pack-destination', temporaryRoot],
     repositoryRoot,
   );
 
@@ -83,8 +84,16 @@ void score;
   );
 
   run(
-    npmCommand,
-    ['install', '--ignore-scripts', '--no-audit', '--no-fund', '--no-package-lock', tarball],
+    process.execPath,
+    [
+      npmCli,
+      'install',
+      '--ignore-scripts',
+      '--no-audit',
+      '--no-fund',
+      '--no-package-lock',
+      tarball,
+    ],
     consumerRoot,
   );
   run(process.execPath, ['commonjs.cjs'], consumerRoot);
