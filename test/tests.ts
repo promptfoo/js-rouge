@@ -11,7 +11,8 @@ const bracketPairs = [
 ] as const;
 const geographicAcronyms = ['U.S.', 'U.S.A.', 'E.U.'];
 const nonFiniteNumbers = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
-const invalidNGramSizes = [...nonFiniteNumbers, -1, 0, 1.5];
+const unsafeInteger = Number.MAX_SAFE_INTEGER + 1;
+const invalidNGramSizes = [...nonFiniteNumbers, -1, 0, 1.5, unsafeInteger];
 const invalidMaxSkips = [Number.NaN, Number.NEGATIVE_INFINITY, -1, 0.5, 1.5];
 const invalidBetas = [Number.NaN, Number.NEGATIVE_INFINITY, -1];
 
@@ -64,8 +65,14 @@ describe('Utility Functions', () => {
   describe('comb2', () => {
     const { comb2 } = rouge;
 
-    test('should throw RangeError for C(1,2)', () => {
-      expect(() => comb2(1)).toThrow(RangeError);
+    test.each([1, ...nonFiniteNumbers, 2.5, unsafeInteger])(
+      'should reject invalid item count %s',
+      (value) => {
+        expect(() => comb2(value)).toThrow(RangeError);
+      },
+    );
+    test('should reject results that exceed the safe integer range', () => {
+      expect(() => comb2(134_217_729)).toThrow(RangeError);
     });
 
     test('should return 1 for C(2,2)', () => {
@@ -76,6 +83,9 @@ describe('Utility Functions', () => {
     });
     test('should return 499500 for C(1000,2)', () => {
       expect(comb2(1000)).toBe(499_500);
+    });
+    test('should return the largest safe boundary result', () => {
+      expect(comb2(134_217_728)).toBe(9_007_199_187_632_128);
     });
   });
 
@@ -243,6 +253,28 @@ describe('Utility Functions', () => {
         'c d',
       ]);
       expect(nGram(data, 2, { start: undefined, end: undefined })).toEqual(nGram(data, 2));
+    });
+
+    test('should apply requested padding before validating short inputs', () => {
+      const oneToken = ['a'];
+      expect(nGram(oneToken, 2, { start: true })).toEqual(['<S> a']);
+      expect(nGram(oneToken, 2, { end: true })).toEqual(['a <S>']);
+      expect(nGram([], 2, { start: true, end: true })).toEqual(['<S> <S>']);
+      expect(oneToken).toEqual(['a']);
+    });
+
+    test('should still reject short inputs when padding is insufficient', () => {
+      expect(() => nGram([], 2, { start: true })).toThrow(RangeError);
+    });
+
+    test('should reject impossible padding before allocation', () => {
+      expect(() => nGram([], 1_000_000_000, { start: true })).toThrow(RangeError);
+    });
+
+    test('should reject excessive two-sided padding before materialization', () => {
+      expect(() => nGram([], 1_000_000_000, { start: true, end: true })).toThrow(
+        /materialization limit/,
+      );
     });
   });
 
@@ -918,6 +950,30 @@ describe('Utility Functions', () => {
       expect(jk(cands, ref, evalFunc, statTest)).toBe(31);
     });
 
+    test('should preserve leave-one-out maxima and score each candidate once', () => {
+      const scorer = jest.fn((candidate: string): number => Number(candidate));
+      const statistic = jest.fn(() => 0);
+
+      expect(jk(['4', '3', '2'], ref, scorer, statistic)).toBe(0);
+      expect(statistic).toHaveBeenCalledWith([3, 4, 4]);
+      expect(scorer.mock.calls).toEqual([
+        ['4', ref],
+        ['3', ref],
+        ['2', ref],
+      ]);
+    });
+
+    test('should preserve NaN propagation in leave-one-out maxima', () => {
+      const statistic = jest.fn(() => 0);
+      jk(['nan', '3', '1'], ref, (candidate) => Number(candidate), statistic);
+      expect(statistic).toHaveBeenCalledWith([3, Number.NaN, Number.NaN]);
+    });
+
+    test('should handle large candidate sets without quadratic resampling', () => {
+      const candidates = Array.from({ length: 50_000 }, (_, index) => String(index));
+      expect(jk(candidates, ref, () => 1)).toBe(1);
+    });
+
     test('should adapt multiple references without reversing an asymmetric scorer', () => {
       const candidate = 'a';
       const references = ['a b', 'a c d', 'a b c d e'];
@@ -1328,6 +1384,12 @@ describe('Core Functions', () => {
       const tokenizer = (text: string): string[] => text.split('');
       const nGram = (tokens: string[]): string[] => tokens;
       expect(n('aaa', 'aa', { tokenizer, nGram })).toBeCloseTo(4 / 5);
+    });
+
+    test('should not apply the built-in padding limit to custom ngram callbacks', () => {
+      const nGram = jest.fn((): string[] => ['match']);
+      expect(n('a', 'a', { n: 1_000_000_000, nGram })).toBe(1);
+      expect(nGram).toHaveBeenCalledTimes(2);
     });
 
     test('should correctly compute ROUGE-N score with custom beta', () => {

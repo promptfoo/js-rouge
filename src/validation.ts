@@ -1,7 +1,7 @@
 /** Shared numeric contracts for the scorers and their public utilities. */
 export function validateNGramSize(n: number): void {
-  if (!Number.isInteger(n) || n < 1) {
-    throw new RangeError('ngram size must be a positive integer');
+  if (!Number.isSafeInteger(n) || n < 1) {
+    throw new RangeError('ngram size must be a positive safe integer');
   }
 }
 

@@ -509,6 +509,8 @@ export const NGRAM_DEFAULT_OPTS: NGramOptions = {
   val: '<S>',
 };
 
+const MAX_NGRAM_PADDING_WORK = 1_000_000;
+
 /**
  * Returns n-grams for an array of word tokens.
  *
@@ -521,36 +523,34 @@ export const NGRAM_DEFAULT_OPTS: NGramOptions = {
 export function nGram(tokens: string[], n = 2, pad: Partial<NGramOptions> = {}): string[] {
   validateNGramSize(n);
 
-  if (tokens.length < n) {
+  const start = pad.start ?? NGRAM_DEFAULT_OPTS.start;
+  const end = pad.end ?? NGRAM_DEFAULT_OPTS.end;
+  const value = pad.val ?? NGRAM_DEFAULT_OPTS.val;
+  const paddingSize = n - 1;
+  const startPaddingSize = start ? paddingSize : 0;
+  const endPaddingSize = end ? paddingSize : 0;
+  const paddingLength = startPaddingSize + endPaddingSize;
+  const paddedLength = tokens.length + paddingLength;
+  if (paddedLength < n) {
     throw new RangeError('ngram size cannot be larger than the number of tokens available');
   }
 
-  let workingTokens = tokens;
-
-  if (Object.keys(pad).length > 0) {
-    const config = {
-      start: pad.start ?? NGRAM_DEFAULT_OPTS.start,
-      end: pad.end ?? NGRAM_DEFAULT_OPTS.end,
-      val: pad.val ?? NGRAM_DEFAULT_OPTS.val,
-    };
-
-    // Clone the input token array to avoid mutating the source data
-    workingTokens = tokens.slice();
-
-    if (config.start) {
-      for (let i = 0; i < n - 1; i++) {
-        workingTokens.unshift(config.val);
-      }
-    }
-    if (config.end) {
-      for (let i = 0; i < n - 1; i++) {
-        workingTokens.push(config.val);
-      }
-    }
+  const gramCount = paddedLength - n + 1;
+  const unpaddedGramCount = Math.max(tokens.length - n + 1, 0);
+  const paddingWork = paddingLength + n * (gramCount - unpaddedGramCount);
+  if (
+    paddingLength > 0 &&
+    (!Number.isSafeInteger(paddingWork) || paddingWork > MAX_NGRAM_PADDING_WORK)
+  ) {
+    throw new RangeError('Padded n-gram generation exceeds the materialization limit');
   }
 
+  const startPadding = new Array<string>(startPaddingSize).fill(value);
+  const endPadding = new Array<string>(endPaddingSize).fill(value);
+  const workingTokens = paddingLength === 0 ? tokens : startPadding.concat(tokens, endPadding);
+
   const acc: string[] = [];
-  for (let idx = 0; idx < workingTokens.length - n + 1; idx++) {
+  for (let idx = 0; idx < gramCount; idx++) {
     acc.push(workingTokens.slice(idx, idx + n).join(' '));
   }
 
@@ -566,10 +566,14 @@ export function nGram(tokens: string[], n = 2, pad: Partial<NGramOptions> = {}):
  * @return {number}         The number of ways in which 2 items can be chosen from `val`
  */
 export function comb2(val: number): number {
-  if (val < 2) {
-    throw new RangeError('Input must be greater than 2');
+  if (!Number.isSafeInteger(val) || val < 2) {
+    throw new RangeError('Input must be a safe integer greater than or equal to 2');
   }
-  return 0.5 * val * (val - 1);
+  const result = (val * (val - 1)) / 2;
+  if (!Number.isSafeInteger(result)) {
+    throw new RangeError('Result exceeds Number.MAX_SAFE_INTEGER');
+  }
+  return result;
 }
 
 /**
@@ -613,18 +617,22 @@ export function jackKnife(
     throw new RangeError('Candidate array must contain more than one element');
   }
 
-  const pairs: number[] = cands.map((c) => func(c, ref));
+  const scores = cands.map((candidate) => func(candidate, ref));
 
-  const acc: number[] = [];
-  for (let idx = 0; idx < pairs.length; idx++) {
-    // Clone the array and remove one element
-    const leaveOneOut = pairs.slice(0);
-    leaveOneOut.splice(idx, 1);
-
-    acc.push(Math.max(...leaveOneOut));
+  const suffixMax = new Array<number>(scores.length + 1);
+  suffixMax[scores.length] = Number.NEGATIVE_INFINITY;
+  for (let idx = scores.length - 1; idx >= 0; idx--) {
+    suffixMax[idx] = Math.max(suffixMax[idx + 1], scores[idx]);
   }
 
-  return test(acc);
+  const leaveOneOutMaxima = new Array<number>(scores.length);
+  let prefixMax = Number.NEGATIVE_INFINITY;
+  for (let idx = 0; idx < scores.length; idx++) {
+    leaveOneOutMaxima[idx] = Math.max(prefixMax, suffixMax[idx + 1]);
+    prefixMax = Math.max(prefixMax, scores[idx]);
+  }
+
+  return test(leaveOneOutMaxima);
 }
 
 /**
@@ -635,7 +643,7 @@ export function jackKnife(
  * F_β = ((1 + β²) × P × R) / (β² × P + R)
  *
  * Beta controls the tradeoff between precision and recall:
- * - beta = 0: Pure precision (F₀ = P)
+ * - beta = 0: Pure precision when recall is positive; zero when recall is zero
  * - beta = 1: F1 score (harmonic mean, equal weight)
  * - beta = 2: F2 score (weighs recall twice as much as precision)
  * - beta = Infinity: Pure recall
