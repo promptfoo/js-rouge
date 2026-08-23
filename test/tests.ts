@@ -320,6 +320,7 @@ describe('Utility Functions', () => {
 
   describe('sentenceSegment', () => {
     const ss = rouge.sentenceSegment;
+    const segmentCaseNeutrally = (input: string): string[] => ss(input, { caseNeutral: true });
 
     test('should return empty array for empty input', () => {
       expect(ss('')).toEqual([]);
@@ -331,6 +332,92 @@ describe('Utility Functions', () => {
     test('should split simple periods', () => {
       expect(ss('Hello World. My name is Jonas.')).toEqual(['Hello World.', 'My name is Jonas.']);
     });
+
+    test.each([
+      ['astral uppercase', '\u{10400}', true],
+      ['astral lowercase', '\u{10428}', false],
+      ['titlecase', 'ǅ', true],
+      ['Roman numeral', 'Ⅰ', true],
+      ['circled uppercase', 'Ⓐ', true],
+      ['mapping-less uppercase', '𝐀', true],
+      ['mapping-less lowercase', '𝐚', false],
+    ])('classifies %s sentence starts', (_label, character, defaultBoundary) => {
+      const input = `Use etc. ${character} begins.`;
+      const sentences = ['Use etc.', `${character} begins.`];
+      expect(ss(input)).toEqual(defaultBoundary ? sentences : [input]);
+      expect(segmentCaseNeutrally(input)).toEqual(sentences);
+    });
+
+    test('recognizes titlecase letters across line wraps', () => {
+      expect(ss('ǅuro\ncontinued.')).toEqual(['ǅuro continued.']);
+    });
+
+    test.each([
+      ['Use etc. Another sentence.', ['Use etc.', 'Another sentence.']],
+      ['use etc. another sentence.', ['use etc.', 'another sentence.']],
+    ])('segments %j without changing its text', (input, expected) => {
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
+    test('should match lowercase-equivalent Unicode abbreviations case-neutrally', () => {
+      const mixedCase = 'Da\u212a.\nNext.';
+      const lowerCase = mixedCase.toLowerCase();
+      expect(ss(mixedCase)).toEqual(['Da\u212a.', 'Next.']);
+      expect(segmentCaseNeutrally(mixedCase)).toEqual(['Da\u212a. Next.']);
+      expect(segmentCaseNeutrally(lowerCase)).toEqual(['dak. next.']);
+    });
+
+    test('should preserve gate exceptions in case-neutral quoted continuations', () => {
+      expect(segmentCaseNeutrally('"Mt." Next stop.')).toEqual(['"Mt." Next stop.']);
+      expect(segmentCaseNeutrally('"mt." next stop.')).toEqual(['"mt." next stop.']);
+    });
+
+    test.each(['\u212a', '\u0130', 'I\u0307\u0323', 'I\u093e', 'I\u20dd', '\u{10400}\u0307'])(
+      'should treat combining marks as part of a case-neutral initial: %s',
+      (initial) => {
+        const firstSentence = `Albert ${initial}.`;
+        const text = `${firstSentence} Jones left.`;
+        const lowerCase = text.toLowerCase();
+        expect(segmentCaseNeutrally(text)).toEqual([firstSentence, 'Jones left.']);
+        expect(segmentCaseNeutrally(lowerCase)).toEqual([
+          firstSentence.toLowerCase(),
+          'jones left.',
+        ]);
+      },
+    );
+
+    test.each([
+      ['We chose option A. Next step.', ['We chose option A.', 'Next step.']],
+      ['We chose option A. 10 people agreed.', ['We chose option A.', '10 people agreed.']],
+    ])('splits the ambiguous initial in %j', (input, expected) => {
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        expected.map((sentence) => sentence.toLowerCase()),
+      );
+    });
+
+    test.each(['10', '(10)', '#10'])(
+      'retains the page-number continuation %s case-neutrally',
+      (continuation) => {
+        const input = `Please turn to P. ${continuation} for details.`;
+        expect(segmentCaseNeutrally(input)).toEqual([input]);
+        expect(segmentCaseNeutrally(input.toLowerCase())).toEqual([input.toLowerCase()]);
+      },
+    );
+
+    test('retains an unterminated page number case-neutrally', () => {
+      expect(segmentCaseNeutrally('Please turn to P. 10')).toEqual(['Please turn to P. 10']);
+    });
+
+    test.each(['$10', '-10', '"10"', '10abc', '(10)abc'])(
+      'should not treat %s as a page number',
+      (continuation) => {
+        expect(segmentCaseNeutrally(`First P. ${continuation} follows.`)).toEqual([
+          'First P.',
+          `${continuation} follows.`,
+        ]);
+      },
+    );
 
     test('should split end-of-sentence question marks', () => {
       expect(ss('What is your name? My name is Jonas.')).toEqual([
@@ -1084,6 +1171,7 @@ describe('Utility Functions', () => {
 
     test('should throw RangeError for non-character input', () => {
       expect(() => isUpper('abcd')).toThrow(RangeError);
+      expect(() => isUpper('\u{10400}A')).toThrow(RangeError);
     });
     test('should throw RangeError for empty input', () => {
       expect(() => isUpper('')).toThrow(RangeError);
@@ -1109,6 +1197,20 @@ describe('Utility Functions', () => {
       expect(isUpper('é')).toBe(false);
       expect(isUpper('ñ')).toBe(false);
     });
+    test.each([
+      ['astral uppercase', '\u{10400}', true],
+      ['astral lowercase', '\u{10428}', false],
+      ['titlecase', 'ǅ', true],
+      ['titlecase lowercase', 'ǆ', false],
+      ['Roman uppercase', 'Ⅰ', true],
+      ['Roman lowercase', 'ⅰ', false],
+      ['circled uppercase', 'Ⓐ', true],
+      ['circled lowercase', 'ⓐ', false],
+      ['mapping-less uppercase', '𝐀', true],
+      ['mapping-less lowercase', '𝐚', false],
+    ])('classifies %s characters', (_label, input, expected) => {
+      expect(isUpper(input)).toBe(expected);
+    });
   });
 
   describe('strIsTitleCase', () => {
@@ -1128,6 +1230,14 @@ describe('Utility Functions', () => {
       expect(isTitle('')).toBe(false);
       expect(isTitle(' \t\r\n')).toBe(false);
     });
+
+    test.each([
+      ['  \u{10400}bc', true],
+      ['  \u{10428}bc', false],
+      ['ǅuro', true],
+    ])('classifies the first Unicode code point in %j', (input, expected) => {
+      expect(isTitle(input)).toBe(expected);
+    });
   });
 });
 
@@ -1137,6 +1247,20 @@ describe('Core Functions', () => {
     ['ROUGE-S', rouge.s],
     ['ROUGE-L', rouge.l],
   ] as const;
+
+  test.each([
+    ['ROUGE-N', rouge.n, 1],
+    ['ROUGE-S', rouge.s, 7 / 15],
+    ['ROUGE-L', rouge.l, 1],
+  ] as const)(
+    '%s preserves reordered mapping-less cased sentences case-insensitively',
+    (_name, score, expected) => {
+      const reference = 'Use etc. 𝐀 begins.';
+      const candidate = '𝐀 begins. Use etc.';
+      expect(score(candidate, reference, { caseSensitive: false })).toBe(expected);
+    },
+  );
+
   describe.each(metrics)('%s input handling', (_name, score) => {
     test.each(['\n', '\r\n', '\r'])('keeps wrapped quotes (%j)', (lineBreak) => {
       expect(score(`He said "Stop.${lineBreak}" Next.`, 'He said "Stop." Next.')).toBe(1);
@@ -1746,6 +1870,34 @@ describe('Core Functions', () => {
 
   describe('caseSensitive option', () => {
     const { n, s, l } = rouge;
+
+    test.each([
+      ['ROUGE-N', n, 4 / 11],
+      ['ROUGE-S', s, 2 / 25],
+      ['ROUGE-L', l, 4 / 11],
+    ] as const)(
+      '%s keeps case-sensitive scoring while making case-insensitive boundaries casing-neutral',
+      (_name, score, caseSensitiveScore) => {
+        const mixedCase = 'Use etc. Another sentence.';
+        const lowerCase = mixedCase.toLowerCase();
+        expect(score(mixedCase, lowerCase)).toBeCloseTo(caseSensitiveScore);
+        expect(score(mixedCase, lowerCase, { caseSensitive: false })).toBe(1);
+      },
+    );
+
+    test('ROUGE-L passes original text to custom segmenters before case folding', () => {
+      const segmenter = jest.fn((input: string): string[] => [input]);
+      expect(
+        l('Use etc. Another sentence.', 'use etc. another sentence.', {
+          caseSensitive: false,
+          segmenter,
+        }),
+      ).toBe(1);
+      expect(segmenter.mock.calls).toEqual([
+        ['Use etc. Another sentence.'],
+        ['use etc. another sentence.'],
+      ]);
+    });
 
     test('ROUGE-N should be case-sensitive by default', () => {
       expect(n('Hello World', 'hello world')).toBe(0);

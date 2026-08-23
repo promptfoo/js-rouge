@@ -184,7 +184,10 @@ function tokenizeSummary(
   tokenizer?: (input: string) => string[],
 ): string[] {
   const tokenize = tokenizer ?? utils.treeBankTokenize;
-  const sentences = tokenize === utils.treeBankTokenize ? utils.sentenceSegment(input) : [input];
+  const sentences =
+    tokenize === utils.treeBankTokenize
+      ? utils.sentenceSegment(input, { caseNeutral: !caseSensitive })
+      : [input];
   return sentences.flatMap((sentence) =>
     tokenize(caseSensitive ? sentence : sentence.toLowerCase()),
   );
@@ -377,8 +380,12 @@ export function l(cand: string, ref: string, opts?: RougeLOptions): number {
 
   const tokenizeSentence = (sentence: string): string[] =>
     tokenizer(caseSensitive ? sentence : sentence.toLowerCase());
-  const candSents = segmenter(cand).map(tokenizeSentence);
-  const refSents = segmenter(ref).map(tokenizeSentence);
+  const segmentSummary = (input: string): string[] =>
+    segmenter === utils.sentenceSegment
+      ? utils.sentenceSegment(input, { caseNeutral: !caseSensitive })
+      : segmenter(input);
+  const candSents = segmentSummary(cand).map(tokenizeSentence);
+  const refSents = segmentSummary(ref).map(tokenizeSentence);
 
   const remaining = new Map<string, number>();
   let candLength = 0;
