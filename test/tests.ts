@@ -19,8 +19,19 @@ describe('Utility Functions', () => {
   describe('fact', () => {
     const { fact } = rouge;
 
-    test('should throw RangeError for -1!', () => {
-      expect(() => fact(-1)).toThrow(RangeError);
+    test.each([
+      -1,
+      -1.5,
+      1.5,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+    ])('should throw RangeError for invalid input %p', (input) => {
+      expect(() => fact(input)).toThrow(RangeError);
+    });
+
+    test.each([171, 10_000])('should reject unsupported input %i before computation', (input) => {
+      expect(() => fact(input)).toThrow(RangeError);
     });
 
     test('should return 1 for 0!', () => {
@@ -41,6 +52,9 @@ describe('Utility Functions', () => {
     });
     test('should return 2432902008176640000 for 20! using cache', () => {
       expect(fact(20)).toBe(2_432_902_008_176_640_000);
+    });
+    test('should return a finite result for the maximum supported input', () => {
+      expect(fact(170)).toBe(7.257_415_615_307_994e306);
     });
   });
 

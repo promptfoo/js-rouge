@@ -481,33 +481,34 @@ function memoize<T, R>(func: (arg: T) => R, Store: new () => Map<T, R> = Map): (
 }
 
 /**
- * Computes the factorial of a number.
+ * Computes the factorial of an integer from 0 through 170.
  *
- * This function uses a tail-recursive call to avoid
- * blowing the stack when computing inputs with a large
- * recursion depth.
+ * Values above 170 are rejected because their factorials overflow
+ * JavaScript's finite number range.
  *
- * @method factRec
- * @param  {number} x     The number for which the factorial is to be computed
- * @param  {number} acc   The starting value for the computation. Defaults to 1.
- * @return {number}       The factorial result
+ * @method factorial
+ * @param  {number} x     The integer for which the factorial is to be computed
+ * @return {number}       The finite factorial result
  */
-function factRec(x: number, acc = 1): number {
-  if (x < 0) {
-    throw new RangeError('Input must be a positive number');
+function factorial(x: number): number {
+  if (!Number.isInteger(x) || x < 0 || x > 170) {
+    throw new RangeError('Input must be an integer between 0 and 170');
   }
-  return x < 2 ? acc : factRec(x - 1, x * acc);
+
+  let result = 1;
+  for (let factor = 2; factor <= x; factor++) {
+    result *= factor;
+  }
+  return result;
 }
 
 /**
  * Memoized factorial function.
  *
- * **Memory Note**: Results are cached indefinitely. In typical ROUGE usage,
- * factorial is called with small values (≤20) so memory impact is negligible.
- * The cache size is bounded by the range of valid factorial inputs that don't
- * overflow JavaScript's number type (approximately n ≤ 170).
+ * Accepts only finite, non-negative integers through 170. Results are cached
+ * indefinitely, so the cache contains at most 171 entries.
  */
-export const fact = memoize(factRec);
+export const fact = memoize(factorial);
 
 /**
  * Returns the skip bigrams for an array of word tokens.
