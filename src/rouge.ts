@@ -236,7 +236,10 @@ export function n(cand: string, ref: string, opts?: RougeNOptions): number {
 
   const getGrams = (input: string): string[] => {
     const tokens = tokenizeSummary(input, caseSensitive, tokenizer);
-    return nGram(nGram === utils.nGram ? encodeTokens(tokens) : tokens, size);
+    if (nGram === utils.nGram) {
+      return tokens.length < size ? [] : nGram(encodeTokens(tokens), size);
+    }
+    return nGram(tokens, size);
   };
   const candGrams = getGrams(cand);
   const refGrams = getGrams(ref);
@@ -305,12 +308,9 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
   }
 
   const candTokens = tokenizeSummary(cand, caseSensitive, tokenizer);
-  if (candTokens.length < 2) {
-    throw new RangeError('Input must have at least two words');
-  }
   const refTokens = tokenizeSummary(ref, caseSensitive, tokenizer);
-  if (refTokens.length < 2) {
-    throw new RangeError('Input must have at least two words');
+  if (candTokens.length < 2 || refTokens.length < 2) {
+    return 0;
   }
   if (maxSkip === 0) {
     return 0;

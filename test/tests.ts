@@ -1281,6 +1281,24 @@ describe('Core Functions', () => {
     test('should throw RangeError for empty ref', () => {
       expect(() => n(cand, '', { n: 2 })).toThrow(RangeError);
     });
+    test.each([
+      ['one', 'one two'],
+      ['one two', 'one'],
+    ])('returns 0 for short %j and %j', (candidate, reference) => {
+      expect(n(candidate, reference, { n: 2 })).toBe(0);
+    });
+    test('should return 0 when built-in tokenization produces no grams', () => {
+      const tokenizer = (): string[] => [];
+      expect(n('candidate', 'reference', { n: 2, tokenizer })).toBe(0);
+    });
+    test('should let custom generators define short-token behavior', () => {
+      const nGram = jest.fn((): string[] => ['custom gram']);
+      expect(n('one', 'one', { n: 2, nGram })).toBe(1);
+      expect(nGram.mock.calls).toEqual([
+        [['one'], 2],
+        [['one'], 2],
+      ]);
+    });
 
     test('should correctly compute ROUGE-N F1-score for ref 1', () => {
       // 3 matching bigrams, 4 candidate bigrams, 9 reference bigrams
@@ -1346,11 +1364,15 @@ describe('Core Functions', () => {
     test('should throw RangeError for empty ref', () => {
       expect(() => s(cands[0], '', undefined as any)).toThrow(RangeError);
     });
-    test('should throw RangeError for a candidate with fewer than two tokens', () => {
-      expect(() => s('one', 'one two')).toThrow(RangeError);
+    test.each([
+      ['one', 'one two'],
+      ['one two', 'one'],
+    ])('returns 0 for short %j and %j', (candidate, reference) => {
+      expect(s(candidate, reference)).toBe(0);
     });
-    test('should throw RangeError for a reference with fewer than two tokens', () => {
-      expect(() => s('one two', 'one')).toThrow(RangeError);
+    test('should return 0 when built-in tokenization produces no skip-bigrams', () => {
+      const tokenizer = (): string[] => [];
+      expect(s('candidate', 'reference', { tokenizer })).toBe(0);
     });
     test('should let custom generators define short-token behavior', () => {
       const skipBigram = jest.fn((): string[] => ['custom gram']);
