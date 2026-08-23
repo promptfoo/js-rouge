@@ -11,7 +11,7 @@ const bracketPairs = [
 ] as const;
 const geographicAcronyms = ['U.S.', 'U.S.A.', 'E.U.'];
 const nonFiniteNumbers = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY];
-const invalidNGramSizes = [...nonFiniteNumbers, -1, 0, 1.5];
+const invalidNGramSizes = [...nonFiniteNumbers, -1, 0, 1.5, 2 ** 54];
 const invalidMaxSkips = [Number.NaN, Number.NEGATIVE_INFINITY, -1, 0.5, 1.5];
 const invalidBetas = [Number.NaN, Number.NEGATIVE_INFINITY, -1];
 
@@ -251,12 +251,15 @@ describe('Utility Functions', () => {
       expect(() => nGram(['a'], 3, { start: false, end: false })).toThrow(RangeError);
     });
 
-    test('should reject impossible large padding before materializing it', () => {
+    test.each([
+      1_000_000_000,
+      2 ** 54,
+    ])('should reject impossible padding size %s before materializing it', (size) => {
       const unshift = jest.spyOn(Array.prototype, 'unshift').mockImplementation((): number => {
         throw new Error('padding should not be materialized');
       });
       try {
-        expect(() => nGram([], 1_000_000_000, { start: true })).toThrow(RangeError);
+        expect(() => nGram([], size, { start: true })).toThrow(RangeError);
         expect(unshift).not.toHaveBeenCalled();
       } finally {
         unshift.mockRestore();
