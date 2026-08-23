@@ -239,10 +239,10 @@ export function n(cand: string, ref: string, opts?: RougeNOptions): number {
 
   const getGrams = (input: string): string[] => {
     const tokens = tokenizeSummary(input, caseSensitive, tokenizer);
-    if (nGram === utils.nGram && tokens.length < size) {
-      return [];
+    if (nGram === utils.nGram) {
+      return tokens.length < size ? [] : nGram(encodeTokens(tokens), size);
     }
-    return nGram(nGram === utils.nGram ? encodeTokens(tokens) : tokens, size);
+    return nGram(tokens, size);
   };
   const candGrams = getGrams(cand);
   const refGrams = getGrams(ref);
