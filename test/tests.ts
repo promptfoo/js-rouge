@@ -253,6 +253,12 @@ describe('Utility Functions', () => {
     test('should reject impossible padding before allocation', () => {
       expect(() => nGram([], 1_000_000_000, { start: true })).toThrow(RangeError);
     });
+
+    test('should reject excessive two-sided padding before materialization', () => {
+      expect(() => nGram([], 1_000_000_000, { start: true, end: true })).toThrow(
+        /materialization limit/,
+      );
+    });
   });
 
   describe('skipBigram', () => {
@@ -1354,6 +1360,12 @@ describe('Core Functions', () => {
       const tokenizer = (text: string): string[] => text.split('');
       const nGram = (tokens: string[]): string[] => tokens;
       expect(n('aaa', 'aa', { tokenizer, nGram })).toBeCloseTo(4 / 5);
+    });
+
+    test('should not apply the built-in padding limit to custom ngram callbacks', () => {
+      const nGram = jest.fn((): string[] => ['match']);
+      expect(n('a', 'a', { n: 1_000_000_000, nGram })).toBe(1);
+      expect(nGram).toHaveBeenCalledTimes(2);
     });
 
     test('should correctly compute ROUGE-N score with custom beta', () => {
