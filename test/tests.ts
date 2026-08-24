@@ -625,6 +625,26 @@ describe('Utility Functions', () => {
       expect(ss('ǅ. Alpha ǈ. Beta ǋ. Gamma')).toEqual(['ǅ. Alpha', 'ǈ. Beta', 'ǋ. Gamma']);
     });
 
+    test('keeps Unicode Roman numeral markers in the same alphabetical list', () => {
+      expect(ss('Ⅰ. Alpha Ⅱ. Beta Ⅲ. Gamma')).toEqual(['Ⅰ. Alpha', 'Ⅱ. Beta', 'Ⅲ. Gamma']);
+    });
+
+    test('accepts uncased and numeric alphabetical list-item bodies', () => {
+      expect(ss('a) 100 widgets b) 200 widgets')).toEqual(['a) 100 widgets', 'b) 200 widgets']);
+      expect(rouge.l('a) 100 widgets b) 200 widgets', 'b) 200 widgets a) 100 widgets')).toBe(1);
+      expect(ss('a) 中文 b) 日文')).toEqual(['a) 中文', 'b) 日文']);
+    });
+
+    test('prefers an outer list family over nested marker pairs', () => {
+      const input = '1. Alpha a) One b) Two 2. Beta';
+      expect(ss(input)).toEqual(['1. Alpha a) One b) Two', '2. Beta']);
+      expect(rouge.l(input, '2. Beta 1. Alpha a) One b) Two')).toBe(1);
+    });
+
+    test('preserves genuinely sparse numbered lists after deferring outliers', () => {
+      expect(ss('Options: 1. First 42. Last')).toEqual(['Options:', '1. First', '42. Last']);
+    });
+
     test('handles many unmatched parenthesized marker candidates', () => {
       const input = `(${' a) A'.repeat(4000)}`;
       expect(ss(input)).toEqual([input]);
@@ -703,6 +723,12 @@ describe('Utility Functions', () => {
         'More analysis followed',
         '2. Final.',
       ]);
+      expect(ss('Results: 1. The answer measured 42. More analysis followed 2. Final.')).toEqual([
+        'Results:',
+        '1. The answer measured 42.',
+        'More analysis followed',
+        '2. Final.',
+      ]);
     });
 
     test('ignores quoted parentheses while finding embedded lists', () => {
@@ -712,6 +738,23 @@ describe('Utility Functions', () => {
         'a) Alpha',
         'b) Beta.',
       ]);
+      expect(ss("The symbol '(' is used. Options: a) Alpha b) Beta.")).toEqual([
+        "The symbol '(' is used.",
+        'Options:',
+        'a) Alpha',
+        'b) Beta.',
+      ]);
+      for (const [opening, closing] of [
+        ['“', '”'],
+        ['‘', '’'],
+      ]) {
+        expect(ss(`The symbol ${opening}(${closing} is used. Options: a) Alpha b) Beta.`)).toEqual([
+          `The symbol ${opening}(${closing} is used.`,
+          'Options:',
+          'a) Alpha',
+          'b) Beta.',
+        ]);
+      }
     });
 
     test('does not interpret parenthesized labels as list markers', () => {

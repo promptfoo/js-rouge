@@ -121,7 +121,7 @@ const closingDelimiterReg = /[\])}>"']/;
 const openingBracketReg = /[([{<]/;
 const closingBracketReg = /[\])}>]/;
 const listMarkerReg =
-  /(?:^|\s)(?:(?:[•⁃]\s*)?\d+|\p{Cased}\p{M}*)(?:\.\)|[.)])(?=\s+["'([{<]*\p{Cased})/gu;
+  /(?:^|\s)(?:(?:[•⁃]\s*)?\d+|\p{Cased}\p{M}*)(?:\.\)|[.)])(?=\s+["'([{<]*[\p{Letter}\p{Number}\p{Symbol}])/gu;
 const nestedListDepth = Symbol('nestedListDepth');
 const maxNestedListDepth = 32;
 const geographicAcronymReg = /\bU\.S(?:\.A)?\.$/i;
@@ -459,9 +459,17 @@ interface ListScanState {
   quote: string | undefined;
 }
 
-function listQuoteCloser(character: string): string | undefined {
+function listQuoteCloser(input: string, index: number): string | undefined {
+  const character = input[index];
   if (character === '"') {
     return '"';
+  }
+  if (
+    character === "'" &&
+    (index === 0 || /^[\s\p{Punctuation}]$/u.test(input[index - 1])) &&
+    !/^\p{Number}$/u.test(characterAt(input, index + 1))
+  ) {
+    return "'";
   }
   if (character === '“') {
     return '”';
@@ -471,14 +479,15 @@ function listQuoteCloser(character: string): string | undefined {
 
 function advanceListScan(input: string, end: number, state: ListScanState): void {
   while (state.cursor < end) {
-    const character = input[state.cursor++];
+    const index = state.cursor++;
+    const character = input[index];
     if (state.quote !== undefined) {
       if (character === state.quote) {
         state.quote = undefined;
       }
       continue;
     }
-    const quote = listQuoteCloser(character);
+    const quote = listQuoteCloser(input, index);
     if (quote !== undefined) {
       state.quote = quote;
       continue;
@@ -555,7 +564,9 @@ function listMarkerFamily(marker: string, caseNeutral: boolean): RegExp {
   if (caseNeutral) {
     return /^\s*\p{Cased}/u;
   }
-  return /^[\p{Lu}\p{Lt}]/u.test(marker) ? /^\s*[\p{Lu}\p{Lt}]/u : /^\s*\p{Ll}/u;
+  return /^[\p{Uppercase}\p{Lt}]/u.test(marker)
+    ? /^\s*[\p{Uppercase}\p{Lt}]/u
+    : /^\s*\p{Lowercase}/u;
 }
 
 function findListCandidate(
@@ -565,6 +576,9 @@ function findListCandidate(
   state: ListScanState,
 ): ListCandidate | undefined {
   const firstByFamily = new Map<string, { marker: RegExpExecArray; emptyPrefix: boolean }>();
+  let deferred:
+    | { candidate: ListCandidate; expressionIndex: number; state: ListScanState }
+    | undefined;
   let current = nextListMarker(input, expression, state);
   while (current !== null) {
     const marker = current[0].trim();
@@ -578,11 +592,29 @@ function findListCandidate(
       ? previousMarker?.toLowerCase() !== marker.toLowerCase()
       : previousMarker !== marker;
     if (first !== undefined && (first.emptyPrefix || distinctMarker)) {
-      return {
+      const candidate: ListCandidate = {
         current: first.marker,
         next: current,
         family,
         prefix: input.slice(0, first.marker.index).trim(),
+      };
+      const hasEarlierFamily = [...firstByFamily.values()].some(
+        (entry) => entry.marker.index < first.marker.index,
+      );
+      const firstNumber = Number(previousMarker?.match(/^\d+/)?.[0]);
+      const currentNumber = Number(marker.match(/^\d+/)?.[0]);
+      const distantNumber =
+        Number.isFinite(firstNumber) &&
+        Number.isFinite(currentNumber) &&
+        Math.abs(currentNumber - firstNumber) > 10 &&
+        !context.boundary;
+      if (!(hasEarlierFamily || distantNumber)) {
+        return candidate;
+      }
+      deferred ??= {
+        candidate,
+        expressionIndex: expression.lastIndex,
+        state: { ...state },
       };
     }
 
@@ -592,7 +624,11 @@ function findListCandidate(
 
     current = nextListMarker(input, expression, state);
   }
-  return undefined;
+  if (deferred !== undefined) {
+    expression.lastIndex = deferred.expressionIndex;
+    Object.assign(state, deferred.state);
+  }
+  return deferred?.candidate;
 }
 
 function segmentNestedSentence(input: string, caseNeutral: boolean, depth: number): string[] {
