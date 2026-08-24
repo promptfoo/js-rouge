@@ -181,7 +181,7 @@ const closingDelimiterReg = /[\])}>"'”]/;
 const openingBracketReg = /[([{<]/;
 const closingBracketReg = /[\])}>]/;
 const listMarkerReg =
-  /(?:^|\s)(?:(?:[•⁃]\s*)?\d+(?:\.\)|[.)])|\p{Cased}\.)(?=\s+["'([{<]*\p{Cased})/gu;
+  /(?:^|\s)(?:(?:[•⁃]\s*)?\d+(?:\.\)|[.)])|\p{Cased}\.)(?=\s+["'“‘„«([{<]*\p{Cased})/gu;
 const geographicAcronymReg = /\bU\.S(?:\.A)?\.$/i;
 const geographicContinuationReg = /^(?:government|army|navy|military|congress)\b/i;
 const sentenceContinuationReg =
@@ -797,9 +797,17 @@ function sentenceEnd(
 }
 
 function isDialogueAttribution(input: string, closesQuotation: boolean): boolean {
+  if (!closesQuotation) {
+    return false;
+  }
   return (
-    closesQuotation &&
-    /^(?:aloud\b|(?:[\p{Letter}\p{Mark}'’-]+\s+){1,3}(?:said|thought|asked|replied|answered)(?=\s*[,.;!?]|\s*$))/iu.test(
+    /^(?:aloud\b|(?:am|is|are|was|were|be|been|being|has|have|had|will|would|can|could|should|must)\b)/i.test(
+      input,
+    ) ||
+    /^(?:(?!(?:am|is|are|was|were|be|been|being|has|have|had)\b)[\p{Letter}\p{Mark}'’-]+\s+){1,3}(?:said|thought|asked|replied|answered)(?=\s*[,.;!?]|\s*$)/iu.test(
+      input,
+    ) ||
+    /^(?:said|thought|asked|replied|answered)\s+(?:[\p{Letter}\p{Mark}'’-]+\s*){1,3}(?=\s*[,.;!?]|\s*$)/iu.test(
       input,
     )
   );

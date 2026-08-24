@@ -1246,6 +1246,11 @@ describe('Utility Functions', () => {
       expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
         expected.map((sentence) => sentence.toLowerCase()),
       );
+      expect(segmentCaseNeutrally('"It ended." Nothing was said. Next.')).toEqual([
+        '"It ended."',
+        'Nothing was said.',
+        'Next.',
+      ]);
     });
 
     test('keeps proper-name dialogue attributions with the quotation', () => {
@@ -1256,6 +1261,21 @@ describe('Utility Functions', () => {
       expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
         expected.map((sentence) => sentence.toLowerCase()),
       );
+      expect(segmentCaseNeutrally('"Stop!" said Alice. Next.')).toEqual([
+        '"Stop!" said Alice.',
+        'Next.',
+      ]);
+      expect(segmentCaseNeutrally('The word “No.” was written. Next.')).toEqual([
+        'The word “No.” was written.',
+        'Next.',
+      ]);
+    });
+
+    test('keeps curly-quoted list markers attached to their items', () => {
+      const input = '1. “Alpha.” 2. “Beta.”';
+      const expected = ['1. “Alpha.”', '2. “Beta.”'];
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
     });
 
     test('scores reordered curly-quoted reference sentences correctly', () => {
