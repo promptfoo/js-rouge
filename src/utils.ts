@@ -583,7 +583,7 @@ export const NGRAM_DEFAULT_OPTS: NGramOptions = {
   val: '<S>',
 };
 
-const MAX_NGRAM_PADDING_WORK = 1_000_000;
+const MAX_NGRAM_MATERIALIZATION_WORK = 1_000_000;
 
 /**
  * Returns n-grams for an array of word tokens.
@@ -610,13 +610,17 @@ export function nGram(tokens: string[], n = 2, pad: Partial<NGramOptions> = {}):
   }
 
   const gramCount = paddedLength - n + 1;
-  const unpaddedGramCount = Math.max(tokens.length - n + 1, 0);
-  const paddingWork = paddingLength + n * (gramCount - unpaddedGramCount);
-  if (
-    paddingLength > 0 &&
-    (!Number.isSafeInteger(paddingWork) || paddingWork > MAX_NGRAM_PADDING_WORK)
-  ) {
-    throw new RangeError('Padded n-gram generation exceeds the materialization limit');
+  let materializationWork = paddingLength + n * gramCount;
+  for (let i = 0; i < paddedLength && materializationWork <= MAX_NGRAM_MATERIALIZATION_WORK; i++) {
+    const token =
+      i < startPaddingSize || i >= startPaddingSize + tokens.length
+        ? value
+        : tokens[i - startPaddingSize];
+    materializationWork +=
+      Math.max(token.length - 1, 0) * Math.min(i + 1, n, gramCount, paddedLength - i);
+  }
+  if (materializationWork > MAX_NGRAM_MATERIALIZATION_WORK) {
+    throw new RangeError('N-gram generation exceeds the materialization limit');
   }
 
   const startPadding = new Array<string>(startPaddingSize).fill(value);
