@@ -1417,6 +1417,21 @@ describe('Utility Functions', () => {
         );
       }, 25_000);
 
+      test('bounds unmatched typographic quotation state within a constrained heap', () => {
+        expectBundledScriptToPass(
+          `
+            const summary = '‘'.repeat(7000000);
+            const sentences = module.exports.sentenceSegment(summary);
+            if (sentences.length !== 1 || sentences[0] !== summary) {
+              throw new Error('Unmatched quotation content changed');
+            }
+            process.stdout.write('ok');
+          `,
+          20_000,
+          ['--max-old-space-size=64'],
+        );
+      }, 25_000);
+
       test('should segment abbreviation chains within a small heap', () => {
         expectBundledScriptToPass(
           `
@@ -1556,6 +1571,7 @@ describe('Utility Functions', () => {
         ['Alpha... Beta.', ['Alpha...', 'Beta.']],
         ['Alpha... "Beta."', ['Alpha...', '"Beta."']],
         ['Alpha... (Beta.)', ['Alpha...', '(Beta.)']],
+        ['Alpha... 2024 was different.', ['Alpha...', '2024 was different.']],
         [
           'This is e.g. Mr. Smith, who talks slowly... And this is another sentence.',
           ['This is e.g. Mr. Smith, who talks slowly...', 'And this is another sentence.'],
@@ -1580,6 +1596,7 @@ describe('Utility Functions', () => {
         'She said, "I... I cannot go."',
         'She said, “I... I cannot go.”',
         'She said, ‘I can’t... Alpha.’',
+        'She said, «I... Beta.»',
         'We noted (Alpha... Beta) today.',
       ])('keeps three-dot ellipses inside surrounding delimiters: %s', (input) => {
         expect(ss(input)).toEqual([input]);
@@ -1599,6 +1616,12 @@ describe('Utility Functions', () => {
 
       test('handles long sequences of merged ellipses in one scan', () => {
         expect(ss('It is... Alpha '.repeat(4000))).toHaveLength(1);
+      });
+
+      test('keeps inline parentheticals with their ellipsis continuation', () => {
+        const input = 'He paused... (Perhaps deliberately) before answering.';
+        expect(ss(input)).toEqual([input]);
+        expect(segmentCaseNeutrally(input)).toEqual([input]);
       });
 
       test('scores reference sentences ending in a three-dot ellipsis correctly', () => {
