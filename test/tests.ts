@@ -1574,8 +1574,17 @@ describe('Utility Functions', () => {
         },
       );
 
-      test.each(['She said, "I... I cannot go."', 'We noted (Alpha... Beta) today.'])(
-        'keeps three-dot ellipses inside surrounding delimiters: %s',
+      test.each([
+        'She said, "I... I cannot go."',
+        'She said, “I... I cannot go.”',
+        'We noted (Alpha... Beta) today.',
+      ])('keeps three-dot ellipses inside surrounding delimiters: %s', (input) => {
+        expect(ss(input)).toEqual([input]);
+        expect(segmentCaseNeutrally(input)).toEqual([input]);
+      });
+
+      test.each(['And the winner is... Alice Smith.', 'I... I cannot go.'])(
+        'keeps capitalized ellipsis continuations in the same sentence: %s',
         (input) => {
           expect(ss(input)).toEqual([input]);
           expect(segmentCaseNeutrally(input)).toEqual([input]);

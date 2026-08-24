@@ -438,7 +438,12 @@ export function sentenceSegment(
         if (
           /\.{3,4}$/.test(suffix) &&
           startsSentence &&
-          (/\.{4}$/.test(suffix) || !chunk.hasOpenDelimiter)
+          (/\.{4}$/.test(suffix) ||
+            !(
+              chunk.hasOpenDelimiter ||
+              hasOpenTypographicQuote(chunk.text()) ||
+              /\b(?:am|is|are|was|were|i)\.{3}$/i.test(suffix)
+            ))
         ) {
           acc.push(chunk.text());
           continue;
@@ -458,6 +463,13 @@ export function sentenceSegment(
 
   // If no matches were found, return the input treated as a single sentence
   return acc.length === 0 ? [input] : acc;
+}
+
+function hasOpenTypographicQuote(input: string): boolean {
+  return (
+    input.lastIndexOf('“') > input.lastIndexOf('”') ||
+    input.lastIndexOf('‘') > input.lastIndexOf('’')
+  );
 }
 
 function nextListMarker(
