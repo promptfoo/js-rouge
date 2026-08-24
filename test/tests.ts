@@ -1185,6 +1185,30 @@ describe('Utility Functions', () => {
     });
 
     test.each([
+      ["'Tis the season. It is cold.", ["'Tis the season.", 'It is cold.']],
+      ["'twas late. We left.", ["'twas late.", 'We left.']],
+      ["She told 'em to leave. They refused.", ["She told 'em to leave.", 'They refused.']],
+      ["She said 'cause it rained. We stayed.", ["She said 'cause it rained.", 'We stayed.']],
+    ])('does not interpret apostrophe-led contractions as quotations: %s', (input, expected) => {
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
+    test('retains outer straight quotations around nested curly quotations', () => {
+      const input = 'She said "She answered “No.” Then left." Next.';
+      const expected = ['She said "She answered “No.” Then left."', 'Next.'];
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
+    test('closes s-ending quotations before capitalized continuations', () => {
+      const input = "The response 'Yes' Alice selected was accepted. Bob objected.";
+      const expected = ["The response 'Yes' Alice selected was accepted.", 'Bob objected.'];
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
+    test.each([
       ['“Alpha.” Beta.', ['“Alpha.”', 'Beta.']],
       ['She said “First! Second!” Next she left.', ['She said “First! Second!”', 'Next she left.']],
     ])('keeps curly closing quotations with their sentence in %s', (input, expected) => {

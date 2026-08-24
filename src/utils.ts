@@ -81,9 +81,6 @@ function opensDoubleQuote(input: string, index: number, insideQuotes: boolean): 
 }
 
 function quotationState(input: string, index: number, insideQuotes: boolean): boolean {
-  if (input[index] === '“' || input[index] === '”') {
-    return input[index] === '“';
-  }
   if (input[index] === '"') {
     return opensDoubleQuote(input, index, insideQuotes);
   }
@@ -101,6 +98,23 @@ function quotationState(input: string, index: number, insideQuotes: boolean): bo
   );
 }
 
+function curlyQuotationState(input: string, index: number, insideQuotes: boolean): boolean {
+  return input[index] === '“' || (insideQuotes && input[index] !== '”');
+}
+
+function remainsInsideNestedQuotation(
+  input: string,
+  start: number,
+  end: number,
+  insideStraightQuotes: boolean,
+  insideCurlyQuotes: boolean,
+): boolean {
+  const closing = input.slice(start + 1, end);
+  return (
+    insideStraightQuotes && insideCurlyQuotes && !(closing.includes('"') && closing.includes('”'))
+  );
+}
+
 function singleQuotationState(
   input: string,
   index: number,
@@ -115,13 +129,15 @@ function singleQuotationState(
     const possessive =
       previous.toLowerCase() === 's' &&
       /\s/.test(following) &&
-      /^(?:\p{Lu}|\p{Ll}+\s+\p{Lu})/u.test(input.slice(index + 1).trimStart());
+      /^(?:\p{Lu}\p{Ll}*\s+\p{Lu}|\p{Ll}+\s+\p{Lu})/u.test(input.slice(index + 1).trimStart());
     return possessive || (following.length > 0 && !/[\s.,!?;:)\]}\p{Pd}]/u.test(following));
   }
   return (
     (previous.length === 0 || /^[\s\p{Punctuation}]$/u.test(previous)) &&
     /\S/.test(following) &&
-    !/^(?:(?:twen|thir|for|fif|six|seven|eigh|nine)ties|\d{2}s)\b/i.test(input.slice(index + 1))
+    !/^(?:tis|twas|em|cause|(?:twen|thir|for|fif|six|seven|eigh|nine)ties|\d{2}s)\b/i.test(
+      input.slice(index + 1),
+    )
   );
 }
 
@@ -164,6 +180,7 @@ class SentenceBuffer {
   #words: { titleCase: boolean; lowerCase: boolean }[] = [];
   #openingDelimiters: string[] = [];
   #insideDoubleQuotes = false;
+  #insideCurlyQuotes = false;
   #insideSingleQuotes = false;
   #lastCharacter = '';
   hasLineBreaks = false;
@@ -187,9 +204,11 @@ class SentenceBuffer {
   }
 
   get hasOpenDelimiter(): boolean {
-    return (
-      this.#openingDelimiters.length > 0 || this.#insideDoubleQuotes || this.#insideSingleQuotes
-    );
+    return this.#openingDelimiters.length > 0 || this.#insideQuotation;
+  }
+
+  get #insideQuotation(): boolean {
+    return this.#insideDoubleQuotes || this.#insideCurlyQuotes || this.#insideSingleQuotes;
   }
 
   get suffix(): string {
@@ -240,15 +259,12 @@ class SentenceBuffer {
       } else if (character === "'") {
         this.#trackSingleQuote(text, index);
       } else if (
-        !(this.#insideDoubleQuotes || this.#insideSingleQuotes) &&
+        !this.#insideQuotation &&
         openingBracketReg.test(character) &&
         (character !== '<' || /^\p{Letter}$/u.test(characterAt(text, index + 1)))
       ) {
         this.#openingDelimiters.push(character);
-      } else if (
-        !(this.#insideDoubleQuotes || this.#insideSingleQuotes) &&
-        closingBracketReg.test(character)
-      ) {
+      } else if (!this.#insideQuotation && closingBracketReg.test(character)) {
         const opener = '([{<'[')]}>'.indexOf(character)];
         if (this.#openingDelimiters.at(-1) === opener) {
           this.#openingDelimiters.pop();
@@ -261,7 +277,7 @@ class SentenceBuffer {
   #trackDoubleQuote(text: string, index: number): void {
     const character = text[index];
     if (character !== '"') {
-      this.#insideDoubleQuotes = character === '“';
+      this.#insideCurlyQuotes = character === '“';
       return;
     }
     const previous = index === 0 ? this.#lastCharacter : text[index - 1];
@@ -544,12 +560,14 @@ function sentenceChunks(input: string, caseNeutral: boolean): string[] {
   let lastEnd = 0;
   let start = -1;
   let insideQuotes = false;
+  let insideCurlyQuotes = false;
   let insideSingleQuotes = false;
   const brackets = { depth: 0, standalone: false };
 
   for (let index = 0; index < input.length; index++) {
     const char = input[index];
     insideQuotes = quotationState(input, index, insideQuotes);
+    insideCurlyQuotes = curlyQuotationState(input, index, insideCurlyQuotes);
     insideSingleQuotes = singleQuotationState(input, index, insideSingleQuotes);
     if (openingBracketReg.test(char)) {
       if (brackets.depth === 0) {
@@ -579,11 +597,14 @@ function sentenceChunks(input: string, caseNeutral: boolean): string[] {
       const end = sentenceEnd(
         input,
         index,
-        insideQuotes || insideSingleQuotes,
+        insideQuotes || insideCurlyQuotes || insideSingleQuotes,
         brackets,
         caseNeutral,
       );
-      if (end === -1) {
+      if (
+        end === -1 ||
+        remainsInsideNestedQuotation(input, index, end, insideQuotes, insideCurlyQuotes)
+      ) {
         continue;
       }
       // Captured line wraps can only occur between the terminal and closing delimiters.
