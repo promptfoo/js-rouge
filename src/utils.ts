@@ -544,7 +544,9 @@ function sentenceChunks(input: string, caseNeutral: boolean): string[] {
       char === '?' ||
       char === '!'
     ) {
-      const end = sentenceEnd(input, index, insideQuotes, brackets, caseNeutral);
+      const end =
+        citationEnd(input, index, caseNeutral) ??
+        sentenceEnd(input, index, insideQuotes, brackets, caseNeutral);
       if (end === -1) {
         continue;
       }
@@ -698,6 +700,38 @@ function sentenceEnd(
     return -1;
   }
   return abbrvReg.test(gateSuffix) && excepReg.test(gateSuffix) ? -1 : end;
+}
+
+function citationEnd(input: string, index: number, caseNeutral: boolean): number | undefined {
+  const following = input[index + 1] ?? '';
+  if (
+    input[index] !== '.' ||
+    (following !== '[' && !/^\p{Number}$/u.test(following)) ||
+    (following !== '[' && !/^[\p{Letter}\p{Mark})\]]$/u.test(input[index - 1] ?? ''))
+  ) {
+    return undefined;
+  }
+
+  const citation = input
+    .slice(index + 1)
+    .match(/^(?:(?:\[\p{Number}+\])+|\p{Number}+(?:[^\S\r\n]+\p{Number}+)?)/u);
+  if (citation === null) {
+    return undefined;
+  }
+
+  const end = index + 1 + citation[0].length;
+  if (!/\s/.test(input[end] ?? '')) {
+    return undefined;
+  }
+
+  let next = end;
+  while (next < input.length && /[\s"'([{<]/.test(input[next])) {
+    next++;
+  }
+  const startsSentence = caseNeutral
+    ? isNeutralSentenceStart(input, end, next)
+    : charIsUpperCase(characterAt(input, next));
+  return startsSentence ? end : undefined;
 }
 
 function countClosingBrackets(input: string, start: number, end: number): number {

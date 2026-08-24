@@ -654,6 +654,30 @@ describe('Utility Functions', () => {
       ]);
     });
 
+    test.each([
+      ['Alpha.[1] Beta.', ['Alpha.[1]', 'Beta.']],
+      ['Alpha.[7][8] Beta.', ['Alpha.[7][8]', 'Beta.']],
+      ['Alpha.[12] Beta.[34] Gamma.', ['Alpha.[12]', 'Beta.[34]', 'Gamma.']],
+      ['A conclusion.11 12 The next sentence.', ['A conclusion.11 12', 'The next sentence.']],
+      ['A conclusion (1987).1 The next sentence.', ['A conclusion (1987).1', 'The next sentence.']],
+    ])('keeps numeric citation suffixes with sentence boundaries in %s', (input, expected) => {
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        expected.map((sentence) => sentence.toLowerCase()),
+      );
+    });
+
+    test('does not mistake decimal numbers for numeric citation suffixes', () => {
+      const input = 'She has $100.00 in her bag.';
+      expect(ss(input)).toEqual([input]);
+      expect(segmentCaseNeutrally(input)).toEqual([input]);
+    });
+
+    test('scores reordered cited reference sentences correctly', () => {
+      expect(rouge.l('Beta Alpha.[1]', 'Alpha.[1] Beta.')).toBeCloseTo(10 / 11);
+    });
+
     test('keeps parenthesized page references inside their sentence', () => {
       const input = 'See p.(10) for details.';
       expect(ss(input)).toEqual([input]);
