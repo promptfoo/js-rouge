@@ -1187,6 +1187,8 @@ describe('Utility Functions', () => {
     test.each([
       ["'Tis the season. It is cold.", ["'Tis the season.", 'It is cold.']],
       ["'twas late. We left.", ["'twas late.", 'We left.']],
+      ["'Til tomorrow. We can wait.", ["'Til tomorrow.", 'We can wait.']],
+      ["'round the bend. We continued.", ["'round the bend.", 'We continued.']],
       ["She told 'em to leave. They refused.", ["She told 'em to leave.", 'They refused.']],
       ["She said 'cause it rained. We stayed.", ["She said 'cause it rained.", 'We stayed.']],
     ])('does not interpret apostrophe-led contractions as quotations: %s', (input, expected) => {
@@ -1197,6 +1199,13 @@ describe('Utility Functions', () => {
     test('retains outer straight quotations around nested curly quotations', () => {
       const input = 'She said "She answered “No.” Then left." Next.';
       const expected = ['She said "She answered “No.” Then left."', 'Next.'];
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
+    test('keeps spaced single closing quotations with their sentence', () => {
+      const input = "He said 'Stop. ' Next.";
+      const expected = ["He said 'Stop. '", 'Next.'];
       expect(ss(input)).toEqual(expected);
       expect(segmentCaseNeutrally(input)).toEqual(expected);
     });

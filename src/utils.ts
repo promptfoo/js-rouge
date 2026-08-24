@@ -135,7 +135,7 @@ function singleQuotationState(
   return (
     (previous.length === 0 || /^[\s\p{Punctuation}]$/u.test(previous)) &&
     /\S/.test(following) &&
-    !/^(?:tis|twas|em|cause|(?:twen|thir|for|fif|six|seven|eigh|nine)ties|\d{2}s)\b/i.test(
+    !/^(?:t(?:is|was|were|will|would|il|ill)|em|cause|cos|round|bout|neath|fore|tween|gainst|cept|(?:twen|thir|for|fif|six|seven|eigh|nine)ties|\d{2}s)\b/i.test(
       input.slice(index + 1),
     )
   );
@@ -673,7 +673,7 @@ function closingDelimiterEnd(input: string, index: number, insideQuotes: boolean
   let quotePending = insideQuotes;
   while (end < input.length) {
     if (closingDelimiterReg.test(input[end])) {
-      quotePending &&= input[end] !== '"' && input[end] !== '”';
+      quotePending &&= !/["'”]/.test(input[end]);
       end++;
       continue;
     }
@@ -686,7 +686,7 @@ function closingDelimiterEnd(input: string, index: number, insideQuotes: boolean
     if (
       next > end &&
       next < input.length &&
-      (closingBracketReg.test(input[next]) || (quotePending && /["”]/.test(input[next])))
+      (closingBracketReg.test(input[next]) || (quotePending && /["'”]/.test(input[next])))
     ) {
       end = next;
       continue;
