@@ -1065,6 +1065,15 @@ describe('Utility Functions', () => {
       ]);
     });
 
+    test.each([
+      'The Giants vs. the Tigers won.',
+      'The Giants vs. Tigers won.',
+      'The Giants VS. Tigers won.',
+    ])('keeps the standard versus abbreviation inside %s', (input) => {
+      expect(ss(input)).toEqual([input]);
+      expect(segmentCaseNeutrally(input)).toEqual([input]);
+    });
+
     test('should not split possessive two letter abbreviations', () => {
       expect(ss("That is JFK Jr.'s book.")).toEqual(["That is JFK Jr.'s book."]);
     });
@@ -1101,6 +1110,17 @@ describe('Utility Functions', () => {
       expect(ss('I have lived in the U.S. for 20 years.')).toEqual([
         'I have lived in the U.S. for 20 years.',
       ]);
+    });
+
+    test.each(['Senate', 'Commission'])('keeps U.S. %s inside its sentence', (continuation) => {
+      const input = `The U.S. ${continuation} voted.`;
+      expect(ss(input)).toEqual([input]);
+      expect(segmentCaseNeutrally(input)).toEqual([input]);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual([input.toLowerCase()]);
+    });
+
+    test('does not inflate ROUGE-L by splitting geographic noun phrases', () => {
+      expect(rouge.l('The U.S. Senate voted.', 'Senate voted The U.S.')).toBeCloseTo(4 / 9);
     });
 
     test.each([

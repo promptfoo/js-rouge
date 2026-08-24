@@ -123,7 +123,8 @@ const closingBracketReg = /[\])}>]/;
 const listMarkerReg =
   /(?:^|\s)(?:(?:[•⁃]\s*)?\d+(?:\.\)|[.)])|\p{Cased}\.)(?=\s+["'([{<]*\p{Cased})/gu;
 const geographicAcronymReg = /\bU\.S(?:\.A)?\.$/i;
-const geographicContinuationReg = /^(?:government|army|navy|military|congress)\b/i;
+const geographicContinuationReg =
+  /^(?:government|army|navy|military|congress|senate|commission)\b/i;
 const sentenceContinuationReg =
   /^(?:and|or|but|nor|for|yet|so|at|in|on|of|to|from|with|by|as|then|because|while|after|before|although|though|since|unless|until|when|where|whether|if|once|whereas)\b/i;
 const independentSentenceReg =
