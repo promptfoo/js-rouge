@@ -595,8 +595,16 @@ describe('Utility Functions', () => {
         "He described 'the students' Acme Co. International project' today.",
       ],
       [
+        "He described 'the students' favorite Acme Co.\nInternational project' today.",
+        "He described 'the students' favorite Acme Co. International project' today.",
+      ],
+      [
         'We invested in (score > 5, Acme Co.\nInternational Holdings) today.',
         'We invested in (score > 5, Acme Co. International Holdings) today.',
+      ],
+      [
+        'We noted (the symbol ")" then Acme Co.\nInternational Holdings) today.',
+        'We noted (the symbol ")" then Acme Co. International Holdings) today.',
       ],
     ])('keeps wrapped abbreviations inside punctuation-aware delimiters: %s', (input, expected) => {
       expect(ss(input)).toEqual([expected]);

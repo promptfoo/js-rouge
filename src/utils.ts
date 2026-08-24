@@ -193,9 +193,15 @@ class SentenceBuffer {
           (previous.length === 0 || /^[\s\p{Punctuation}]$/u.test(previous));
       } else if (character === "'") {
         this.#trackSingleQuote(text, index);
-      } else if (openingBracketReg.test(character)) {
+      } else if (
+        !(this.#insideDoubleQuotes || this.#insideSingleQuotes) &&
+        openingBracketReg.test(character)
+      ) {
         this.#openingDelimiters.push(character);
-      } else if (closingBracketReg.test(character)) {
+      } else if (
+        !(this.#insideDoubleQuotes || this.#insideSingleQuotes) &&
+        closingBracketReg.test(character)
+      ) {
         const opener = '([{<'[')]}>'.indexOf(character)];
         if (this.#openingDelimiters.at(-1) === opener) {
           this.#openingDelimiters.pop();
@@ -212,7 +218,9 @@ class SentenceBuffer {
       const possessive =
         previous.toLowerCase() === 's' &&
         /\s/.test(following) &&
-        strIsTitleCase(text.slice(index + 1));
+        !/^(?:said|asked|replied|wrote|today|yesterday|tomorrow|then|and|but|or|in|on|at|for|with|to|from)\b/i.test(
+          text.slice(index + 1).trimStart(),
+        );
       this.#insideSingleQuotes =
         possessive || (following.length > 0 && !/[\s.,!?;:)\]}]/.test(following));
       return;
