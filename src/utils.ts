@@ -487,7 +487,11 @@ function segmentList(input: string, caseNeutral: boolean): string[] | undefined 
   }
 
   const prefix = input.slice(0, current.index).trim();
-  if (prefix.length > 0 && firstMarker.trim() === next[0].trim()) {
+  const ambiguousMarker = /^(?:\p{Lu}|\d+)\.$/u.test(firstMarker.trim());
+  if (
+    prefix.length > 0 &&
+    (firstMarker.trim() === next[0].trim() || (ambiguousMarker && !/[.!?:]$/.test(prefix)))
+  ) {
     return undefined;
   }
   const segments = prefix.length === 0 ? [] : sentenceSegment(prefix, { caseNeutral });

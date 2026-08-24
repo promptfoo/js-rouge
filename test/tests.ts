@@ -593,6 +593,7 @@ describe('Utility Functions', () => {
       ['a.) Alpha b.) Beta', ['a.) Alpha', 'b.) Beta']],
       ['A) Alpha B) Beta', ['A) Alpha', 'B) Beta']],
       ['Intro. a) Alpha b) Beta', ['Intro.', 'a) Alpha', 'b) Beta']],
+      ['Intro: A. Alpha B. Beta.', ['Intro:', 'A. Alpha', 'B. Beta.']],
     ])('recognizes parenthesized alphabetical list markers in %s', (input, expected) => {
       expect(ss(input)).toEqual(expected);
       expect(segmentCaseNeutrally(input)).toEqual(expected);
@@ -600,6 +601,17 @@ describe('Utility Functions', () => {
 
     test('scores reordered parenthesized alphabetical lists correctly', () => {
       expect(rouge.l('a) Alpha b) Beta', 'b) Beta a) Alpha')).toBe(1);
+    });
+
+    test('does not interpret names or addresses as embedded lists', () => {
+      expect(ss('I met John A. Smith and Mary B. Jones.')).toEqual([
+        'I met John A. Smith and Mary B. Jones.',
+      ]);
+      expect(ss('The address is 1. Main and 2. Broadway.')).toEqual([
+        'The address is 1.',
+        'Main and 2.',
+        'Broadway.',
+      ]);
     });
 
     test('keeps four-dot boundaries invariant under case folding', () => {
