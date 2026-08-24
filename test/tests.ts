@@ -593,6 +593,10 @@ describe('Utility Functions', () => {
       expect(rouge.l('Intro. 1. Alpha 2. Beta.', 'Intro. 2. Beta 1. Alpha.')).toBe(1);
     });
 
+    test('accepts dash-delimited introductory prose', () => {
+      expect(ss('Options — 1. Alpha 2. Beta.')).toEqual(['Options —', '1. Alpha', '2. Beta.']);
+    });
+
     test('keeps mixed-case list markers invariant under case folding', () => {
       const input = 'Intro: A. Alpha b. Beta.';
       expect(segmentCaseNeutrally(input)).toEqual(['Intro:', 'A. Alpha', 'b. Beta.']);
@@ -615,6 +619,10 @@ describe('Utility Functions', () => {
         segmentCaseNeutrally(input).map((sentence) => sentence.toLowerCase()),
       );
       expect(rouge.l(input, input.toLowerCase(), { caseSensitive: false })).toBe(1);
+    });
+
+    test('keeps Unicode titlecase markers in the same alphabetical list', () => {
+      expect(ss('ǅ. Alpha ǈ. Beta ǋ. Gamma')).toEqual(['ǅ. Alpha', 'ǈ. Beta', 'ǋ. Gamma']);
     });
 
     test('handles many unmatched parenthesized marker candidates', () => {
@@ -661,6 +669,9 @@ describe('Utility Functions', () => {
         segmentCaseNeutrally(names).map((sentence) => sentence.toLowerCase()),
       );
       expect(rouge.l(names, names.toLowerCase(), { caseSensitive: false })).toBe(1);
+      expect(ss('we hired alice a. smith and bob b. jones.')).toEqual([
+        'we hired alice a. smith and bob b. jones.',
+      ]);
       expect(ss('The address is 1. Main and 2. Broadway.')).toEqual([
         'The address is 1.',
         'Main and 2.',
@@ -682,6 +693,24 @@ describe('Utility Functions', () => {
         'Results: 1.',
         'Alpha was founded in 2020.',
         'Growth continued.',
+      ]);
+    });
+
+    test('does not treat sentence-ending counts as embedded list markers', () => {
+      expect(ss('Results: 1. The answer was 42. More analysis followed 2. Final.')).toEqual([
+        'Results:',
+        '1. The answer was 42.',
+        'More analysis followed',
+        '2. Final.',
+      ]);
+    });
+
+    test('ignores quoted parentheses while finding embedded lists', () => {
+      expect(ss('The symbol "(" is used. Options: a) Alpha b) Beta.')).toEqual([
+        'The symbol "(" is used.',
+        'Options:',
+        'a) Alpha',
+        'b) Beta.',
       ]);
     });
 

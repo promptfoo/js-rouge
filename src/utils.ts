@@ -456,11 +456,33 @@ export function sentenceSegment(input: string, options: SentenceSegmentOptions =
 interface ListScanState {
   cursor: number;
   parenthesisDepth: number;
+  quote: string | undefined;
+}
+
+function listQuoteCloser(character: string): string | undefined {
+  if (character === '"') {
+    return '"';
+  }
+  if (character === '“') {
+    return '”';
+  }
+  return character === '‘' ? '’' : undefined;
 }
 
 function advanceListScan(input: string, end: number, state: ListScanState): void {
   while (state.cursor < end) {
     const character = input[state.cursor++];
+    if (state.quote !== undefined) {
+      if (character === state.quote) {
+        state.quote = undefined;
+      }
+      continue;
+    }
+    const quote = listQuoteCloser(character);
+    if (quote !== undefined) {
+      state.quote = quote;
+      continue;
+    }
     if (character === '(') {
       state.parenthesisDepth++;
     } else if (character === ')') {
@@ -482,7 +504,7 @@ function listMarkerPrefix(
     lineBreak ||= /[\r\n]/.test(input[index]);
     index--;
   }
-  return { empty: index < 0, boundary: lineBreak || /[.!?:]/.test(input[index] ?? '') };
+  return { empty: index < 0, boundary: lineBreak || /[.!?:\p{Pd}]/u.test(input[index] ?? '') };
 }
 
 function nextListMarker(
@@ -497,10 +519,16 @@ function nextListMarker(
     const closesParenthesis = marker[0].endsWith(')') && state.parenthesisDepth > 0;
     const yearInProse =
       /^(?:1\d{3}|20\d{2})\.$/.test(marker[0].trim()) && !listMarkerPrefix(input, marker).boundary;
+    const countInProse =
+      /^\d+\.$/.test(marker[0].trim()) &&
+      /\b(?:am|is|are|was|were|be|been|being|has|have|had|reached|numbered|total(?:ed)?|hit|equals?|equaled|became|remained|scored|costs?|in|of|at|by|to|from|about|around|roughly|approximately)$/i.test(
+        input.slice(Math.max(0, marker.index - 24), marker.index).trimEnd(),
+      );
     if (
       (family === undefined || family.test(marker[0])) &&
       !closesParenthesis &&
       !yearInProse &&
+      !countInProse &&
       (marker.index === 0 ||
         !/\b(?:section|chapter|page|figure|table|paragraph|article|clause)$/i.test(
           input.slice(Math.max(0, marker.index - 24), marker.index).trimEnd(),
@@ -527,7 +555,7 @@ function listMarkerFamily(marker: string, caseNeutral: boolean): RegExp {
   if (caseNeutral) {
     return /^\s*\p{Cased}/u;
   }
-  return /^\p{Lu}/u.test(marker) ? /^\s*\p{Lu}/u : /^\s*\p{Ll}/u;
+  return /^[\p{Lu}\p{Lt}]/u.test(marker) ? /^\s*[\p{Lu}\p{Lt}]/u : /^\s*\p{Ll}/u;
 }
 
 function findListCandidate(
@@ -541,9 +569,7 @@ function findListCandidate(
   while (current !== null) {
     const marker = current[0].trim();
     const context = listMarkerPrefix(input, current);
-    const ambiguousMarker =
-      /^\d+\.$/.test(marker) ||
-      (caseNeutral ? /^\p{Cased}\p{M}*\.$/u : /^\p{Lu}\p{M}*\.$/u).test(marker);
+    const ambiguousMarker = /^\d+\.$/.test(marker) || /^\p{Cased}\p{M}*\.$/u.test(marker);
 
     const family = listMarkerFamily(marker, caseNeutral);
     const first = firstByFamily.get(family.source);
@@ -582,7 +608,7 @@ function segmentList(input: string, caseNeutral: boolean, depth: number): string
     return undefined;
   }
   const expression = new RegExp(listMarkerReg);
-  const state: ListScanState = { cursor: 0, parenthesisDepth: 0 };
+  const state: ListScanState = { cursor: 0, parenthesisDepth: 0, quote: undefined };
   const candidate = findListCandidate(input, caseNeutral, expression, state);
   if (candidate === undefined) {
     return undefined;
