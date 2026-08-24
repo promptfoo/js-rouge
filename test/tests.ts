@@ -571,6 +571,10 @@ describe('Utility Functions', () => {
       expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
         expected.map((sentence) => sentence.toLowerCase()),
       );
+      expect(ss('The standard abbreviation is vs. This is clearer.')).toEqual([
+        'The standard abbreviation is vs.',
+        'This is clearer.',
+      ]);
     });
 
     test('recognizes list markers after document indentation', () => {
@@ -1065,6 +1069,38 @@ describe('Utility Functions', () => {
       ]);
     });
 
+    test.each([
+      'The Giants vs. the Tigers won.',
+      'The Giants vs. Tigers won.',
+      'The Giants VS. Tigers won.',
+    ])('keeps the standard versus abbreviation inside %s', (input) => {
+      expect(ss(input)).toEqual([input]);
+      expect(segmentCaseNeutrally(input)).toEqual([input]);
+    });
+
+    test('preserves independent sentences after a terminal versus abbreviation', () => {
+      const input = 'The standard abbreviation is vs. Today we compare, the full word is clearer.';
+      const expected = [
+        'The standard abbreviation is vs.',
+        'Today we compare, the full word is clearer.',
+      ];
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        expected.map((sentence) => sentence.toLowerCase()),
+      );
+    });
+
+    test.each(['Tomorrow is clearer.', 'Alice explained the term.'])(
+      'preserves ordinary sentence starts after a terminal versus abbreviation: %s',
+      (continuation) => {
+        const input = `The standard abbreviation is vs. ${continuation}`;
+        const expected = ['The standard abbreviation is vs.', continuation];
+        expect(ss(input)).toEqual(expected);
+        expect(segmentCaseNeutrally(input)).toEqual(expected);
+      },
+    );
+
     test('should not split possessive two letter abbreviations', () => {
       expect(ss("That is JFK Jr.'s book.")).toEqual(["That is JFK Jr.'s book."]);
     });
@@ -1101,6 +1137,47 @@ describe('Utility Functions', () => {
       expect(ss('I have lived in the U.S. for 20 years.')).toEqual([
         'I have lived in the U.S. for 20 years.',
       ]);
+    });
+
+    test.each(['Senate', 'Commission'])('keeps U.S. %s inside its sentence', (continuation) => {
+      const input = `The U.S. ${continuation} voted.`;
+      expect(ss(input)).toEqual([input]);
+      expect(segmentCaseNeutrally(input)).toEqual([input]);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual([input.toLowerCase()]);
+    });
+
+    test.each(['Senate', 'Commission'])(
+      'preserves wrapped and unspaced boundaries around U.S. %s',
+      (continuation) => {
+        for (const separator of ['\n', '\r\n', '\r']) {
+          const wrapped = `The U.S.${separator}${continuation} voted.`;
+          const normalized = `The U.S. ${continuation} voted.`;
+          expect(ss(wrapped)).toEqual([normalized]);
+          expect(segmentCaseNeutrally(wrapped)).toEqual([normalized]);
+        }
+
+        const unspaced = `I live in the U.S.${continuation} meets tomorrow.`;
+        expect(ss(unspaced)).toEqual(['I live in the U.S.', `${continuation} meets tomorrow.`]);
+        expect(segmentCaseNeutrally(unspaced)).toEqual([
+          'I live in the U.S.',
+          `${continuation} meets tomorrow.`,
+        ]);
+
+        const quoted = `The U.S.\n"${continuation} reconvenes."`;
+        expect(ss(quoted)).toEqual(['The U.S.', `"${continuation} reconvenes."`]);
+        expect(segmentCaseNeutrally(quoted)).toEqual(['The U.S.', `"${continuation} reconvenes."`]);
+
+        for (const paragraph of ['\n\n', '\r\n\r\n', '\r\r']) {
+          const input = `I live in the U.S.${paragraph}${continuation} meets tomorrow.`;
+          const expected = ['I live in the U.S.', `${continuation} meets tomorrow.`];
+          expect(ss(input)).toEqual(expected);
+          expect(segmentCaseNeutrally(input)).toEqual(expected);
+        }
+      },
+    );
+
+    test('does not inflate ROUGE-L by splitting geographic noun phrases', () => {
+      expect(rouge.l('The U.S. Senate voted.', 'Senate voted The U.S.')).toBeCloseTo(4 / 9);
     });
 
     test.each([
