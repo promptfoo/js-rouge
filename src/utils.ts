@@ -97,6 +97,9 @@ const sentenceSuffixLength = Math.max(10, ...GATE_SUBSTITUTIONS.map((word) => wo
 const closingDelimiterReg = /[\])}>"']/;
 const openingBracketReg = /[([{<]/;
 const closingBracketReg = /[\])}>]/;
+const listMarkerReg = /(?:^|\s)(?:(?:[•⁃]\s*)?\d+(?:\.\)|[.)])|[a-z]\.)(?=\s+\p{Lu})/gu;
+const geographicAcronymReg = /\b(?:U\.S(?:\.A)?|E\.U)\.$/i;
+const geographicContinuationReg = /^(?:government|army|navy|military|congress)\b/i;
 
 /** Keep merged fragments separate; boundary rules only need a suffix and word casing. */
 class SentenceBuffer {
@@ -219,6 +222,13 @@ export function sentenceSegment(
     return [];
   }
 
+  const listMarkers = [...input.matchAll(listMarkerReg)];
+  if (listMarkers.length > 1 && listMarkers[0].index === 0) {
+    return listMarkers.map((marker, index) =>
+      input.slice(marker.index, listMarkers[index + 1]?.index ?? input.length).trim(),
+    );
+  }
+
   // Scan terminals before applying abbreviation and line-wrap rules.
   const chunks = sentenceChunks(input, caseNeutral);
 
@@ -262,7 +272,11 @@ export function sentenceSegment(
         const nextChunk = chunks[idx + 1];
         if (
           (caseNeutral ? startsWithCasedCharacter(nextChunk) : strIsTitleCase(nextChunk)) &&
-          !excepReg.test(gateSuffix)
+          !excepReg.test(gateSuffix) &&
+          !(
+            geographicAcronymReg.test(gateSuffix) &&
+            geographicContinuationReg.test(nextChunk.trim())
+          )
         ) {
           // Catch abbreviations followed by a capital letter and treat as a boundary.
           acc.push(chunk.text());
@@ -304,6 +318,11 @@ export function sentenceSegment(
       } else if (chunks[idx + 1] && ellipseReg.test(suffix)) {
         // Catch mid-sentence ellipses (and their derivatives) and merge them
         const nextChunk = chunks[idx + 1];
+        const nextSentence = nextChunk.trim() || chunks[idx + 2] || '';
+        if (/\.{4}$/.test(suffix) && strIsTitleCase(nextSentence)) {
+          acc.push(chunk.text());
+          continue;
+        }
         chunk.append(nextChunk.replace(/ +/g, ' '));
         if (!(nextChunk.trim() || breakReg.test(nextChunk)) && chunks[idx + 2]) {
           // Keep the separator inside the sentence; leave line breaks to the newline rule.
@@ -330,6 +349,7 @@ export interface SentenceSegmentOptions {
 /** Scan sentence boundaries once, preserving the former captured-split layout. */
 function sentenceChunks(input: string, caseNeutral: boolean): string[] {
   const chunks: string[] = [];
+  const protectedPeriods = spacedEllipsisPeriods(input);
   let lastEnd = 0;
   let start = -1;
   let insideQuotes = false;
@@ -360,7 +380,7 @@ function sentenceChunks(input: string, caseNeutral: boolean): string[] {
       // A terminal must follow the initial character, even if it is punctuation.
       continue;
     }
-    if (char === '.' || char === '?' || char === '!') {
+    if ((char === '.' && !protectedPeriods.has(index)) || char === '?' || char === '!') {
       const end = sentenceEnd(input, index, insideQuotes, brackets, caseNeutral);
       if (end === -1) {
         continue;
@@ -374,6 +394,26 @@ function sentenceChunks(input: string, caseNeutral: boolean): string[] {
 
   chunks.push(input.slice(lastEnd));
   return chunks;
+}
+
+function spacedEllipsisPeriods(input: string): Set<number> {
+  const protectedPeriods = new Set<number>();
+  for (const match of input.matchAll(/(?:\.[^\S\r\n]+){2,}\./g)) {
+    const offsets = [...match[0].matchAll(/\./g)].map((period) => period.index);
+    let boundary = -1;
+    if (
+      offsets.length >= 4 &&
+      /^\p{Lu}/u.test(input.slice(match.index + match[0].length).trimStart())
+    ) {
+      boundary = /\S/.test(input[match.index - 1] ?? '') ? offsets[0] : (offsets.at(-1) ?? -1);
+    }
+    for (const offset of offsets) {
+      if (offset !== boundary) {
+        protectedPeriods.add(match.index + offset);
+      }
+    }
+  }
+  return protectedPeriods;
 }
 
 /** Scan closing delimiters, including whitespace before a pending closing quote. */
@@ -415,7 +455,7 @@ function sentenceEnd(
 ): number {
   const end = closingDelimiterEnd(input, index, insideQuotes);
   if (end < input.length && !/\s/.test(input[end])) {
-    return -1;
+    return isUnspacedSentenceBoundary(input, index, end, caseNeutral) ? end : -1;
   }
   if (end === index + 1) {
     return end;
@@ -461,6 +501,26 @@ function sentenceEnd(
     return -1;
   }
   return abbrvReg.test(gateSuffix) && excepReg.test(gateSuffix) ? -1 : end;
+}
+
+function isUnspacedSentenceBoundary(
+  input: string,
+  index: number,
+  next: number,
+  caseNeutral: boolean,
+): boolean {
+  if (input[index] !== '.' || !charIsUpperCase(characterAt(input, next))) {
+    return false;
+  }
+
+  const suffix = input.slice(Math.max(0, index + 1 - sentenceSuffixLength), index + 1);
+  const following = input.slice(next);
+  return !(
+    abbrvReg.test(caseNeutral ? suffix.toLowerCase() : suffix) ||
+    /^\p{Lu}\./u.test(following) ||
+    (/\b\p{Lu}\.$/u.test(suffix) && /^\p{Lu}(?=\s|$)/u.test(following)) ||
+    /^[^\s]*@/.test(following)
+  );
 }
 
 function trimSpaces(input: string): string {
