@@ -1625,10 +1625,14 @@ describe('Utility Functions', () => {
         for (const input of [
           'He paused... (Perhaps deliberately) before answering.',
           'He paused... (Perhaps, e.g., deliberately) before answering.',
+          'He paused... “Perhaps deliberately,” before answering.',
         ]) {
           expect(ss(input)).toEqual([input]);
           expect(segmentCaseNeutrally(input)).toEqual([input]);
         }
+        const uppercase = 'HE PAUSED... (PERHAPS) BEFORE ANSWERING.';
+        expect(segmentCaseNeutrally(uppercase)).toEqual([uppercase]);
+        expect(rouge.l(uppercase, uppercase.toLowerCase(), { caseSensitive: false })).toBe(1);
       });
 
       test('scores reference sentences ending in a three-dot ellipsis correctly', () => {

@@ -479,7 +479,7 @@ export function sentenceSegment(
         const startsWithNumber =
           /^\p{Number}/u.test(sentenceStart) &&
           !ellipsisQuantityContinuationReg.test(sentenceStart);
-        const inlineParenthetical = hasInlineParenthetical(nextSentence);
+        const inlineParenthetical = hasInlineParenthetical(nextSentence, caseNeutral);
         const startsSentence = (startsWithLetter || startsWithNumber) && !inlineParenthetical;
         if (
           /\.{3,4}$/.test(suffix) &&
@@ -510,19 +510,22 @@ export function sentenceSegment(
   return acc.length === 0 ? [input] : acc;
 }
 
-function hasInlineParenthetical(input: string): boolean {
+function hasInlineParenthetical(input: string, caseNeutral: boolean): boolean {
   const opening = input[0];
-  const openingIndex = '([{<'.indexOf(opening);
+  const openingIndex = '([{<"\'“‘«„'.indexOf(opening);
   if (openingIndex === -1) {
     return false;
   }
-  const closing = ')]}>'[openingIndex];
-  let depth = 0;
-  for (let index = 0; index < Math.min(input.length, 512); index++) {
-    if (input[index] === opening) {
+  const closing = ')]}>"\'”’»“'[openingIndex];
+  let depth = 1;
+  for (let index = 1; index < Math.min(input.length, 512); index++) {
+    if (input[index] === opening && opening !== closing) {
       depth++;
     } else if (input[index] === closing && --depth === 0) {
-      return /^[^\S\r\n]+\p{Ll}/u.test(input.slice(index + 1, index + 64));
+      const continuation = input.slice(index + 1, index + 64);
+      return caseNeutral
+        ? /^[^\S\r\n]+\p{Cased}/u.test(continuation)
+        : /^[^\S\r\n]+\p{Ll}/u.test(continuation);
     }
   }
   return false;
