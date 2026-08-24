@@ -48,21 +48,28 @@ assert.equal(s('a b', 'a b'), 1);
   writeConsumerFile(
     'commonjs.cjs',
     `const assert = require('node:assert/strict');
-const { l, n, s } = require('js-rouge');
+const rouge = require('js-rouge');
+const { l, n, s } = rouge;
+assert.equal(Object.hasOwn(rouge, 'default'), false);
 ${runtimeAssertions}`,
   );
   writeConsumerFile(
     'module.mjs',
     `import assert from 'node:assert/strict';
 import { l, n, s } from 'js-rouge';
+import * as rouge from 'js-rouge';
+assert.equal(Object.hasOwn(rouge, 'default'), false);
 ${runtimeAssertions}`,
   );
   writeConsumerFile(
     'types.ts',
     `import { n, type RougeNOptions } from 'js-rouge';
+// @ts-expect-error The ESM entry point does not export a default.
+import missingDefault from 'js-rouge';
 const options: RougeNOptions = { n: 2, caseSensitive: false };
 const score: number = n('a b', 'A B', options);
 void score;
+void missingDefault;
 `,
   );
   writeConsumerJson('tsconfig.json', {
