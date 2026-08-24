@@ -588,6 +588,35 @@ describe('Utility Functions', () => {
       expect(rouge.l(input, '1. Alpha 2. Beta. Intro.')).toBe(1);
     });
 
+    test('segments reordered numbered lists after introductory prose', () => {
+      expect(ss('Intro. 2. Beta 1. Alpha.')).toEqual(['Intro.', '2. Beta', '1. Alpha.']);
+      expect(rouge.l('Intro. 1. Alpha 2. Beta.', 'Intro. 2. Beta 1. Alpha.')).toBe(1);
+    });
+
+    test('keeps mixed-case list markers invariant under case folding', () => {
+      const input = 'Intro: A. Alpha b. Beta.';
+      expect(segmentCaseNeutrally(input)).toEqual(['Intro:', 'A. Alpha', 'b. Beta.']);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(['intro:', 'a. alpha', 'b. beta.']);
+      expect(rouge.l(input, input.toLowerCase(), { caseSensitive: false })).toBe(1);
+    });
+
+    test('handles many unmatched parenthesized marker candidates', () => {
+      const input = `(${' a) A'.repeat(4000)}`;
+      expect(ss(input)).toEqual([input]);
+    });
+
+    test('bounds recursion for deeply nested embedded lists', () => {
+      const input = `${'Intro. 1. '.repeat(512)}Leaf. ${'2. Done. '.repeat(512)}`;
+      expect(() => ss(input)).not.toThrow();
+    });
+
+    test('handles sparse numbered marker sequences', () => {
+      const input = Array.from({ length: 2000 }, (_, index) => `End. ${2 * index + 1}. Alpha`).join(
+        ' ',
+      );
+      expect(() => ss(input)).not.toThrow();
+    });
+
     test.each([
       ['a) Alpha b) Beta', ['a) Alpha', 'b) Beta']],
       ['a.) Alpha b.) Beta', ['a.) Alpha', 'b.) Beta']],

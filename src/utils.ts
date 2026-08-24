@@ -122,6 +122,8 @@ const openingBracketReg = /[([{<]/;
 const closingBracketReg = /[\])}>]/;
 const listMarkerReg =
   /(?:^|\s)(?:(?:[•⁃]\s*)?\d+|\p{Cased})(?:\.\)|[.)])(?=\s+["'([{<]*\p{Cased})/gu;
+const nestedListDepth = Symbol('nestedListDepth');
+const maxNestedListDepth = 32;
 const geographicAcronymReg = /\bU\.S(?:\.A)?\.$/i;
 const geographicContinuationReg = /^(?:government|army|navy|military|congress)\b/i;
 const sentenceContinuationReg =
@@ -299,15 +301,14 @@ class SentenceBuffer {
  * @return {Array<string>}            An array of sentences
  */
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Sentence segmentation requires complex NLP logic
-export function sentenceSegment(
-  input: string,
-  { caseNeutral = false }: SentenceSegmentOptions = {},
-): string[] {
+export function sentenceSegment(input: string, options: SentenceSegmentOptions = {}): string[] {
+  const { caseNeutral = false } = options;
+  const depth = (options as InternalSentenceSegmentOptions)[nestedListDepth] ?? 0;
   if (input.length === 0) {
     return [];
   }
 
-  const list = segmentList(input, caseNeutral);
+  const list = segmentList(input, caseNeutral, depth);
   if (list !== undefined) {
     return list;
   }
@@ -452,21 +453,54 @@ export function sentenceSegment(
   return acc.length === 0 ? [input] : acc;
 }
 
+interface ListScanState {
+  cursor: number;
+  parenthesisDepth: number;
+}
+
+function advanceListScan(input: string, end: number, state: ListScanState): void {
+  while (state.cursor < end) {
+    const character = input[state.cursor++];
+    if (character === '(') {
+      state.parenthesisDepth++;
+    } else if (character === ')') {
+      state.parenthesisDepth = Math.max(0, state.parenthesisDepth - 1);
+    }
+  }
+}
+
+function listMarkerPrefix(
+  input: string,
+  marker: RegExpExecArray,
+): {
+  empty: boolean;
+  boundary: boolean;
+} {
+  let index = marker.index - 1;
+  let lineBreak = /[\r\n]/.test(marker[0]);
+  while (index >= 0 && /\s/.test(input[index])) {
+    lineBreak ||= /[\r\n]/.test(input[index]);
+    index--;
+  }
+  return { empty: index < 0, boundary: lineBreak || /[.!?:]/.test(input[index] ?? '') };
+}
+
 function nextListMarker(
   input: string,
   expression: RegExp,
+  state: ListScanState,
   family?: RegExp,
-  expectedNumber?: number,
 ): RegExpExecArray | null {
   let marker = expression.exec(input);
   while (marker !== null) {
-    const closesParenthesis =
-      marker[0].endsWith(')') &&
-      input.lastIndexOf('(', marker.index) > input.lastIndexOf(')', marker.index);
+    advanceListScan(input, marker.index, state);
+    const closesParenthesis = marker[0].endsWith(')') && state.parenthesisDepth > 0;
+    const yearInProse =
+      /^(?:1\d{3}|20\d{2})\.$/.test(marker[0].trim()) && !listMarkerPrefix(input, marker).boundary;
     if (
       (family === undefined || family.test(marker[0])) &&
-      (expectedNumber === undefined || Number(marker[0].match(/\d+/)?.[0]) === expectedNumber) &&
       !closesParenthesis &&
+      !yearInProse &&
       (marker.index === 0 ||
         !/\b(?:section|chapter|page|figure|table|paragraph|article|clause)$/i.test(
           input.slice(Math.max(0, marker.index - 24), marker.index).trimEnd(),
@@ -482,66 +516,88 @@ function nextListMarker(
 interface ListCandidate {
   current: RegExpExecArray;
   next: RegExpExecArray;
-  family: RegExp | undefined;
-  expectedNumber: number | undefined;
+  family: RegExp;
   prefix: string;
+}
+
+function listMarkerFamily(marker: string, caseNeutral: boolean): RegExp {
+  if (/\d/.test(marker)) {
+    return /\d/;
+  }
+  if (caseNeutral) {
+    return /^\s*\p{Cased}/u;
+  }
+  return /^\p{Lu}/u.test(marker) ? /^\s*\p{Lu}/u : /^\s*\p{Ll}/u;
 }
 
 function findListCandidate(
   input: string,
   caseNeutral: boolean,
   expression: RegExp,
+  state: ListScanState,
 ): ListCandidate | undefined {
-  let current = nextListMarker(input, expression);
+  const firstByFamily = new Map<string, { marker: RegExpExecArray; emptyPrefix: boolean }>();
+  let current = nextListMarker(input, expression, state);
   while (current !== null) {
     const marker = current[0].trim();
-    const preceding = input.slice(0, current.index);
-    const prefix = preceding.trim();
+    const context = listMarkerPrefix(input, current);
     const ambiguousMarker =
       /^\d+\.$/.test(marker) || (caseNeutral ? /^\p{Cased}\.$/u : /^\p{Lu}\.$/u).test(marker);
-    const startsAfterBoundary = /[.!?:]$/.test(prefix) || /[\r\n]\s*$/.test(preceding);
 
-    if (prefix.length === 0 || !ambiguousMarker || startsAfterBoundary) {
-      const family = [/\d/, /^\s*\p{Lu}/u, /^\s*\p{Ll}/u].find((pattern) => pattern.test(marker));
-      const markerNumber = marker.match(/\d+/)?.[0];
-      const expectedNumber =
-        prefix.length > 0 && markerNumber !== undefined ? Number(markerNumber) + 1 : undefined;
-      const next = nextListMarker(input, expression, family, expectedNumber);
-      if (next !== null && (prefix.length === 0 || marker !== next[0].trim())) {
-        return { current, next, family, expectedNumber, prefix };
-      }
+    const family = listMarkerFamily(marker, caseNeutral);
+    const first = firstByFamily.get(family.source);
+    if (first !== undefined && (first.emptyPrefix || first.marker[0].trim() !== marker)) {
+      return {
+        current: first.marker,
+        next: current,
+        family,
+        prefix: input.slice(0, first.marker.index).trim(),
+      };
     }
 
-    expression.lastIndex = current.index + current[0].length;
-    current = nextListMarker(input, expression);
+    if (first === undefined && (context.empty || !ambiguousMarker || context.boundary)) {
+      firstByFamily.set(family.source, { marker: current, emptyPrefix: context.empty });
+    }
+
+    current = nextListMarker(input, expression, state);
   }
   return undefined;
 }
 
-function segmentList(input: string, caseNeutral: boolean): string[] | undefined {
+function segmentNestedSentence(input: string, caseNeutral: boolean, depth: number): string[] {
+  const options: InternalSentenceSegmentOptions = {
+    caseNeutral,
+    [nestedListDepth]: depth + 1,
+  };
+  return sentenceSegment(input, options);
+}
+
+function segmentList(input: string, caseNeutral: boolean, depth: number): string[] | undefined {
+  if (depth >= maxNestedListDepth) {
+    return undefined;
+  }
   const expression = new RegExp(listMarkerReg);
-  const candidate = findListCandidate(input, caseNeutral, expression);
+  const state: ListScanState = { cursor: 0, parenthesisDepth: 0 };
+  const candidate = findListCandidate(input, caseNeutral, expression, state);
   if (candidate === undefined) {
     return undefined;
   }
 
   let current: RegExpExecArray | null = candidate.current;
   let next: RegExpExecArray | null = candidate.next;
-  let expectedNumber = candidate.expectedNumber;
   const { family, prefix } = candidate;
-  const segments = prefix.length === 0 ? [] : sentenceSegment(prefix, { caseNeutral });
+  const segments = prefix.length === 0 ? [] : segmentNestedSentence(prefix, caseNeutral, depth);
   do {
     const body = input.slice(current.index + current[0].length, next?.index ?? input.length).trim();
-    const sentences = /[.!?\r\n]/.test(body) ? sentenceSegment(body, { caseNeutral }) : [body];
+    const sentences = /[.!?\r\n]/.test(body)
+      ? segmentNestedSentence(body, caseNeutral, depth)
+      : [body];
     if (sentences.length > 1 && /^\p{Cased}\.$/u.test(sentences[0])) {
       sentences.splice(0, 2, `${sentences[0]} ${sentences[1]}`);
     }
     segments.push(`${current[0].trim()} ${sentences[0]}`, ...sentences.slice(1));
     current = next;
-    if (expectedNumber !== undefined) {
-      expectedNumber++;
-    }
-    next = nextListMarker(input, expression, family, expectedNumber);
+    next = nextListMarker(input, expression, state, family);
   } while (current !== null);
   return segments;
 }
@@ -550,6 +606,10 @@ function segmentList(input: string, caseNeutral: boolean): string[] | undefined 
 export interface SentenceSegmentOptions {
   /** Ignore letter casing when applying sentence-boundary heuristics (default: false). */
   caseNeutral?: boolean;
+}
+
+interface InternalSentenceSegmentOptions extends SentenceSegmentOptions {
+  [nestedListDepth]?: number;
 }
 
 /** Scan sentence boundaries once, preserving the former captured-split layout. */
