@@ -23,8 +23,9 @@
     "lint": "biome lint .",
     "format": "biome format --write . && prettier --write \"**/*.md\"",
     "check": "biome check --write . && prettier --write \"**/*.md\"",
+    "prepack": "npm run build",
     "prepublishOnly": "npm run build && npm run test:package",
-    "prepare": "husky"
+    "prepare": "node scripts/prepare.js"
   },
   "repository": {
     "type": "git",
@@ -63,6 +64,7 @@
   },
   "files": [
     "dist",
+    "scripts/prepare.js",
     "src",
     "README.md",
     "LICENSE"

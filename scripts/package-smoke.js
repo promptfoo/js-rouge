@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 const {
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -31,12 +32,8 @@ function writeConsumerJson(file, value) {
 
 try {
   assert.ok(npmCli, 'Run the package smoke test through npm');
-  assert.ok(existsSync(join(repositoryRoot, 'dist', 'rouge.js')), 'Build the package first');
-  run(
-    process.execPath,
-    [npmCli, 'pack', '--ignore-scripts', '--pack-destination', temporaryRoot],
-    repositoryRoot,
-  );
+  rmSync(join(repositoryRoot, 'dist'), { force: true, recursive: true });
+  run(process.execPath, [npmCli, 'pack', '--pack-destination', temporaryRoot], repositoryRoot);
 
   const tarballs = readdirSync(temporaryRoot).filter((file) => file.endsWith('.tgz'));
   assert.equal(tarballs.length, 1, 'npm pack should create exactly one tarball');
@@ -105,6 +102,13 @@ void score;
   for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
     assert.equal(installedPackage[field], undefined, `The package must not declare ${field}`);
   }
+
+  const productionRoot = join(temporaryRoot, 'production');
+  mkdirSync(join(productionRoot, 'scripts'), { recursive: true });
+  for (const file of ['package.json', 'package-lock.json', 'scripts/prepare.js']) {
+    copyFileSync(join(repositoryRoot, file), join(productionRoot, file));
+  }
+  run(process.execPath, [npmCli, 'ci', '--omit=dev', '--no-audit', '--no-fund'], productionRoot);
 
   const declarationMaps = readdirSync(join(installedRoot, 'dist')).filter((file) =>
     file.endsWith('.d.ts.map'),
