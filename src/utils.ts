@@ -435,7 +435,11 @@ export function sentenceSegment(
                 (!sentenceContinuationReg.test(nextSentence) ||
                   independentSentenceReg.test(nextSentence))))
           : strIsTitleCase(nextSentence);
-        if (/\.{3,4}$/.test(suffix) && startsSentence) {
+        if (
+          /\.{3,4}$/.test(suffix) &&
+          startsSentence &&
+          (/\.{4}$/.test(suffix) || !chunk.hasOpenDelimiter)
+        ) {
           acc.push(chunk.text());
           continue;
         }

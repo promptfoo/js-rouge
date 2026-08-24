@@ -1574,6 +1574,14 @@ describe('Utility Functions', () => {
         },
       );
 
+      test.each(['She said, "I... I cannot go."', 'We noted (Alpha... Beta) today.'])(
+        'keeps three-dot ellipses inside surrounding delimiters: %s',
+        (input) => {
+          expect(ss(input)).toEqual([input]);
+          expect(segmentCaseNeutrally(input)).toEqual([input]);
+        },
+      );
+
       test('scores reference sentences ending in a three-dot ellipsis correctly', () => {
         expect(rouge.l('Beta Alpha...', 'Alpha... Beta.')).toBeCloseTo(6 / 7);
       });
