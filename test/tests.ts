@@ -998,6 +998,29 @@ describe('Utility Functions', () => {
       ]);
     });
 
+    test.each(['5 stars', '2 days', '3 weeks', '10 months', '20 points'])(
+      'keeps numeric quote continuations together: %s',
+      (quantity) => {
+        const input = `She rated "Wow!" ${quantity}.`;
+        expect(ss(input)).toEqual([input]);
+        expect(segmentCaseNeutrally(input)).toEqual([input]);
+      },
+    );
+
+    test('retains genuine numeric sentence boundaries after quotes', () => {
+      expect(ss('"Stop." 123 starts here.')).toEqual(['"Stop."', '123 starts here.']);
+      expect(ss('She said "Stop." 2 days passed.')).toEqual(['She said "Stop."', '2 days passed.']);
+      expect(ss('She said "Stop." 5 stars appeared.')).toEqual([
+        'She said "Stop."',
+        '5 stars appeared.',
+      ]);
+    });
+
+    test('recognizes Treebank closing quotes after bracketed sentences', () => {
+      expect(ss("He said ``(Stop.)'' Next.")).toEqual(["He said ``(Stop.)''", 'Next.']);
+      expect(ss("He said ''(Stop.)'' Next.")).toEqual(["He said ''(Stop.)''", 'Next.']);
+    });
+
     // ReDoS regression tests - ensure pathological inputs complete quickly
     // Using 500ms threshold to account for CI environment variability
     describe('ReDoS prevention', () => {
@@ -1141,6 +1164,13 @@ describe('Utility Functions', () => {
     test.each(geographicAcronyms)('retains the final dot in %s', (acronym) => {
       expect(tbt(acronym)).toEqual([acronym]);
       expect(tbt(`"${acronym}"`)).toEqual(['``', acronym, "''"]);
+    });
+
+    test.each([
+      ["He quoted ''$100''.", ['He', 'quoted', '``', '$', '100', "''", '.']],
+      ["He quoted ''(yes)''.", ['He', 'quoted', '``', '(', 'yes', ')', "''", '.']],
+    ])('recognizes paired apostrophes before punctuation in %s', (input, expected) => {
+      expect(tbt(input)).toEqual(expected);
     });
 
     test.each(bracketPairs)('splits final periods through %s%s spacing', (open, close) => {
@@ -1667,6 +1697,8 @@ describe('Core Functions', () => {
 
     test.each([
       ["He said ''hello''.", 'He said "hello".'],
+      ["He quoted ''$100''.", 'He quoted "$100".'],
+      ["He quoted ''(yes)''.", 'He quoted "(yes)".'],
       ["He said ``hello''.", 'He said "hello".'],
       [
         "``First sentence. Second fragment '', attribution ''third''.",
