@@ -401,10 +401,28 @@ export function l(cand: string, ref: string, opts?: RougeLOptions): number {
     return 0;
   }
 
+  const matches = countSummaryLcsMatches(candSents, refSents, remaining, getLcs, getLcsIndices);
+  if (matches === 0) {
+    return 0;
+  }
+  return utils.fMeasure(matches / candLength, matches / refLength, beta);
+}
+
+function countSummaryLcsMatches(
+  candidates: string[][],
+  references: string[][],
+  remaining: Map<string, number>,
+  getLcs: (a: string[], b: string[]) => string[],
+  getLcsIndices?: (candidate: string[], reference: string[]) => number[],
+): number {
   let matches = 0;
-  for (const reference of refSents) {
+  for (const reference of references) {
+    if (getLcs === utils.lcs && getLcsIndices === undefined && remaining.size === 0) {
+      break;
+    }
+
     const union = new Set<number>();
-    for (const candidate of candSents) {
+    for (const candidate of candidates) {
       for (const index of matchedReferenceIndices(candidate, reference, getLcs, getLcsIndices)) {
         union.add(index);
       }
@@ -416,15 +434,15 @@ export function l(cand: string, ref: string, opts?: RougeLOptions): number {
       const count = remaining.get(token) ?? 0;
       if (count > 0) {
         matches++;
-        remaining.set(token, count - 1);
+        if (count === 1) {
+          remaining.delete(token);
+        } else {
+          remaining.set(token, count - 1);
+        }
       }
     }
   }
-
-  if (matches === 0) {
-    return 0;
-  }
-  return utils.fMeasure(matches / candLength, matches / refLength, beta);
+  return matches;
 }
 
 function matchedReferenceIndices(
