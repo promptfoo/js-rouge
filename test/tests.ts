@@ -1739,6 +1739,20 @@ describe('Core Functions', () => {
       expect(n('candidate', 'reference', { tokenizer })).toBe(1);
     });
 
+    test('budgets both summaries and distinct reference gram entries before encoding', () => {
+      const tokens = Array.from({ length: 120_000 }, (_, index) =>
+        String.fromCodePoint(0x1_00_00 + index),
+      );
+      const tokenizer = (): string[] => tokens;
+      const stringify = jest.spyOn(JSON, 'stringify');
+      try {
+        expect(() => n('candidate', 'reference', { tokenizer })).toThrow(/materialization limit/);
+        expect(stringify).not.toHaveBeenCalled();
+      } finally {
+        stringify.mockRestore();
+      }
+    });
+
     test('should reject oversized token encoding within a small heap', () => {
       expectBundledScriptToPass(
         `
@@ -1785,6 +1799,26 @@ describe('Core Functions', () => {
           try {
             module.exports.n('candidate', 'reference', { tokenizer });
             throw new Error('Oversized encoding map was accepted');
+          } catch (error) {
+            if (!(error instanceof RangeError) || !/materialization limit/.test(error.message)) {
+              throw error;
+            }
+          }
+          process.stdout.write('ok');
+        `,
+        30_000,
+        ['--max-old-space-size=32'],
+      );
+    }, 30_000);
+
+    test('rejects combined distinct-summary allocations within a constrained heap', () => {
+      expectBundledScriptToPass(
+        `
+          const tokens = Array.from({ length: 120000 }, (_, index) => String.fromCodePoint(0x10000 + index));
+          const tokenizer = () => tokens;
+          try {
+            module.exports.n('candidate', 'reference', { tokenizer });
+            throw new Error('Combined distinct-gram allocations were accepted');
           } catch (error) {
             if (!(error instanceof RangeError) || !/materialization limit/.test(error.message)) {
               throw error;

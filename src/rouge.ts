@@ -3,7 +3,7 @@ import * as utils from './utils';
 import {
   validateBeta,
   validateMaxSkip,
-  validateNGramMaterialization,
+  validateNGramScoringMaterialization,
   validateNGramSize,
 } from './validation';
 
@@ -244,19 +244,21 @@ export function n(cand: string, ref: string, opts?: RougeNOptions): number {
   validateNGramSize(size);
   validateBeta(beta);
 
-  const getGrams = (input: string): string[] => {
-    const tokens = tokenizeSummary(input, caseSensitive, tokenizer);
-    if (nGram === utils.nGram) {
-      if (tokens.length < size) {
-        return [];
-      }
-      validateNGramMaterialization(tokens, size, 0, 0, '', true);
-      return nGram(encodeTokens(tokens), size);
+  const candTokens = tokenizeSummary(cand, caseSensitive, tokenizer);
+  let candGrams: string[];
+  let refGrams: string[];
+  if (nGram === utils.nGram) {
+    const refTokens = tokenizeSummary(ref, caseSensitive, tokenizer);
+    if (candTokens.length < size || refTokens.length < size) {
+      return 0;
     }
-    return nGram(tokens, size);
-  };
-  const candGrams = getGrams(cand);
-  const refGrams = getGrams(ref);
+    validateNGramScoringMaterialization(candTokens, refTokens, size);
+    candGrams = nGram(encodeTokens(candTokens), size);
+    refGrams = nGram(encodeTokens(refTokens), size);
+  } else {
+    candGrams = nGram(candTokens, size);
+    refGrams = nGram(tokenizeSummary(ref, caseSensitive, tokenizer), size);
+  }
 
   const matches = countMatchingGrams(candGrams, refGrams);
 

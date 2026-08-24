@@ -46,7 +46,7 @@ export function validateNGramMaterialization(
   endPaddingSize = 0,
   paddingValue = '',
   encoded = false,
-): void {
+): number {
   const paddingLength = startPaddingSize + endPaddingSize;
   const paddedLength = tokens.length + paddingLength;
   const gramCount = paddedLength - n + 1;
@@ -62,6 +62,20 @@ export function validateNGramMaterialization(
   }
 
   if (work > MAX_NGRAM_MATERIALIZATION_WORK) {
+    throw new RangeError('N-gram generation exceeds the materialization limit');
+  }
+  return work;
+}
+
+export function validateNGramScoringMaterialization(
+  candidate: string[],
+  reference: string[],
+  n: number,
+): void {
+  const candidateWork = validateNGramMaterialization(candidate, n, 0, 0, '', true);
+  const referenceWork = validateNGramMaterialization(reference, n, 0, 0, '', true);
+  const referenceGrams = reference.length - n + 1;
+  if (candidateWork + referenceWork + referenceGrams > MAX_NGRAM_MATERIALIZATION_WORK) {
     throw new RangeError('N-gram generation exceeds the materialization limit');
   }
 }
