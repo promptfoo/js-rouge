@@ -500,6 +500,18 @@ describe('Utility Functions', () => {
       );
     });
 
+    test.each(['smiled', 'laughed', 'danced', 'recovered', 'reads'])(
+      'recognizes independent noun-subject clauses without a verb whitelist: %s',
+      (verb) => {
+        const input = `Use etc. But John ${verb}.`;
+        const expected = ['Use etc.', `But John ${verb}.`];
+        expect(segmentCaseNeutrally(input)).toEqual(expected);
+        expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+          expected.map((sentence) => sentence.toLowerCase()),
+        );
+      },
+    );
+
     test.each([
       'After that, John smiled.',
       'Because he was late, John hurried.',
@@ -535,6 +547,9 @@ describe('Utility Functions', () => {
       (lineBreak) => {
         expect(segmentCaseNeutrally(`2020 saw "hello."${lineBreak}then left.`)).toEqual([
           '2020 saw "hello." then left.',
+        ]);
+        expect(segmentCaseNeutrally(`2020 saw <hello.>${lineBreak}then left.`)).toEqual([
+          '2020 saw <hello.> then left.',
         ]);
       },
     );
