@@ -75,7 +75,8 @@ jobs:
           RELEASE_CREATED: ${{ steps.release.outputs.release_created }}
         run: |
           if [ -n "$RELEASE_TAG" ]; then
-            target="$(gh release view "$RELEASE_TAG" --json targetCommitish --jq .targetCommitish)"
+            tag="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
+            target="$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq .sha)"
             if [ "$target" != "$GITHUB_SHA" ]; then
               echo "Release $RELEASE_TAG points to $target, not $GITHUB_SHA"
               exit 1
