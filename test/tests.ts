@@ -647,6 +647,14 @@ describe('Utility Functions', () => {
       },
     );
 
+    test.each(['A.İ', 'Alpha.İ', 'U.Sİ', 'é.İ.', '1.İ.', 'İ.İ.', 'Sİ.𝒜', 'Drİ1.İ', 'İbBİσİU.İ'])(
+      'preserves case-expanded dotted identifiers: %s',
+      (input) => {
+        expect(segmentCaseNeutrally(input)).toEqual([input]);
+        expect(segmentCaseNeutrally(input.toLowerCase())).toEqual([input.toLowerCase()]);
+      },
+    );
+
     test('keeps bracketed references inside their sentence', () => {
       expect(ss('He wrote (see Fig.[2] for details). Next.')).toEqual([
         'He wrote (see Fig.[2] for details).',
@@ -2946,6 +2954,15 @@ describe('Core Functions', () => {
         expect(score(mixedCase, lowerCase, { caseSensitive: false })).toBe(1);
       },
     );
+
+    test.each([
+      ['ROUGE-N', n],
+      ['ROUGE-S', s],
+      ['ROUGE-L', l],
+    ] as const)('%s preserves Unicode case expansion across dotted identifiers', (_name, score) => {
+      const input = 'A.İ Beta';
+      expect(score(input, input.toLowerCase(), { caseSensitive: false })).toBe(1);
+    });
 
     test('ROUGE-L passes original text to custom segmenters before case folding', () => {
       const segmenter = jest.fn((input: string): string[] => [input]);

@@ -766,13 +766,16 @@ function isUnspacedSentenceBoundary(
         hostnameLabel === hostnameLabel.toLowerCase() ||
         hostnameLabel === hostnameLabel.toUpperCase()));
   const dottedIdentifier = caseNeutral
-    ? /\b\p{Cased}[\p{Letter}\p{Number}_-]*\.$/u.test(suffix) &&
-      /^[\p{Cased}\p{Number}_-]{1,2}(?=\s|[/.]|$)/u.test(following)
+    ? /(?:^|[^\p{Letter}\p{Mark}\p{Number}_-])\p{Mark}*\p{Cased}[\p{Letter}\p{Mark}\p{Number}_-]*\.$/u.test(
+        suffix,
+      ) && /^(?:[\p{Cased}\p{Number}_-]\p{M}*){1,2}(?=\s|[/.]|$)/u.test(following)
     : /\b\p{Lu}[\p{Letter}\p{Number}_-]*\.$/u.test(suffix) &&
       /^[\p{Lu}\p{Number}_-]+(?=\s|[/.]|$)/u.test(following);
-  const initial = caseNeutral ? /^\p{Cased}\./u : /^\p{Lu}\./u;
-  const trailingInitial = caseNeutral ? /\b\p{Cased}\.$/u : /\b\p{Lu}\.$/u;
-  const nextInitial = caseNeutral ? /^\p{Cased}(?=\s|$)/u : /^\p{Lu}(?=\s|$)/u;
+  const initial = caseNeutral ? /^\p{Cased}\p{M}*\./u : /^\p{Lu}\./u;
+  const trailingInitial = caseNeutral
+    ? /(?:^|[^\p{Letter}\p{Mark}\p{Number}_-])\p{Cased}\p{M}*\.$/u
+    : /\b\p{Lu}\.$/u;
+  const nextInitial = caseNeutral ? /^\p{Cased}\p{M}*(?=\s|$)/u : /^\p{Lu}(?=\s|$)/u;
   const gateSuffix = caseNeutral ? suffix.toLowerCase() : suffix;
   const continuesAbbreviation =
     abbrvReg.test(gateSuffix) &&
