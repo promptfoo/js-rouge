@@ -757,6 +757,16 @@ describe('Utility Functions', () => {
       }
     });
 
+    test('does not split parenthesized labels inside a quotation', () => {
+      const input = 'He said "The winners were (team A) Alice and (team B) Bob."';
+      expect(ss(input)).toEqual([input]);
+    });
+
+    test('caches long numeric markers while deferring overlapping list families', () => {
+      const input = `A. x: ${'9'.repeat(4000)}. x ${'1. x '.repeat(4000)}`;
+      expect(() => rouge.n(input, input)).not.toThrow();
+    });
+
     test('does not interpret parenthesized labels as list markers', () => {
       const input = 'The winners were (team A) Alice and (team B) Bob.';
       expect(ss(input)).toEqual([input]);

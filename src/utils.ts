@@ -525,7 +525,8 @@ function nextListMarker(
   let marker = expression.exec(input);
   while (marker !== null) {
     advanceListScan(input, marker.index, state);
-    const closesParenthesis = marker[0].endsWith(')') && state.parenthesisDepth > 0;
+    const closesParenthesis =
+      marker[0].endsWith(')') && (state.parenthesisDepth > 0 || state.quote !== undefined);
     const yearInProse =
       /^(?:1\d{3}|20\d{2})\.$/.test(marker[0].trim()) && !listMarkerPrefix(input, marker).boundary;
     const countInProse =
@@ -575,7 +576,10 @@ function findListCandidate(
   expression: RegExp,
   state: ListScanState,
 ): ListCandidate | undefined {
-  const firstByFamily = new Map<string, { marker: RegExpExecArray; emptyPrefix: boolean }>();
+  const firstByFamily = new Map<
+    string,
+    { marker: RegExpExecArray; emptyPrefix: boolean; identity: string; number: number }
+  >();
   let deferred:
     | { candidate: ListCandidate; expressionIndex: number; state: ListScanState }
     | undefined;
@@ -587,10 +591,8 @@ function findListCandidate(
 
     const family = listMarkerFamily(marker, caseNeutral);
     const first = firstByFamily.get(family.source);
-    const previousMarker = first?.marker[0].trim();
-    const distinctMarker = caseNeutral
-      ? previousMarker?.toLowerCase() !== marker.toLowerCase()
-      : previousMarker !== marker;
+    const identity = caseNeutral ? marker.toLowerCase() : marker;
+    const distinctMarker = first?.identity !== identity;
     if (first !== undefined && (first.emptyPrefix || distinctMarker)) {
       const candidate: ListCandidate = {
         current: first.marker,
@@ -601,7 +603,7 @@ function findListCandidate(
       const hasEarlierFamily = [...firstByFamily.values()].some(
         (entry) => entry.marker.index < first.marker.index,
       );
-      const firstNumber = Number(previousMarker?.match(/^\d+/)?.[0]);
+      const firstNumber = first.number;
       const currentNumber = Number(marker.match(/^\d+/)?.[0]);
       const distantNumber =
         Number.isFinite(firstNumber) &&
@@ -619,7 +621,12 @@ function findListCandidate(
     }
 
     if (first === undefined && (context.empty || !ambiguousMarker || context.boundary)) {
-      firstByFamily.set(family.source, { marker: current, emptyPrefix: context.empty });
+      firstByFamily.set(family.source, {
+        marker: current,
+        emptyPrefix: context.empty,
+        identity,
+        number: Number(marker.match(/^\d+/)?.[0]),
+      });
     }
 
     current = nextListMarker(input, expression, state);
