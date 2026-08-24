@@ -28,20 +28,26 @@ export function treeBankTokenize(input: string): string[] {
 
   // Classify paired quotes before inserting spaces around punctuation.
   let insideQuotes = false;
-  let parse = text.replace(/"/g, (_quote: string, index: number): string => {
-    insideQuotes = opensDoubleQuote(text, index, insideQuotes);
+  let parse = text.replace(/``|''|"/g, (quote: string, index: number): string => {
+    insideQuotes =
+      quote === '``' ||
+      (opensDoubleQuote(text, index, insideQuotes) &&
+        (quote === '"' ||
+          (index > 0 &&
+            /^[\p{Letter}\p{Number}]$/u.test(characterAt(text, index + 2)) &&
+            text.slice(index + 2).match(/``|''|"/)?.[0] === "''")));
     return insideQuotes ? ' `` ' : " '' ";
   });
 
   // Preserve numeric separators and acronym dots, even at a heuristic sentence boundary.
   parse = parse
-    .replace(/\.\.\.*/g, ' ... ')
+    .replace(/\.{3}/g, ' ... ')
     .replace(/[:,](?!\d)/g, ' $& ')
     .replace(/[;@#$%&]/g, ' $& ')
     .replace(/([^.])(?<!\b[A-Za-z]\.[A-Za-z])(\.)([\])}>'\s]*)$/g, '$1 $2$3 ')
     .replace(/[?!]/g, ' $& ')
     .replace(/[\][(){}<>]/g, ' $& ')
-    .replace(/---*/g, ' -- ');
+    .replace(/--/g, ' -- ');
 
   // Wrap spaces at the start and end of the sentence for consistency
   // i.e. reduce the number of Regex matches required
@@ -584,7 +590,7 @@ export const NGRAM_DEFAULT_OPTS: NGramOptions = {
   val: '<S>',
 };
 
-const MAX_NGRAM_PADDING_WORK = 1_000_000;
+const MAX_NGRAM_MATERIALIZATION_WORK = 1_000_000;
 
 /**
  * Returns n-grams for an array of word tokens.
@@ -611,13 +617,17 @@ export function nGram(tokens: string[], n = 2, pad: Partial<NGramOptions> = {}):
   }
 
   const gramCount = paddedLength - n + 1;
-  const unpaddedGramCount = Math.max(tokens.length - n + 1, 0);
-  const paddingWork = paddingLength + n * (gramCount - unpaddedGramCount);
-  if (
-    paddingLength > 0 &&
-    (!Number.isSafeInteger(paddingWork) || paddingWork > MAX_NGRAM_PADDING_WORK)
-  ) {
-    throw new RangeError('Padded n-gram generation exceeds the materialization limit');
+  let materializationWork = paddingLength + n * gramCount;
+  for (let i = 0; i < paddedLength && materializationWork <= MAX_NGRAM_MATERIALIZATION_WORK; i++) {
+    const token =
+      i < startPaddingSize || i >= startPaddingSize + tokens.length
+        ? value
+        : tokens[i - startPaddingSize];
+    materializationWork +=
+      Math.max(token.length - 1, 0) * Math.min(i + 1, n, gramCount, paddedLength - i);
+  }
+  if (materializationWork > MAX_NGRAM_MATERIALIZATION_WORK) {
+    throw new RangeError('N-gram generation exceeds the materialization limit');
   }
 
   const startPadding = new Array<string>(startPaddingSize).fill(value);

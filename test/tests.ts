@@ -350,6 +350,11 @@ describe('Utility Functions', () => {
         /materialization limit/,
       );
     });
+
+    test('should reject excessive unpadded n-gram materialization', () => {
+      const tokens = new Array<string>(2000).fill('a');
+      expect(() => nGram(tokens, 1000)).toThrow(/materialization limit/);
+    });
   });
 
   describe('skipBigram', () => {
@@ -1107,6 +1112,46 @@ describe('Utility Functions', () => {
         '.',
       ]);
     });
+
+    test.each([
+      ["He said ''hello''.", ['He', 'said', '``', 'hello', "''", '.']],
+      ["He said ``hello''.", ['He', 'said', '``', 'hello', "''", '.']],
+      ["``hello''", ['``', 'hello', "''"]],
+      ["''hello''", ["''", 'hello', "''"]],
+      ["Second fragment '' attribution.", ['Second', 'fragment', "''", 'attribution', '.']],
+      [
+        "Second fragment '' attribution ``third''.",
+        ['Second', 'fragment', "''", 'attribution', '``', 'third', "''", '.'],
+      ],
+      [
+        "Second fragment '' attribution ''third''.",
+        ['Second', 'fragment', "''", 'attribution', '``', 'third', "''", '.'],
+      ],
+      [
+        "Second fragment '', attribution ''third''.",
+        ['Second', 'fragment', "''", ',', 'attribution', '``', 'third', "''", '.'],
+      ],
+    ])('should recognize existing Treebank quotation markers in %s', (input, expected) => {
+      expect(tbt(input)).toEqual(expected);
+    });
+
+    test.each([
+      ['alpha..omega', ['alpha..omega']],
+      ['alpha...omega', ['alpha', '...', 'omega']],
+      ['alpha....omega', ['alpha', '...', '.omega']],
+      ['alpha.....omega', ['alpha', '...', '..omega']],
+    ])('should preserve period multiplicity in %s', (input, expected) => {
+      expect(tbt(input)).toEqual(expected);
+    });
+
+    test.each([
+      ['alpha--omega', ['alpha', '--', 'omega']],
+      ['alpha---omega', ['alpha', '--', '-omega']],
+      ['alpha----omega', ['alpha', '--', '--', 'omega']],
+      ['alpha-----omega', ['alpha', '--', '--', '-omega']],
+    ])('should preserve dash multiplicity in %s', (input, expected) => {
+      expect(tbt(input)).toEqual(expected);
+    });
   });
 
   describe('jackKnife', () => {
@@ -1431,6 +1476,26 @@ describe('Core Functions', () => {
         score(`He said "${open}Stop.${close}" Next.`, `He said "${open}Stop. ${close} " Next.`),
       ).toBe(1);
     });
+
+    test.each([
+      ["He said ''hello''.", 'He said "hello".'],
+      ["He said ``hello''.", 'He said "hello".'],
+      [
+        "``First sentence. Second fragment '', attribution ''third''.",
+        '``First sentence. Second fragment", attribution "third".',
+      ],
+    ])('should normalize existing Treebank quotation markers in %s', (input, expected) => {
+      expect(score(input, expected)).toBe(1);
+    });
+
+    test.each([
+      ['alpha..omega', 'alpha...omega'],
+      ['alpha...omega', 'alpha....omega'],
+      ['alpha--omega', 'alpha---omega'],
+      ['alpha--omega', 'alpha----omega'],
+    ])('should distinguish punctuation runs in %s and %s', (candidate, reference) => {
+      expect(score(candidate, reference)).toBeLessThan(1);
+    });
   });
 
   describe.each([
@@ -1612,6 +1677,25 @@ describe('Core Functions', () => {
       expect(n('a', 'a', { n: 1_000_000_000, nGram })).toBe(1);
       expect(nGram).toHaveBeenCalledTimes(2);
     });
+
+    test('should reject excessive built-in n-grams within a small heap', () => {
+      expectBundledScriptToPass(
+        `
+          const summary = Array(600).fill('x'.repeat(1024)).join(' ');
+          try {
+            module.exports.n(summary, summary, { n: 300 });
+            throw new Error('excessive n-grams were accepted');
+          } catch (error) {
+            if (!(error instanceof RangeError) || !/materialization limit/.test(error.message)) {
+              throw error;
+            }
+          }
+          process.stdout.write('ok');
+        `,
+        30_000,
+        ['--max-old-space-size=64'],
+      );
+    }, 30_000);
 
     test('should correctly compute ROUGE-N score with custom beta', () => {
       // With beta=0, F-score equals precision
