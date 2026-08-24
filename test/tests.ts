@@ -1091,6 +1091,16 @@ describe('Utility Functions', () => {
       );
     });
 
+    test.each(['Tomorrow is clearer.', 'Alice explained the term.'])(
+      'preserves ordinary sentence starts after a terminal versus abbreviation: %s',
+      (continuation) => {
+        const input = `The standard abbreviation is vs. ${continuation}`;
+        const expected = ['The standard abbreviation is vs.', continuation];
+        expect(ss(input)).toEqual(expected);
+        expect(segmentCaseNeutrally(input)).toEqual(expected);
+      },
+    );
+
     test('should not split possessive two letter abbreviations', () => {
       expect(ss("That is JFK Jr.'s book.")).toEqual(["That is JFK Jr.'s book."]);
     });
@@ -1156,6 +1166,13 @@ describe('Utility Functions', () => {
         const quoted = `The U.S.\n"${continuation} reconvenes."`;
         expect(ss(quoted)).toEqual(['The U.S.', `"${continuation} reconvenes."`]);
         expect(segmentCaseNeutrally(quoted)).toEqual(['The U.S.', `"${continuation} reconvenes."`]);
+
+        for (const paragraph of ['\n\n', '\r\n\r\n', '\r\r']) {
+          const input = `I live in the U.S.${paragraph}${continuation} meets tomorrow.`;
+          const expected = ['I live in the U.S.', `${continuation} meets tomorrow.`];
+          expect(ss(input)).toEqual(expected);
+          expect(segmentCaseNeutrally(input)).toEqual(expected);
+        }
       },
     );
 

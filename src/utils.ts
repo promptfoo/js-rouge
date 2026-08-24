@@ -136,7 +136,8 @@ function isAbbreviationException(suffix: string, following: string): boolean {
     excepReg.test(suffix) &&
     !(
       /\bvs\.$/i.test(suffix) &&
-      (independentSentenceReg.test(continuation) ||
+      (/\b(?:am|is|are|was|were|be|been|being)\s+vs\.$/i.test(suffix) ||
+        independentSentenceReg.test(continuation) ||
         /^(?:this|that|these|those|it|we|they|he|she|i)\b/i.test(continuation))
     )
   );
@@ -362,7 +363,8 @@ export function sentenceSegment(
           !chunk.hasOpenDelimiter &&
           !(
             geographicAcronymReg.test(abbreviation) &&
-            geographicContinuationReg.test(nextChunk?.trimStart() ?? '')
+            geographicContinuationReg.test(nextChunk?.trimStart() ?? '') &&
+            !/[\r\n][^\S\r\n]*[\r\n]/.test(suffix.replace(/\r\n/g, '\n'))
           )
         ) {
           chunk.normalizeWhitespace();
