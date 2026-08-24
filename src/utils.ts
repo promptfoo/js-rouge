@@ -131,6 +131,10 @@ class SentenceBuffer {
   #parts: string[] = [];
   #normalizedThrough = 0;
   #words: { titleCase: boolean; lowerCase: boolean }[] = [];
+  #openingDelimiters: string[] = [];
+  #insideDoubleQuotes = false;
+  #insideSingleQuotes = false;
+  #lastCharacter = '';
   hasLineBreaks = false;
   startsWithTitleCase = false;
 
@@ -151,6 +155,12 @@ class SentenceBuffer {
     return this.#words.at(-2)?.titleCase ?? false;
   }
 
+  get hasOpenDelimiter(): boolean {
+    return (
+      this.#openingDelimiters.length > 0 || this.#insideDoubleQuotes || this.#insideSingleQuotes
+    );
+  }
+
   get suffix(): string {
     let suffix = '';
     for (let i = this.#parts.length - 1; i >= 0 && suffix.length < sentenceSuffixLength; i--) {
@@ -163,6 +173,8 @@ class SentenceBuffer {
     if (text.length === 0) {
       return;
     }
+
+    this.#trackDelimiters(text);
 
     // A merge without separating whitespace can continue the previous word.
     const previous = this.#words.at(-1);
@@ -187,6 +199,51 @@ class SentenceBuffer {
 
     this.hasLineBreaks = this.hasLineBreaks || breakReg.test(text);
     this.#parts.push(text);
+  }
+
+  #trackDelimiters(text: string): void {
+    for (let index = 0; index < text.length; index++) {
+      const character = text[index];
+      if (character === '"') {
+        const previous = index === 0 ? this.#lastCharacter : text[index - 1];
+        this.#insideDoubleQuotes =
+          !this.#insideDoubleQuotes &&
+          (previous.length === 0 || /^[\s\p{Punctuation}]$/u.test(previous));
+      } else if (character === "'") {
+        this.#trackSingleQuote(text, index);
+      } else if (
+        !(this.#insideDoubleQuotes || this.#insideSingleQuotes) &&
+        openingBracketReg.test(character) &&
+        (character !== '<' || /^\p{Letter}$/u.test(characterAt(text, index + 1)))
+      ) {
+        this.#openingDelimiters.push(character);
+      } else if (
+        !(this.#insideDoubleQuotes || this.#insideSingleQuotes) &&
+        closingBracketReg.test(character)
+      ) {
+        const opener = '([{<'[')]}>'.indexOf(character)];
+        if (this.#openingDelimiters.at(-1) === opener) {
+          this.#openingDelimiters.pop();
+        }
+      }
+    }
+    this.#lastCharacter = text.at(-1) ?? this.#lastCharacter;
+  }
+
+  #trackSingleQuote(text: string, index: number): void {
+    const previous = index === 0 ? this.#lastCharacter : text[index - 1];
+    const following = text[index + 1] ?? '';
+    if (this.#insideSingleQuotes) {
+      const possessive =
+        previous.toLowerCase() === 's' &&
+        /\s/.test(following) &&
+        /^(?:\p{Lu}|\p{Ll}+\s+\p{Lu})/u.test(text.slice(index + 1).trimStart());
+      this.#insideSingleQuotes =
+        possessive || (following.length > 0 && !/[\s.,!?;:)\]}]/.test(following));
+      return;
+    }
+    this.#insideSingleQuotes =
+      (previous.length === 0 || /^[\s\p{Punctuation}]$/u.test(previous)) && /\S/.test(following);
   }
 
   trimEnd(): void {
@@ -269,7 +326,22 @@ export function sentenceSegment(
 
       if (chunk.hasLineBreaks) {
         const nextChunk = chunks[idx + 1];
+        const nextSentence = nextChunk?.replace(/^[\s"'([{<]+/, '');
+        const abbreviation = gateSuffix.trimEnd();
         if (
+          nextSentence &&
+          abbrvReg.test(abbreviation) &&
+          !excepReg.test(abbreviation) &&
+          (caseNeutral
+            ? startsWithCasedCharacter(nextSentence) &&
+              (!sentenceContinuationReg.test(nextSentence) ||
+                independentSentenceReg.test(nextSentence))
+            : strIsTitleCase(nextSentence)) &&
+          !chunk.hasOpenDelimiter
+        ) {
+          chunk.normalizeWhitespace();
+          acc.push(chunk.text());
+        } else if (
           nextChunk &&
           (chunk.startsWithTitleCase ||
             (caseNeutral &&
@@ -306,7 +378,7 @@ export function sentenceSegment(
           acc.push(chunk.text());
         } else {
           // Catch common abbreviations and merge them with a delimiting space
-          chunk.append(` ${trimSpaces(nextChunk.replace(/ +/g, ' '))}`);
+          chunk.append(` ${trimSpaces(nextChunk.replace(/[^\S\r\n]+/g, ' '))}`);
           pending = chunk;
         }
       } else if (chunks[idx + 1] && matchesAcronymSuffix(suffix, lastWord, caseNeutral)) {

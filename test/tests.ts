@@ -495,8 +495,8 @@ describe('Utility Functions', () => {
       const mixedCase = 'Da\u212a.\nNext.';
       const lowerCase = mixedCase.toLowerCase();
       expect(ss(mixedCase)).toEqual(['Da\u212a.', 'Next.']);
-      expect(segmentCaseNeutrally(mixedCase)).toEqual(['Da\u212a. Next.']);
-      expect(segmentCaseNeutrally(lowerCase)).toEqual(['dak. next.']);
+      expect(segmentCaseNeutrally(mixedCase)).toEqual(['Da\u212a.', 'Next.']);
+      expect(segmentCaseNeutrally(lowerCase)).toEqual(['dak.', 'next.']);
     });
 
     test('should preserve gate exceptions in case-neutral quoted continuations', () => {
@@ -685,6 +685,118 @@ describe('Utility Functions', () => {
         "Let's ask Jane and co.",
         'They should know.',
       ]);
+    });
+
+    test.each(['\n', '\r\n', '\r'])(
+      'keeps a terminal abbreviation boundary across %j',
+      (lineBreak) => {
+        const input = `Use etc.${lineBreak}Next sentence.`;
+        expect(ss(input)).toEqual(['Use etc.', 'Next sentence.']);
+        expect(segmentCaseNeutrally(input)).toEqual(['Use etc.', 'Next sentence.']);
+        expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(['use etc.', 'next sentence.']);
+      },
+    );
+
+    test.each(['\t', '\u00a0'])(
+      'normalizes horizontal whitespace after abbreviations: %j',
+      (separator) => {
+        expect(ss(`We use etc.${separator}and more.`)).toEqual(['We use etc. and more.']);
+        expect(ss(`Dr.${separator}Jones arrived.`)).toEqual(['Dr. Jones arrived.']);
+      },
+    );
+
+    test.each(['\n', '\r\n', '\r'])(
+      'preserves wrapped honorifics and abbreviation exceptions across %j',
+      (lineBreak) => {
+        expect(ss(`Dr.${lineBreak}Jones arrived.`)).toEqual(['Dr. Jones arrived.']);
+        expect(ss(`Use e.g.${lineBreak}Examples.`)).toEqual(['Use e.g. Examples.']);
+      },
+    );
+
+    test.each(['"Next sentence."', '(Next sentence.)', '[Next sentence.]'])(
+      'recognizes opening punctuation after a wrapped abbreviation: %s',
+      (nextSentence) => {
+        expect(ss(`Use etc.\n${nextSentence}`)).toEqual(['Use etc.', nextSentence]);
+      },
+    );
+
+    test('closes single-quoted words ending in s', () => {
+      expect(ss("He called it 'Success' before we use etc.\nNext sentence.")).toEqual([
+        "He called it 'Success' before we use etc.",
+        'Next sentence.',
+      ]);
+    });
+
+    test('closes single-quoted spans after their opening fragment', () => {
+      expect(
+        ss("We invested in 'Acme Co.\nInternational Holdings' before we use etc.\nNext sentence."),
+      ).toEqual([
+        "We invested in 'Acme Co. International Holdings' before we use etc.",
+        'Next sentence.',
+      ]);
+    });
+
+    test('does not treat comparison operators as opening delimiters', () => {
+      expect(ss('The result was x < 5 and we use etc.\nNext sentence.')).toEqual([
+        'The result was x < 5 and we use etc.',
+        'Next sentence.',
+      ]);
+    });
+
+    test.each(['\n', '\r\n', '\r'])(
+      'does not split abbreviations inside wrapped parentheses across %j',
+      (lineBreak) => {
+        const input = `We invested in (Acme Co.${lineBreak}International Holdings) today.`;
+        expect(ss(input)).toEqual(['We invested in (Acme Co. International Holdings) today.']);
+        expect(segmentCaseNeutrally(input)).toEqual([
+          'We invested in (Acme Co. International Holdings) today.',
+        ]);
+      },
+    );
+
+    test('keeps wrapped place abbreviations invariant under case folding', () => {
+      const input = 'He moved to Calif.\nNext year.';
+      expect(segmentCaseNeutrally(input)).toEqual(['He moved to Calif.', 'Next year.']);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual([
+        'he moved to calif.',
+        'next year.',
+      ]);
+      expect(segmentCaseNeutrally(input)).toEqual(
+        segmentCaseNeutrally(input.replaceAll('\n', ' ')),
+      );
+    });
+
+    test.each(['\n', '\r\n', '\r'])(
+      'does not split abbreviations inside wrapped single quotes across %j',
+      (lineBreak) => {
+        const input = `We invested in 'Acme Co.${lineBreak}International Holdings' today.`;
+        expect(ss(input)).toEqual(["We invested in 'Acme Co. International Holdings' today."]);
+      },
+    );
+
+    test.each([
+      [
+        "We invested—'Acme Co.\nInternational Holdings'—today.",
+        "We invested—'Acme Co. International Holdings'—today.",
+      ],
+      [
+        "He described 'the students' Acme Co.\nInternational project' today.",
+        "He described 'the students' Acme Co. International project' today.",
+      ],
+      [
+        "He described 'the students' favorite Acme Co.\nInternational project' today.",
+        "He described 'the students' favorite Acme Co. International project' today.",
+      ],
+      [
+        'We invested in (score > 5, Acme Co.\nInternational Holdings) today.',
+        'We invested in (score > 5, Acme Co. International Holdings) today.',
+      ],
+      [
+        'We noted (the symbol ")" then Acme Co.\nInternational Holdings) today.',
+        'We noted (the symbol ")" then Acme Co. International Holdings) today.',
+      ],
+    ])('keeps wrapped abbreviations inside punctuation-aware delimiters: %s', (input, expected) => {
+      expect(ss(input)).toEqual([expected]);
     });
 
     test('should split two letter uppercase abbreviations at the end of a sentence', () => {
@@ -1045,6 +1157,22 @@ describe('Utility Functions', () => {
           ['--max-old-space-size=64'],
         );
       });
+
+      test('tracks enclosing delimiters without rescanning wrapped abbreviation chains', () => {
+        expectBundledScriptToPass(
+          `
+            const content = Array.from({ length: 4000 }, (_, index) => 'A' + index + ' etc.\\n').join('');
+            const summary = 'Intro (' + content + 'Tail) done.';
+            const sentences = module.exports.sentenceSegment(summary);
+            if (sentences.length !== 1 || !sentences[0].endsWith('Tail) done.')) {
+              throw new Error('Wrapped abbreviation segmentation changed');
+            }
+            process.stdout.write('ok');
+          `,
+          3000,
+          ['--max-old-space-size=64'],
+        );
+      }, 10_000);
 
       test('should handle long strings without sentence terminators quickly', () => {
         const input = 'a'.repeat(64_000);
