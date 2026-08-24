@@ -1,8 +1,16 @@
 import { lcsIndices as builtInLcsIndices } from './lcs';
 import * as utils from './utils';
-import { validateBeta, validateMaxSkip, validateNGramSize } from './validation';
+import {
+  validateBeta,
+  validateMaxSkip,
+  validateNGramMaterialization,
+  validateNGramScoringMaterialization,
+  validateNGramSize,
+} from './validation';
 
 export * from './utils';
+
+const whitespaceOnlyReg = /^[\s\u0085]*$/;
 
 /** Options for ROUGE-N evaluation */
 export interface RougeNOptions {
@@ -222,10 +230,10 @@ function encodeTokens(tokens: string[]): string[] {
  * @return {number}                 The ROUGE-N F-score
  */
 export function n(cand: string, ref: string, opts?: RougeNOptions): number {
-  if (cand.trim().length === 0) {
+  if (whitespaceOnlyReg.test(cand)) {
     throw new RangeError('Candidate cannot be an empty string');
   }
-  if (ref.trim().length === 0) {
+  if (whitespaceOnlyReg.test(ref)) {
     throw new RangeError('Reference cannot be an empty string');
   }
 
@@ -239,15 +247,23 @@ export function n(cand: string, ref: string, opts?: RougeNOptions): number {
   validateNGramSize(size);
   validateBeta(beta);
 
-  const getGrams = (input: string): string[] => {
-    const tokens = tokenizeSummary(input, caseSensitive, tokenizer);
-    if (nGram === utils.nGram) {
-      return tokens.length < size ? [] : nGram(encodeTokens(tokens), size);
+  const candTokens = tokenizeSummary(cand, caseSensitive, tokenizer);
+  let candGrams: string[];
+  let refGrams: string[];
+  if (nGram === utils.nGram) {
+    const candidateWork =
+      candTokens.length < size ? 0 : validateNGramMaterialization(candTokens, size, 0, 0, '', true);
+    const refTokens = tokenizeSummary(ref, caseSensitive, tokenizer);
+    if (candTokens.length < size || refTokens.length < size) {
+      return 0;
     }
-    return nGram(tokens, size);
-  };
-  const candGrams = getGrams(cand);
-  const refGrams = getGrams(ref);
+    validateNGramScoringMaterialization(candidateWork, refTokens, size);
+    candGrams = nGram(encodeTokens(candTokens), size);
+    refGrams = nGram(encodeTokens(refTokens), size);
+  } else {
+    candGrams = nGram(candTokens, size);
+    refGrams = nGram(tokenizeSummary(ref, caseSensitive, tokenizer), size);
+  }
 
   const matches = countMatchingGrams(candGrams, refGrams);
 
@@ -285,10 +301,10 @@ export function n(cand: string, ref: string, opts?: RougeNOptions): number {
  * @return {number}                 The ROUGE-S score
  */
 export function s(cand: string, ref: string, opts?: RougeSOptions): number {
-  if (cand.trim().length === 0) {
+  if (whitespaceOnlyReg.test(cand)) {
     throw new RangeError('Candidate cannot be an empty string');
   }
-  if (ref.trim().length === 0) {
+  if (whitespaceOnlyReg.test(ref)) {
     throw new RangeError('Reference cannot be an empty string');
   }
 
@@ -320,13 +336,23 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
   if (maxSkip === 0) {
     return 0;
   }
+  if (
+    candTokens.length === refTokens.length &&
+    candTokens.every((token, index) => token === refTokens[index])
+  ) {
+    return 1;
+  }
 
-  const skip2 = countMatchingSkipBigrams(candTokens, refTokens, maxSkip);
+  const effectiveMaxSkip =
+    maxSkip >= Math.max(candTokens.length, refTokens.length) - 1
+      ? Number.POSITIVE_INFINITY
+      : maxSkip;
+  const skip2 = countMatchingSkipBigrams(candTokens, refTokens, effectiveMaxSkip);
   if (skip2 === 0) {
     return 0;
   }
-  const skip2Recall = skip2 / skipBigramCount(refTokens.length, maxSkip);
-  const skip2Prec = skip2 / skipBigramCount(candTokens.length, maxSkip);
+  const skip2Recall = skip2 / skipBigramCount(refTokens.length, effectiveMaxSkip);
+  const skip2Prec = skip2 / skipBigramCount(candTokens.length, effectiveMaxSkip);
 
   return utils.fMeasure(skip2Prec, skip2Recall, beta);
 }
@@ -358,10 +384,10 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
  * @return {number}                 The ROUGE-L score
  */
 export function l(cand: string, ref: string, opts?: RougeLOptions): number {
-  if (cand.trim().length === 0) {
+  if (whitespaceOnlyReg.test(cand)) {
     throw new RangeError('Candidate cannot be an empty string');
   }
-  if (ref.trim().length === 0) {
+  if (whitespaceOnlyReg.test(ref)) {
     throw new RangeError('Reference cannot be an empty string');
   }
 
@@ -401,10 +427,28 @@ export function l(cand: string, ref: string, opts?: RougeLOptions): number {
     return 0;
   }
 
+  const matches = countSummaryLcsMatches(candSents, refSents, remaining, getLcs, getLcsIndices);
+  if (matches === 0) {
+    return 0;
+  }
+  return utils.fMeasure(matches / candLength, matches / refLength, beta);
+}
+
+function countSummaryLcsMatches(
+  candidates: string[][],
+  references: string[][],
+  remaining: Map<string, number>,
+  getLcs: (a: string[], b: string[]) => string[],
+  getLcsIndices?: (candidate: string[], reference: string[]) => number[],
+): number {
   let matches = 0;
-  for (const reference of refSents) {
+  for (const reference of references) {
+    if (getLcs === utils.lcs && getLcsIndices === undefined && remaining.size === 0) {
+      break;
+    }
+
     const union = new Set<number>();
-    for (const candidate of candSents) {
+    for (const candidate of candidates) {
       for (const index of matchedReferenceIndices(candidate, reference, getLcs, getLcsIndices)) {
         union.add(index);
       }
@@ -416,15 +460,15 @@ export function l(cand: string, ref: string, opts?: RougeLOptions): number {
       const count = remaining.get(token) ?? 0;
       if (count > 0) {
         matches++;
-        remaining.set(token, count - 1);
+        if (count === 1) {
+          remaining.delete(token);
+        } else {
+          remaining.set(token, count - 1);
+        }
       }
     }
   }
-
-  if (matches === 0) {
-    return 0;
-  }
-  return utils.fMeasure(matches / candLength, matches / refLength, beta);
+  return matches;
 }
 
 function matchedReferenceIndices(
