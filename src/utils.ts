@@ -34,7 +34,7 @@ export function treeBankTokenize(input: string): string[] {
       (opensDoubleQuote(text, index, insideQuotes) &&
         (quote === '"' ||
           (index > 0 &&
-            /^[\p{Letter}\p{Number}]$/u.test(characterAt(text, index + 2)) &&
+            /^[\p{Letter}\p{Number}\p{Sc}\p{Ps}]$/u.test(characterAt(text, index + 2)) &&
             text.slice(index + 2).match(/``|''|"/)?.[0] === "''")));
     return insideQuotes ? ' `` ' : " '' ";
   });
@@ -73,6 +73,24 @@ export function treeBankTokenize(input: string): string[] {
 
 function opensDoubleQuote(input: string, index: number, insideQuotes: boolean): boolean {
   return !insideQuotes && (index === 0 || /[\s([{<]/.test(input[index - 1]));
+}
+
+function quotationState(input: string, index: number, insideQuotes: boolean): boolean {
+  if (input[index] === '"') {
+    return opensDoubleQuote(input, index, insideQuotes);
+  }
+  if (input.startsWith('``', index)) {
+    return true;
+  }
+  if (!input.startsWith("''", index)) {
+    return insideQuotes;
+  }
+  return (
+    !insideQuotes &&
+    opensDoubleQuote(input, index, false) &&
+    /^[\p{Letter}\p{Number}\p{Sc}\p{Ps}]$/u.test(characterAt(input, index + 2)) &&
+    input.slice(index + 2).includes("''")
+  );
 }
 
 function escapeRegExp(input: string): string {
@@ -337,9 +355,7 @@ function sentenceChunks(input: string, caseNeutral: boolean): string[] {
 
   for (let index = 0; index < input.length; index++) {
     const char = input[index];
-    if (char === '"') {
-      insideQuotes = opensDoubleQuote(input, index, insideQuotes);
-    }
+    insideQuotes = quotationState(input, index, insideQuotes);
     if (openingBracketReg.test(char)) {
       if (brackets.depth === 0) {
         brackets.standalone = start === -1;
@@ -427,7 +443,8 @@ function sentenceEnd(
       closedBrackets++;
     }
   }
-  const closesQuotation = insideQuotes && input[end - 1] === '"';
+  const closesQuotation =
+    insideQuotes && (input[end - 1] === '"' || input.slice(end - 2, end) === "''");
   if (
     closedBrackets > 0 &&
     (closedBrackets < brackets.depth || !(brackets.standalone || closesQuotation))
@@ -451,7 +468,9 @@ function sentenceEnd(
   const startsWithNumber =
     /^\p{Number}$/u.test(nextCharacter) &&
     !abbrvReg.test(gateSuffix) &&
-    !/^\S+(?:\s*%|\s+(?:time|year)s?\b)/iu.test(input.slice(next));
+    !/^\S+(?:\s*%|\s+(?:time|year|month|week|day|hour|minute|second|star|point|percent)s?\b)/iu.test(
+      input.slice(next),
+    );
   if (!(startsWithLetter || startsWithNumber)) {
     return -1;
   }
