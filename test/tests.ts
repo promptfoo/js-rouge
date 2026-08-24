@@ -487,6 +487,58 @@ describe('Utility Functions', () => {
       expect(ss(input)).toEqual(expected);
     });
 
+    test('continues segmenting sentences inside numbered list items', () => {
+      expect(ss('1. First sentence. Another sentence. 2. Second item.')).toEqual([
+        '1. First sentence.',
+        'Another sentence.',
+        '2. Second item.',
+      ]);
+      expect(ss('1. See section 2. Details follow. 2. Actual item.')).toEqual([
+        '1. See section 2.',
+        'Details follow.',
+        '2. Actual item.',
+      ]);
+    });
+
+    test('recognizes list markers without depending on item capitalization', () => {
+      const input = '1. The first item 2. The second item';
+      const expected = ['1. The first item', '2. The second item'];
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        expected.map((sentence) => sentence.toLowerCase()),
+      );
+    });
+
+    test('keeps four-dot boundaries invariant under case folding', () => {
+      expect(segmentCaseNeutrally('First.... Second.')).toEqual(['First....', 'Second.']);
+      expect(segmentCaseNeutrally('first.... second.')).toEqual(['first....', 'second.']);
+    });
+
+    test('keeps unspaced boundaries invariant under case folding', () => {
+      expect(segmentCaseNeutrally('Hello world.Today is Tuesday.')).toEqual([
+        'Hello world.',
+        'Today is Tuesday.',
+      ]);
+      expect(segmentCaseNeutrally('hello world.today is tuesday.')).toEqual([
+        'hello world.',
+        'today is tuesday.',
+      ]);
+    });
+
+    test('keeps uppercase email domain labels inside their address', () => {
+      expect(ss('Mail Jane.Doe@example.COM for help.')).toEqual([
+        'Mail Jane.Doe@example.COM for help.',
+      ]);
+    });
+
+    test.each([
+      ['"Next sentence."', '"Next sentence."'],
+      ['(Next sentence.)', '(Next sentence.)'],
+      ['2 people agreed.', '2 people agreed.'],
+    ])('retains a spaced-ellipsis boundary before %s', (start, expected) => {
+      expect(ss(`Omitted words . . . . ${start}`)).toEqual(['Omitted words . . . .', expected]);
+    });
+
     test('should split simple periods', () => {
       expect(ss('Hello World. My name is Jonas.')).toEqual(['Hello World.', 'My name is Jonas.']);
     });
@@ -928,6 +980,21 @@ describe('Utility Functions', () => {
     // Using 500ms threshold to account for CI environment variability
     describe('ReDoS prevention', () => {
       const TIMEOUT_MS = 500;
+
+      test('segments large spaced-ellipsis runs within a constrained heap', () => {
+        expectBundledScriptToPass(
+          `
+            const summary = '. '.repeat(600000) + '.';
+            const sentences = module.exports.sentenceSegment(summary);
+            if (sentences.length !== 1 || sentences[0] !== summary) {
+              throw new Error('Spaced-ellipsis content changed');
+            }
+            process.stdout.write('ok');
+          `,
+          15_000,
+          ['--max-old-space-size=64'],
+        );
+      }, 20_000);
 
       test('should segment abbreviation chains within a small heap', () => {
         expectBundledScriptToPass(

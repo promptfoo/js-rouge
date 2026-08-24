@@ -97,7 +97,7 @@ const sentenceSuffixLength = Math.max(10, ...GATE_SUBSTITUTIONS.map((word) => wo
 const closingDelimiterReg = /[\])}>"']/;
 const openingBracketReg = /[([{<]/;
 const closingBracketReg = /[\])}>]/;
-const listMarkerReg = /(?:^|\s)(?:(?:[•⁃]\s*)?\d+(?:\.\)|[.)])|[a-z]\.)(?=\s+\p{Lu})/gu;
+const listMarkerReg = /(?:^|\s)(?:(?:[•⁃]\s*)?\d+(?:\.\)|[.)])|\p{Cased}\.)(?=\s+\p{Cased})/gu;
 const geographicAcronymReg = /\b(?:U\.S(?:\.A)?|E\.U)\.$/i;
 const geographicContinuationReg = /^(?:government|army|navy|military|congress)\b/i;
 
@@ -222,11 +222,23 @@ export function sentenceSegment(
     return [];
   }
 
-  const listMarkers = [...input.matchAll(listMarkerReg)];
+  const listMarkers = [...input.matchAll(listMarkerReg)].filter(
+    (marker) =>
+      marker.index === 0 ||
+      !/\b(?:section|chapter|page|figure|table|paragraph|article|clause)$/i.test(
+        input.slice(Math.max(0, marker.index - 24), marker.index).trimEnd(),
+      ),
+  );
   if (listMarkers.length > 1 && listMarkers[0].index === 0) {
-    return listMarkers.map((marker, index) =>
-      input.slice(marker.index, listMarkers[index + 1]?.index ?? input.length).trim(),
-    );
+    return listMarkers.flatMap((marker, index) => {
+      const markerText = marker[0].trim();
+      const body = input
+        .slice(marker.index + marker[0].length, listMarkers[index + 1]?.index ?? input.length)
+        .trim();
+      return sentenceSegment(body, { caseNeutral }).map((sentence, sentenceIndex) =>
+        sentenceIndex === 0 ? `${markerText} ${sentence}` : sentence,
+      );
+    });
   }
 
   // Scan terminals before applying abbreviation and line-wrap rules.
@@ -319,7 +331,10 @@ export function sentenceSegment(
         // Catch mid-sentence ellipses (and their derivatives) and merge them
         const nextChunk = chunks[idx + 1];
         const nextSentence = nextChunk.trim() || chunks[idx + 2] || '';
-        if (/\.{4}$/.test(suffix) && strIsTitleCase(nextSentence)) {
+        if (
+          /\.{4}$/.test(suffix) &&
+          (caseNeutral ? startsWithCasedCharacter(nextSentence) : strIsTitleCase(nextSentence))
+        ) {
           acc.push(chunk.text());
           continue;
         }
@@ -349,7 +364,8 @@ export interface SentenceSegmentOptions {
 /** Scan sentence boundaries once, preserving the former captured-split layout. */
 function sentenceChunks(input: string, caseNeutral: boolean): string[] {
   const chunks: string[] = [];
-  const protectedPeriods = spacedEllipsisPeriods(input);
+  const protectedPeriods = spacedEllipsisRanges(input, caseNeutral);
+  const ellipsisCursor = { index: 0 };
   let lastEnd = 0;
   let start = -1;
   let insideQuotes = false;
@@ -380,7 +396,11 @@ function sentenceChunks(input: string, caseNeutral: boolean): string[] {
       // A terminal must follow the initial character, even if it is punctuation.
       continue;
     }
-    if ((char === '.' && !protectedPeriods.has(index)) || char === '?' || char === '!') {
+    if (
+      (char === '.' && !isProtectedEllipsisPeriod(index, protectedPeriods, ellipsisCursor)) ||
+      char === '?' ||
+      char === '!'
+    ) {
       const end = sentenceEnd(input, index, insideQuotes, brackets, caseNeutral);
       if (end === -1) {
         continue;
@@ -396,24 +416,53 @@ function sentenceChunks(input: string, caseNeutral: boolean): string[] {
   return chunks;
 }
 
-function spacedEllipsisPeriods(input: string): Set<number> {
-  const protectedPeriods = new Set<number>();
+interface SpacedEllipsisRange {
+  start: number;
+  end: number;
+  boundary: number;
+}
+
+function spacedEllipsisRanges(input: string, caseNeutral: boolean): SpacedEllipsisRange[] {
+  const ranges: SpacedEllipsisRange[] = [];
   for (const match of input.matchAll(/(?:\.[^\S\r\n]+){2,}\./g)) {
-    const offsets = [...match[0].matchAll(/\./g)].map((period) => period.index);
-    let boundary = -1;
-    if (
-      offsets.length >= 4 &&
-      /^\p{Lu}/u.test(input.slice(match.index + match[0].length).trimStart())
-    ) {
-      boundary = /\S/.test(input[match.index - 1] ?? '') ? offsets[0] : (offsets.at(-1) ?? -1);
-    }
-    for (const offset of offsets) {
-      if (offset !== boundary) {
-        protectedPeriods.add(match.index + offset);
+    let periods = 0;
+    for (const character of match[0]) {
+      if (character === '.') {
+        periods++;
       }
     }
+
+    let next = match.index + match[0].length;
+    while (next < input.length && /[\s"'([{<]/.test(input[next])) {
+      next++;
+    }
+    const following = characterAt(input, next);
+    const sentenceStart =
+      /^\p{Number}$/u.test(following) ||
+      (caseNeutral
+        ? isCasedCharacter(following)
+        : following.length > 0 && charIsUpperCase(following));
+    let boundary = -1;
+    if (periods >= 4 && sentenceStart) {
+      boundary = /\S/.test(input[match.index - 1] ?? '')
+        ? match.index
+        : match.index + match[0].lastIndexOf('.');
+    }
+    ranges.push({ start: match.index, end: match.index + match[0].length, boundary });
   }
-  return protectedPeriods;
+  return ranges;
+}
+
+function isProtectedEllipsisPeriod(
+  position: number,
+  ranges: SpacedEllipsisRange[],
+  cursor: { index: number },
+): boolean {
+  while (cursor.index < ranges.length && position >= ranges[cursor.index].end) {
+    cursor.index++;
+  }
+  const range = ranges[cursor.index];
+  return range !== undefined && position >= range.start && position !== range.boundary;
 }
 
 /** Scan closing delimiters, including whitespace before a pending closing quote. */
@@ -509,17 +558,28 @@ function isUnspacedSentenceBoundary(
   next: number,
   caseNeutral: boolean,
 ): boolean {
-  if (input[index] !== '.' || !charIsUpperCase(characterAt(input, next))) {
+  const nextCharacter = characterAt(input, next);
+  if (
+    input[index] !== '.' ||
+    !(caseNeutral ? isCasedCharacter(nextCharacter) : charIsUpperCase(nextCharacter))
+  ) {
     return false;
   }
 
   const suffix = input.slice(Math.max(0, index + 1 - sentenceSuffixLength), index + 1);
   const following = input.slice(next);
+  const preceding = input.slice(Math.max(0, index - 320), next);
+  const previousAt = preceding.lastIndexOf('@');
+  const insideAddress = previousAt !== -1 && !/\s/.test(preceding.slice(previousAt));
+  const initial = caseNeutral ? /^\p{Cased}\./u : /^\p{Lu}\./u;
+  const trailingInitial = caseNeutral ? /\b\p{Cased}\.$/u : /\b\p{Lu}\.$/u;
+  const nextInitial = caseNeutral ? /^\p{Cased}(?=\s|$)/u : /^\p{Lu}(?=\s|$)/u;
   return !(
     abbrvReg.test(caseNeutral ? suffix.toLowerCase() : suffix) ||
-    /^\p{Lu}\./u.test(following) ||
-    (/\b\p{Lu}\.$/u.test(suffix) && /^\p{Lu}(?=\s|$)/u.test(following)) ||
-    /^[^\s]*@/.test(following)
+    initial.test(following) ||
+    (trailingInitial.test(suffix) && nextInitial.test(following)) ||
+    /^[^\s]*@/.test(following) ||
+    insideAddress
   );
 }
 
