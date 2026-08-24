@@ -120,6 +120,10 @@ const sentenceSuffixLength = Math.max(10, ...GATE_SUBSTITUTIONS.map((word) => wo
 const closingDelimiterReg = /[\])}>"']/;
 const openingBracketReg = /[([{<]/;
 const closingBracketReg = /[\])}>]/;
+const listMarkerReg =
+  /(?:^|\s)(?:(?:[•⁃]\s*)?\d+(?:\.\)|[.)])|\p{Cased}\.)(?=\s+["'([{<]*\p{Cased})/gu;
+const geographicAcronymReg = /\bU\.S(?:\.A)?\.$/i;
+const geographicContinuationReg = /^(?:government|army|navy|military|congress)\b/i;
 const sentenceContinuationReg =
   /^(?:and|or|but|nor|for|yet|so|at|in|on|of|to|from|with|by|as|then|because|while|after|before|although|though|since|unless|until|when|where|whether|if|once|whereas)\b/i;
 const independentSentenceReg =
@@ -303,6 +307,11 @@ export function sentenceSegment(
     return [];
   }
 
+  const list = segmentList(input, caseNeutral);
+  if (list !== undefined) {
+    return list;
+  }
+
   // Scan terminals before applying abbreviation and line-wrap rules.
   const chunks = sentenceChunks(input.replace(/\u0085/g, ' '), caseNeutral);
 
@@ -372,7 +381,11 @@ export function sentenceSegment(
               (!sentenceContinuationReg.test(nextChunk.trimStart()) ||
                 independentSentenceReg.test(nextChunk.trimStart()))
             : strIsTitleCase(nextChunk)) &&
-          !excepReg.test(gateSuffix)
+          !excepReg.test(gateSuffix) &&
+          !(
+            geographicAcronymReg.test(gateSuffix) &&
+            geographicContinuationReg.test(nextChunk.trim())
+          )
         ) {
           // Catch abbreviations followed by a capital letter and treat as a boundary.
           acc.push(chunk.text());
@@ -414,6 +427,14 @@ export function sentenceSegment(
       } else if (chunks[idx + 1] && ellipseReg.test(suffix)) {
         // Catch mid-sentence ellipses (and their derivatives) and merge them
         const nextChunk = chunks[idx + 1];
+        const nextSentence = nextChunk.trim() || chunks[idx + 2] || '';
+        if (
+          /\.{4}$/.test(suffix) &&
+          (caseNeutral ? startsWithCasedCharacter(nextSentence) : strIsTitleCase(nextSentence))
+        ) {
+          acc.push(chunk.text());
+          continue;
+        }
         chunk.append(nextChunk.replace(/ +/g, ' '));
         if (!(nextChunk.trim() || breakReg.test(nextChunk)) && chunks[idx + 2]) {
           // Keep the separator inside the sentence; leave line breaks to the newline rule.
@@ -431,6 +452,54 @@ export function sentenceSegment(
   return acc.length === 0 ? [input] : acc;
 }
 
+function nextListMarker(
+  input: string,
+  expression: RegExp,
+  family?: RegExp,
+): RegExpExecArray | null {
+  let marker = expression.exec(input);
+  while (marker !== null) {
+    if (
+      (family === undefined || family.test(marker[0])) &&
+      (marker.index === 0 ||
+        !/\b(?:section|chapter|page|figure|table|paragraph|article|clause)$/i.test(
+          input.slice(Math.max(0, marker.index - 24), marker.index).trimEnd(),
+        ))
+    ) {
+      return marker;
+    }
+    marker = expression.exec(input);
+  }
+  return null;
+}
+
+function segmentList(input: string, caseNeutral: boolean): string[] | undefined {
+  const expression = new RegExp(listMarkerReg);
+  let current = nextListMarker(input, expression);
+  if (current === null || input.slice(0, current.index).trim().length > 0) {
+    return undefined;
+  }
+  const firstMarker = current[0];
+  const family = [/\d/, /^\s*\p{Lu}/u, /^\s*\p{Ll}/u].find((pattern) => pattern.test(firstMarker));
+  let next = nextListMarker(input, expression, family);
+  if (next === null) {
+    return undefined;
+  }
+
+  const segments: string[] = [];
+  do {
+    const body = input.slice(current.index + current[0].length, next?.index ?? input.length).trim();
+    const sentences = /[.!?\r\n]/.test(body) ? sentenceSegment(body, { caseNeutral }) : [body];
+    if (sentences.length > 1 && /^\p{Cased}\.$/u.test(sentences[0])) {
+      sentences.splice(0, 2, `${sentences[0]} ${sentences[1]}`);
+    }
+    segments.push(`${current[0].trim()} ${sentences[0]}`, ...sentences.slice(1));
+    current = next;
+    next = nextListMarker(input, expression, family);
+  } while (current !== null);
+  return segments;
+}
+
 /** Options for rule-based sentence segmentation. */
 export interface SentenceSegmentOptions {
   /** Ignore letter casing when applying sentence-boundary heuristics (default: false). */
@@ -440,6 +509,8 @@ export interface SentenceSegmentOptions {
 /** Scan sentence boundaries once, preserving the former captured-split layout. */
 function sentenceChunks(input: string, caseNeutral: boolean): string[] {
   const chunks: string[] = [];
+  const protectedPeriods = spacedEllipsisRanges(input, caseNeutral);
+  const ellipsisCursor = { index: 0 };
   let lastEnd = 0;
   let start = -1;
   let insideQuotes = false;
@@ -468,7 +539,11 @@ function sentenceChunks(input: string, caseNeutral: boolean): string[] {
       // A terminal must follow the initial character, even if it is punctuation.
       continue;
     }
-    if (char === '.' || char === '?' || char === '!') {
+    if (
+      (char === '.' && !isProtectedEllipsisPeriod(index, protectedPeriods, ellipsisCursor)) ||
+      char === '?' ||
+      char === '!'
+    ) {
       const end = sentenceEnd(input, index, insideQuotes, brackets, caseNeutral);
       if (end === -1) {
         continue;
@@ -482,6 +557,55 @@ function sentenceChunks(input: string, caseNeutral: boolean): string[] {
 
   chunks.push(input.slice(lastEnd));
   return chunks;
+}
+
+interface SpacedEllipsisRange {
+  start: number;
+  end: number;
+  boundary: number;
+}
+
+function spacedEllipsisRanges(input: string, caseNeutral: boolean): SpacedEllipsisRange[] {
+  const ranges: SpacedEllipsisRange[] = [];
+  for (const match of input.matchAll(/(?:\.[^\S\r\n]+){2,}\./g)) {
+    let periods = 0;
+    for (const character of match[0]) {
+      if (character === '.') {
+        periods++;
+      }
+    }
+
+    let next = match.index + match[0].length;
+    while (next < input.length && /[\s"'([{<]/.test(input[next])) {
+      next++;
+    }
+    const following = characterAt(input, next);
+    const sentenceStart =
+      /^\p{Number}$/u.test(following) ||
+      (caseNeutral
+        ? isCasedCharacter(following)
+        : following.length > 0 && charIsUpperCase(following));
+    let boundary = -1;
+    if (periods >= 4 && sentenceStart) {
+      boundary = /\S/.test(input[match.index - 1] ?? '')
+        ? match.index
+        : match.index + match[0].lastIndexOf('.');
+    }
+    ranges.push({ start: match.index, end: match.index + match[0].length, boundary });
+  }
+  return ranges;
+}
+
+function isProtectedEllipsisPeriod(
+  position: number,
+  ranges: SpacedEllipsisRange[],
+  cursor: { index: number },
+): boolean {
+  while (cursor.index < ranges.length && position >= ranges[cursor.index].end) {
+    cursor.index++;
+  }
+  const range = ranges[cursor.index];
+  return range !== undefined && position >= range.start && position !== range.boundary;
 }
 
 /** Scan closing delimiters, including whitespace before a pending closing quote. */
@@ -521,20 +645,22 @@ function sentenceEnd(
   brackets: { depth: number; standalone: boolean },
   caseNeutral: boolean,
 ): number {
+  if (
+    !insideQuotes &&
+    brackets.depth === 0 &&
+    isUnspacedDelimitedSentenceStart(input, index, caseNeutral)
+  ) {
+    return index + 1;
+  }
   const end = closingDelimiterEnd(input, index, insideQuotes);
   if (end < input.length && !/\s/.test(input[end])) {
-    return -1;
+    return isUnspacedSentenceBoundary(input, index, end, caseNeutral) ? end : -1;
   }
   if (end === index + 1) {
     return end;
   }
 
-  let closedBrackets = 0;
-  for (let i = index + 1; i < end; i++) {
-    if (closingBracketReg.test(input[i])) {
-      closedBrackets++;
-    }
-  }
+  const closedBrackets = countClosingBrackets(input, index + 1, end);
   const closesQuotation =
     insideQuotes && (input[end - 1] === '"' || input.slice(end - 2, end) === "''");
   if (
@@ -572,6 +698,95 @@ function sentenceEnd(
     return -1;
   }
   return abbrvReg.test(gateSuffix) && excepReg.test(gateSuffix) ? -1 : end;
+}
+
+function countClosingBrackets(input: string, start: number, end: number): number {
+  let count = 0;
+  for (let index = start; index < end; index++) {
+    if (closingBracketReg.test(input[index])) {
+      count++;
+    }
+  }
+  return count;
+}
+
+function isUnspacedDelimitedSentenceStart(
+  input: string,
+  index: number,
+  caseNeutral: boolean,
+): boolean {
+  let next = index + 1;
+  if (!/["'([{<]/.test(input[next] ?? '')) {
+    return false;
+  }
+  if (/^(?:\[\p{Number}+\]|\(\p{Number}+\))/u.test(input.slice(next))) {
+    return false;
+  }
+  while (next < input.length && /["'([{<]/.test(input[next])) {
+    next++;
+  }
+  const character = characterAt(input, next);
+  return (
+    character.length > 0 &&
+    (/^\p{Number}$/u.test(character) ||
+      (caseNeutral ? isCasedCharacter(character) : charIsUpperCase(character)))
+  );
+}
+
+function isUnspacedSentenceBoundary(
+  input: string,
+  index: number,
+  next: number,
+  caseNeutral: boolean,
+): boolean {
+  const nextCharacter = characterAt(input, next);
+  const startsWithLetter = caseNeutral
+    ? isCasedCharacter(nextCharacter)
+    : charIsUpperCase(nextCharacter);
+  if (!(startsWithLetter || (input[index] !== '.' && /^\p{Number}$/u.test(nextCharacter)))) {
+    return false;
+  }
+  const precedingToken = input.slice(Math.max(0, index - 320), next).match(/\S+$/)?.[0] ?? '';
+  const insideUrl = /https?:\/\/|www\./i.test(precedingToken);
+  if (input[index] !== '.') {
+    return !insideUrl;
+  }
+
+  const suffix = input.slice(Math.max(0, index + 1 - sentenceSuffixLength), index + 1);
+  const following = input.slice(next);
+  const insideAddress =
+    precedingToken.includes('@') && !/@[^\s.]+(?:\.[^\s.]+)+\.$/u.test(precedingToken);
+  const hostnameLabel = following.match(
+    /^(com|org|net|edu|gov|mil|io|dev|app|co|uk|us|ca|ai|info|biz|me|tv)(?=[/.\s]|$)/i,
+  )?.[0];
+  const insideHostname =
+    insideUrl ||
+    (hostnameLabel !== undefined &&
+      (caseNeutral ||
+        hostnameLabel === hostnameLabel.toLowerCase() ||
+        hostnameLabel === hostnameLabel.toUpperCase()));
+  const dottedIdentifier = caseNeutral
+    ? /\b\p{Cased}[\p{Letter}\p{Number}_-]*\.$/u.test(suffix) &&
+      /^[\p{Cased}\p{Number}_-]{1,2}(?=\s|[/.]|$)/u.test(following)
+    : /\b\p{Lu}[\p{Letter}\p{Number}_-]*\.$/u.test(suffix) &&
+      /^[\p{Lu}\p{Number}_-]+(?=\s|[/.]|$)/u.test(following);
+  const initial = caseNeutral ? /^\p{Cased}\./u : /^\p{Lu}\./u;
+  const trailingInitial = caseNeutral ? /\b\p{Cased}\.$/u : /\b\p{Lu}\.$/u;
+  const nextInitial = caseNeutral ? /^\p{Cased}(?=\s|$)/u : /^\p{Lu}(?=\s|$)/u;
+  const gateSuffix = caseNeutral ? suffix.toLowerCase() : suffix;
+  const continuesAbbreviation =
+    abbrvReg.test(gateSuffix) &&
+    (excepReg.test(gateSuffix) ||
+      (geographicAcronymReg.test(gateSuffix) && geographicContinuationReg.test(following)));
+  return !(
+    continuesAbbreviation ||
+    initial.test(following) ||
+    (trailingInitial.test(suffix) && nextInitial.test(following)) ||
+    /^[^\s]*@/.test(following) ||
+    insideAddress ||
+    insideHostname ||
+    dottedIdentifier
+  );
 }
 
 function isNeutralSentenceStart(input: string, previousEnd: number, next: number): boolean {

@@ -447,6 +447,255 @@ describe('Utility Functions', () => {
     // Golden Rule tests from https://github.com/diasks2/pragmatic_segmenter
     // =====================================================================
 
+    test.each([
+      [
+        '016',
+        'I work for the U.S. Government in Virginia.',
+        ['I work for the U.S. Government in Virginia.'],
+      ],
+      [
+        '031',
+        '1.) The first item 2.) The second item',
+        ['1.) The first item', '2.) The second item'],
+      ],
+      ['033', '1) The first item 2) The second item', ['1) The first item', '2) The second item']],
+      ['035', '1. The first item 2. The second item', ['1. The first item', '2. The second item']],
+      [
+        '036',
+        '1. The first item. 2. The second item.',
+        ['1. The first item.', '2. The second item.'],
+      ],
+      [
+        '037',
+        '• 9. The first item • 10. The second item',
+        ['• 9. The first item', '• 10. The second item'],
+      ],
+      [
+        '038',
+        '⁃9. The first item ⁃10. The second item',
+        ['⁃9. The first item', '⁃10. The second item'],
+      ],
+      [
+        '039',
+        'a. The first item b. The second item c. The third list item',
+        ['a. The first item', 'b. The second item', 'c. The third list item'],
+      ],
+      [
+        '046',
+        'Thoreau argues that by simplifying one’s life, “the laws of the universe will appear less complex. . . .”',
+        [
+          'Thoreau argues that by simplifying one’s life, “the laws of the universe will appear less complex. . . .”',
+        ],
+      ],
+      [
+        '048',
+        'Omitted words end in a period . . . . Next sentence.',
+        ['Omitted words end in a period . . . .', 'Next sentence.'],
+      ],
+      [
+        '049',
+        'I never meant that.... She left the store.',
+        ['I never meant that....', 'She left the store.'],
+      ],
+      [
+        '050',
+        "I wasn’t really ... well, what I mean...see . . . what I'm saying, the thing is . . . I didn’t mean it.",
+        [
+          "I wasn’t really ... well, what I mean...see . . . what I'm saying, the thing is . . . I didn’t mean it.",
+        ],
+      ],
+      [
+        '051',
+        'One further habit which was somewhat weakened . . . was that of combining words into self-interpreting compounds. . . . The practice was not abandoned. . . .',
+        [
+          'One further habit which was somewhat weakened . . . was that of combining words into self-interpreting compounds.',
+          '. . . The practice was not abandoned. . . .',
+        ],
+      ],
+      [
+        '052',
+        'Hello world.Today is Tuesday.Mr. Smith went to the store and bought 1,000.That is a lot.',
+        [
+          'Hello world.',
+          'Today is Tuesday.',
+          'Mr. Smith went to the store and bought 1,000.',
+          'That is a lot.',
+        ],
+      ],
+    ] as const)('matches upstream English Golden Rule #%s', (_rule, input, expected) => {
+      expect(ss(input)).toEqual(expected);
+    });
+
+    test('continues segmenting sentences inside numbered list items', () => {
+      expect(ss('1. First sentence. Another sentence. 2. Second item.')).toEqual([
+        '1. First sentence.',
+        'Another sentence.',
+        '2. Second item.',
+      ]);
+      expect(ss('1. See section 2. Details follow. 2. Actual item.')).toEqual([
+        '1. See section 2.',
+        'Details follow.',
+        '2. Actual item.',
+      ]);
+    });
+
+    test('keeps name initials inside numbered list items', () => {
+      expect(ss('1. J. Smith will attend 2. A. Brown will attend')).toEqual([
+        '1. J. Smith will attend',
+        '2. A. Brown will attend',
+      ]);
+    });
+
+    test('keeps name initials inside lettered list items', () => {
+      expect(ss('a. J. Smith will attend b. A. Brown will attend')).toEqual([
+        'a. J. Smith will attend',
+        'b. A. Brown will attend',
+      ]);
+    });
+
+    test('recognizes quoted and bracketed list-item starts', () => {
+      expect(ss('1. "First item" 2. "Second item"')).toEqual([
+        '1. "First item"',
+        '2. "Second item"',
+      ]);
+      expect(ss('1. (First item) 2. (Second item)')).toEqual([
+        '1. (First item)',
+        '2. (Second item)',
+      ]);
+    });
+
+    test('recognizes list markers without depending on item capitalization', () => {
+      const input = '1. The first item 2. The second item';
+      const expected = ['1. The first item', '2. The second item'];
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        expected.map((sentence) => sentence.toLowerCase()),
+      );
+    });
+
+    test('recognizes list markers after document indentation', () => {
+      expect(ss('  1. The first item 2. The second item')).toEqual([
+        '1. The first item',
+        '2. The second item',
+      ]);
+    });
+
+    test('keeps four-dot boundaries invariant under case folding', () => {
+      expect(segmentCaseNeutrally('First.... Second.')).toEqual(['First....', 'Second.']);
+      expect(segmentCaseNeutrally('first.... second.')).toEqual(['first....', 'second.']);
+    });
+
+    test('keeps unspaced boundaries invariant under case folding', () => {
+      expect(segmentCaseNeutrally('Hello world.Today is Tuesday.')).toEqual([
+        'Hello world.',
+        'Today is Tuesday.',
+      ]);
+      expect(segmentCaseNeutrally('hello world.today is tuesday.')).toEqual([
+        'hello world.',
+        'today is tuesday.',
+      ]);
+    });
+
+    test('keeps uppercase email domain labels inside their address', () => {
+      expect(ss('Mail Jane.Doe@example.COM for help.')).toEqual([
+        'Mail Jane.Doe@example.COM for help.',
+      ]);
+    });
+
+    test('splits adjacent sentences after email addresses', () => {
+      expect(ss('Contact me@example.com.Next sentence.')).toEqual([
+        'Contact me@example.com.',
+        'Next sentence.',
+      ]);
+    });
+
+    test.each(['Visit example.COM for help.', 'Visit https://example.COM/path today.'])(
+      'keeps uppercase hostname labels inside %s',
+      (input) => {
+        expect(ss(input)).toEqual([input]);
+      },
+    );
+
+    test('keeps mixed-case hostnames invariant under case folding', () => {
+      const input = 'Visit example.Com for help.';
+      expect(segmentCaseNeutrally(input)).toEqual([input]);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual([input.toLowerCase()]);
+    });
+
+    test.each(['?', '!'])('keeps uppercase URL components after a %s separator', (separator) => {
+      const input = `Visit https://example.com${separator}Next=value for details.`;
+      expect(ss(input)).toEqual([input]);
+    });
+
+    test.each([
+      ['The build failed.App restarted.', ['The build failed.', 'App restarted.']],
+      ['The service stopped.Dev investigated.', ['The service stopped.', 'Dev investigated.']],
+      [
+        'Visit https://example.com. Then it failed.App restarted.',
+        ['Visit https://example.com.', 'Then it failed.', 'App restarted.'],
+      ],
+    ])('does not mistake an unspaced sentence for a hostname: %s', (input, expected) => {
+      expect(ss(input)).toEqual(expected);
+    });
+
+    test.each(['He earned a Ph.D in physics.', 'Open README.MD before continuing.'])(
+      'keeps dotted identifiers inside a sentence: %s',
+      (input) => {
+        expect(ss(input)).toEqual([input]);
+        expect(segmentCaseNeutrally(input)).toEqual([input]);
+        expect(segmentCaseNeutrally(input.toLowerCase())).toEqual([input.toLowerCase()]);
+      },
+    );
+
+    test('keeps bracketed references inside their sentence', () => {
+      expect(ss('He wrote (see Fig.[2] for details). Next.')).toEqual([
+        'He wrote (see Fig.[2] for details).',
+        'Next.',
+      ]);
+    });
+
+    test('keeps parenthesized page references inside their sentence', () => {
+      const input = 'See p.(10) for details.';
+      expect(ss(input)).toEqual([input]);
+    });
+
+    test.each([
+      ['Hello world."Next sentence."', ['Hello world.', '"Next sentence."']],
+      ["Hello world.'Next sentence.'", ['Hello world.', "'Next sentence.'"]],
+      ['Hello world.(Next sentence.)', ['Hello world.', '(Next sentence.)']],
+      ['Hello world.(2 people agreed.)', ['Hello world.', '(2 people agreed.)']],
+      ['Hello world.[2 people agreed.]', ['Hello world.', '[2 people agreed.]']],
+      ['Hello world."2 people agreed."', ['Hello world.', '"2 people agreed."']],
+    ])('keeps opening delimiters with adjacent sentence starts in %s', (input, expected) => {
+      expect(ss(input)).toEqual(expected);
+    });
+
+    test('does not merge incompatible geographic-acronym continuations', () => {
+      expect(ss('The treaty applies in the E.U. Congress meets tomorrow.')).toEqual([
+        'The treaty applies in the E.U.',
+        'Congress meets tomorrow.',
+      ]);
+    });
+
+    test.each([
+      ['Use etc.Today is Tuesday.', ['Use etc.', 'Today is Tuesday.']],
+      ['He moved to the U.S.Today is Tuesday.', ['He moved to the U.S.', 'Today is Tuesday.']],
+      ['Are you ready?Yes, I am.', ['Are you ready?', 'Yes, I am.']],
+      ['Are any left?2 remain.', ['Are any left?', '2 remain.']],
+      ['Stop!Run now.', ['Stop!', 'Run now.']],
+      ['Stop!2 people stayed.', ['Stop!', '2 people stayed.']],
+    ])('recognizes adjacent terminal boundaries in %s', (input, expected) => {
+      expect(ss(input)).toEqual(expected);
+    });
+
+    test.each([
+      ['"Next sentence."', '"Next sentence."'],
+      ['(Next sentence.)', '(Next sentence.)'],
+      ['2 people agreed.', '2 people agreed.'],
+    ])('retains a spaced-ellipsis boundary before %s', (start, expected) => {
+      expect(ss(`Omitted words . . . . ${start}`)).toEqual(['Omitted words . . . .', expected]);
+    });
+
     test('should split simple periods', () => {
       expect(ss('Hello World. My name is Jonas.')).toEqual(['Hello World.', 'My name is Jonas.']);
     });
@@ -1137,6 +1386,36 @@ describe('Utility Functions', () => {
     // Using 500ms threshold to account for CI environment variability
     describe('ReDoS prevention', () => {
       const TIMEOUT_MS = 500;
+
+      test('segments large spaced-ellipsis runs within a constrained heap', () => {
+        expectBundledScriptToPass(
+          `
+            const summary = '. '.repeat(600000) + '.';
+            const sentences = module.exports.sentenceSegment(summary);
+            if (sentences.length !== 1 || sentences[0] !== summary) {
+              throw new Error('Spaced-ellipsis content changed');
+            }
+            process.stdout.write('ok');
+          `,
+          15_000,
+          ['--max-old-space-size=64'],
+        );
+      }, 20_000);
+
+      test('streams large list-marker runs within a constrained heap', () => {
+        expectBundledScriptToPass(
+          `
+            const summary = '1. Item '.repeat(400000);
+            const sentences = module.exports.sentenceSegment(summary);
+            if (sentences.length !== 400000 || sentences[0] !== '1. Item') {
+              throw new Error('List-marker segmentation changed');
+            }
+            process.stdout.write('ok');
+          `,
+          20_000,
+          ['--max-old-space-size=64'],
+        );
+      }, 25_000);
 
       test('should segment abbreviation chains within a small heap', () => {
         expectBundledScriptToPass(
