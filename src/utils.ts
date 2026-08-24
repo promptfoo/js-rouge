@@ -770,7 +770,13 @@ function citationEnd(
   const following = characterAt(input, delimiterEnd);
   if (
     (closedBrackets > 0 && brackets.depth > 0 && !brackets.standalone) ||
-    !isCitationContext(input, index, following, Math.max(0, brackets.depth - closedBrackets))
+    !isCitationContext(
+      input,
+      index,
+      following,
+      Math.max(0, brackets.depth - closedBrackets),
+      caseNeutral,
+    )
   ) {
     return undefined;
   }
@@ -850,6 +856,7 @@ function isCitationContext(
   index: number,
   following: string,
   bracketDepth: number,
+  caseNeutral: boolean,
 ): boolean {
   if (bracketDepth > 0 || (following !== '[' && !/^\p{Number}$/u.test(following))) {
     return false;
@@ -863,7 +870,10 @@ function isCitationContext(
   const precedingToken =
     input.slice(Math.max(0, index - 64), index).match(/[\p{Letter}\p{Mark}\p{Number}_-]+$/u)?.[0] ??
     '';
-  const standaloneIdentifier = /^[\p{Lu}\p{Number}_-]{2,}$/u.test(precedingToken);
+  const standaloneIdentifier =
+    input[index] === '.' &&
+    (/^[\p{Lu}\p{Number}_-]{2,}$/u.test(precedingToken) ||
+      (caseNeutral && index === precedingToken.length && /^[a-z\d_-]{2,}$/u.test(precedingToken)));
   const labeledSection =
     /\b(?:appendix|section|chapter|part|figure|table|paragraph|article|clause)\s+[\p{Letter}\p{Number}_-]+$/iu.test(
       input.slice(Math.max(0, index - 96), index),
