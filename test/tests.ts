@@ -571,6 +571,10 @@ describe('Utility Functions', () => {
       expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
         expected.map((sentence) => sentence.toLowerCase()),
       );
+      expect(ss('The standard abbreviation is vs. This is clearer.')).toEqual([
+        'The standard abbreviation is vs.',
+        'This is clearer.',
+      ]);
     });
 
     test('recognizes list markers after document indentation', () => {
@@ -1148,6 +1152,10 @@ describe('Utility Functions', () => {
           'I live in the U.S.',
           `${continuation} meets tomorrow.`,
         ]);
+
+        const quoted = `The U.S.\n"${continuation} reconvenes."`;
+        expect(ss(quoted)).toEqual(['The U.S.', `"${continuation} reconvenes."`]);
+        expect(segmentCaseNeutrally(quoted)).toEqual(['The U.S.', `"${continuation} reconvenes."`]);
       },
     );
 

@@ -131,9 +131,14 @@ const independentSentenceReg =
   /^(?:in\s+(?:fact|time)\b|\p{Letter}+\s+[^,.!?]{1,120},|(?:and|but|or|yet|so|then)\s+(?:(?:i|we|he|she|they|you|it)\b|(?:(?:the|a|an|my|our|their|his|her)\s+)?(?!(?:more|later|moved)\b)[\p{Letter}\p{Mark}'’-]+\s+[\p{Letter}\p{Mark}'’-]+\b))/iu;
 
 function isAbbreviationException(suffix: string, following: string): boolean {
+  const continuation = following.trimStart();
   return (
     excepReg.test(suffix) &&
-    !(/\bvs\.$/i.test(suffix) && independentSentenceReg.test(following.trimStart()))
+    !(
+      /\bvs\.$/i.test(suffix) &&
+      (independentSentenceReg.test(continuation) ||
+        /^(?:this|that|these|those|it|we|they|he|she|i)\b/i.test(continuation))
+    )
   );
 }
 
@@ -357,7 +362,7 @@ export function sentenceSegment(
           !chunk.hasOpenDelimiter &&
           !(
             geographicAcronymReg.test(abbreviation) &&
-            geographicContinuationReg.test(nextSentence.trim())
+            geographicContinuationReg.test(nextChunk?.trimStart() ?? '')
           )
         ) {
           chunk.normalizeWhitespace();
