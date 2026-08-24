@@ -1778,6 +1778,25 @@ describe('Core Functions', () => {
       expect(s('a b', 'a b', { maxSkip: 0 })).toBe(0);
     });
 
+    test.each([0, 1, Number.POSITIVE_INFINITY])(
+      'keeps identical summaries and beta=%s on the built-in fast path',
+      (beta) => {
+        expect(s('a b c', 'a b c', { beta, maxSkip: 1 })).toBe(1);
+      },
+    );
+
+    test('still invokes a custom skip-bigram callback for identical summaries', () => {
+      const skipBigram = jest.fn(() => ['custom']);
+      expect(s('a b', 'a b', { skipBigram })).toBe(1);
+      expect(skipBigram).toHaveBeenCalledTimes(2);
+    });
+
+    test('treats a finite full-summary window as unbounded', () => {
+      expect(s('a a a b', 'a a a c', { maxSkip: Number.MAX_SAFE_INTEGER })).toBe(
+        s('a a a b', 'a a a c'),
+      );
+    });
+
     test('should match materialized skip-bigram scoring exhaustively', () => {
       const tokenizer = (input: string): string[] => JSON.parse(input);
       const materialized = (tokens: string[], maxSkip?: number): string[] =>
@@ -1836,6 +1855,22 @@ describe('Core Functions', () => {
           }
           if (module.exports.s(summary, summary, { maxSkip: 1 }) !== 1) {
             throw new Error('finite-window score changed');
+          }
+          process.stdout.write('ok');
+        `,
+        3000,
+      );
+    }, 10_000);
+
+    test('scores large finite full windows without visiting every position pair', () => {
+      expectBundledScriptToPass(
+        `
+          const prefix = 'a '.repeat(12000);
+          const candidate = prefix + 'b';
+          const reference = prefix + 'c';
+          const score = module.exports.s(candidate, reference, { maxSkip: Number.MAX_SAFE_INTEGER });
+          if (score !== module.exports.s(candidate, reference)) {
+            throw new Error('Finite full-window score changed');
           }
           process.stdout.write('ok');
         `,

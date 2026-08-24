@@ -320,13 +320,23 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
   if (maxSkip === 0) {
     return 0;
   }
+  if (
+    candTokens.length === refTokens.length &&
+    candTokens.every((token, index) => token === refTokens[index])
+  ) {
+    return 1;
+  }
 
-  const skip2 = countMatchingSkipBigrams(candTokens, refTokens, maxSkip);
+  const effectiveMaxSkip =
+    maxSkip >= Math.max(candTokens.length, refTokens.length) - 1
+      ? Number.POSITIVE_INFINITY
+      : maxSkip;
+  const skip2 = countMatchingSkipBigrams(candTokens, refTokens, effectiveMaxSkip);
   if (skip2 === 0) {
     return 0;
   }
-  const skip2Recall = skip2 / skipBigramCount(refTokens.length, maxSkip);
-  const skip2Prec = skip2 / skipBigramCount(candTokens.length, maxSkip);
+  const skip2Recall = skip2 / skipBigramCount(refTokens.length, effectiveMaxSkip);
+  const skip2Prec = skip2 / skipBigramCount(candTokens.length, effectiveMaxSkip);
 
   return utils.fMeasure(skip2Prec, skip2Recall, beta);
 }
