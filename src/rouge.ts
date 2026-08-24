@@ -4,6 +4,8 @@ import { validateBeta, validateMaxSkip, validateNGramSize } from './validation';
 
 export * from './utils';
 
+const whitespaceOnlyReg = /^[\s\u0085]*$/;
+
 /** Options for ROUGE-N evaluation */
 export interface RougeNOptions {
   /** The size of the ngram used (default: 1) */
@@ -222,10 +224,10 @@ function encodeTokens(tokens: string[]): string[] {
  * @return {number}                 The ROUGE-N F-score
  */
 export function n(cand: string, ref: string, opts?: RougeNOptions): number {
-  if (cand.replace(/\u0085/g, '').trim().length === 0) {
+  if (whitespaceOnlyReg.test(cand)) {
     throw new RangeError('Candidate cannot be an empty string');
   }
-  if (ref.replace(/\u0085/g, '').trim().length === 0) {
+  if (whitespaceOnlyReg.test(ref)) {
     throw new RangeError('Reference cannot be an empty string');
   }
 
@@ -285,10 +287,10 @@ export function n(cand: string, ref: string, opts?: RougeNOptions): number {
  * @return {number}                 The ROUGE-S score
  */
 export function s(cand: string, ref: string, opts?: RougeSOptions): number {
-  if (cand.replace(/\u0085/g, '').trim().length === 0) {
+  if (whitespaceOnlyReg.test(cand)) {
     throw new RangeError('Candidate cannot be an empty string');
   }
-  if (ref.replace(/\u0085/g, '').trim().length === 0) {
+  if (whitespaceOnlyReg.test(ref)) {
     throw new RangeError('Reference cannot be an empty string');
   }
 
@@ -358,10 +360,10 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
  * @return {number}                 The ROUGE-L score
  */
 export function l(cand: string, ref: string, opts?: RougeLOptions): number {
-  if (cand.replace(/\u0085/g, '').trim().length === 0) {
+  if (whitespaceOnlyReg.test(cand)) {
     throw new RangeError('Candidate cannot be an empty string');
   }
-  if (ref.replace(/\u0085/g, '').trim().length === 0) {
+  if (whitespaceOnlyReg.test(ref)) {
     throw new RangeError('Reference cannot be an empty string');
   }
 
