@@ -664,6 +664,8 @@ describe('Utility Functions', () => {
       ['A conclusion (1987).1 The next sentence.', ['A conclusion (1987).1', 'The next sentence.']],
       ['Text𐐀.1 Next.', ['Text𐐀.1', 'Next.']],
       ['He said "Alpha.[1]" Beta.', ['He said "Alpha.[1]"', 'Beta.']],
+      ['He said "Alpha."[1] Beta.', ['He said "Alpha."[1]', 'Beta.']],
+      ['(Alpha.)[1] Beta.', ['(Alpha.)[1]', 'Beta.']],
       ['“Alpha.[1]” Beta.', ['“Alpha.[1]”', 'Beta.']],
       ['Alpha.[1] 2 people remained.', ['Alpha.[1]', '2 people remained.']],
       ['Really?[1] Next sentence.', ['Really?[1]', 'Next sentence.']],
@@ -683,13 +685,15 @@ describe('Utility Functions', () => {
       expect(segmentCaseNeutrally(input)).toEqual([input]);
     });
 
-    test.each(['Appendix A.1 Introduction', 'I work for the U.S.[1] Government agency.'])(
-      'preserves dotted section identifiers and cited abbreviation continuations: %s',
-      (input) => {
-        expect(ss(input)).toEqual([input]);
-        expect(segmentCaseNeutrally(input)).toEqual([input]);
-      },
-    );
+    test.each([
+      'Appendix A.1 Introduction',
+      'Appendix IV.1 Introduction',
+      'Section ABC.1 Introduction',
+      'I work for the U.S.[1] Government agency.',
+    ])('preserves dotted section identifiers and cited abbreviation continuations: %s', (input) => {
+      expect(ss(input)).toEqual([input]);
+      expect(segmentCaseNeutrally(input)).toEqual([input]);
+    });
 
     test.each([
       'She said "Alpha.[1] Beta." aloud.',

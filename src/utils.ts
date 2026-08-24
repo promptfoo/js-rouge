@@ -709,13 +709,15 @@ function citationEnd(
   insideQuotes: boolean,
   bracketDepth: number,
 ): number | undefined {
-  const following = characterAt(input, index + 1);
-  if (!isCitationContext(input, index, following, bracketDepth)) {
+  const delimiterEnd = closingDelimiterEnd(input, index, insideQuotes);
+  const closedBrackets = countClosingBrackets(input, index + 1, delimiterEnd);
+  const following = characterAt(input, delimiterEnd);
+  if (!isCitationContext(input, index, following, Math.max(0, bracketDepth - closedBrackets))) {
     return undefined;
   }
 
   const citation = input
-    .slice(index + 1)
+    .slice(delimiterEnd)
     .match(
       /^(?:(?:\[\p{Number}+(?:\s*[,;\p{Pd}]\s*\p{Number}+)*\])+|\p{Number}+(?:[^\S\r\n]+\p{Number}+)?)/u,
     );
@@ -723,9 +725,10 @@ function citationEnd(
     return undefined;
   }
 
-  const contentEnd = index + 1 + citation[0].length;
-  const closingQuote = citationClosingQuote(input, index, insideQuotes);
-  let end = closingDelimiterEnd(input, contentEnd - 1, insideQuotes);
+  const contentEnd = delimiterEnd + citation[0].length;
+  const closedQuote = insideQuotes && input.slice(index + 1, delimiterEnd).includes('"');
+  const closingQuote = closedQuote ? undefined : citationClosingQuote(input, index, insideQuotes);
+  let end = closingDelimiterEnd(input, contentEnd - 1, insideQuotes && !closedQuote);
   if (closingQuote !== undefined && input[end] === closingQuote) {
     end = closingDelimiterEnd(input, end, false);
   }
@@ -804,8 +807,13 @@ function isCitationContext(
 
   const previous = Array.from(input.slice(Math.max(0, index - 2), index)).at(-1) ?? '';
   const previousStart = index - previous.length;
+  const labeledSection =
+    /\b(?:appendix|section|chapter|part|figure|table|paragraph|article|clause)\s+[\p{Letter}\p{Number}_-]+$/iu.test(
+      input.slice(Math.max(0, index - 96), index),
+    );
   return (
     /^[\p{Letter}\p{Mark})\]]$/u.test(previous) &&
+    !labeledSection &&
     !(
       input[index] === '.' &&
       /^\p{Letter}$/u.test(previous) &&
