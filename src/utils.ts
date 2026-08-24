@@ -102,6 +102,10 @@ const sentenceSuffixLength = Math.max(10, ...GATE_SUBSTITUTIONS.map((word) => wo
 const closingDelimiterReg = /[\])}>"']/;
 const openingBracketReg = /[([{<]/;
 const closingBracketReg = /[\])}>]/;
+const sentenceContinuationReg =
+  /^(?:and|or|but|nor|for|yet|so|at|in|on|of|to|from|with|by|as|then|because|while|after|before|although|though|since|unless|until|when|where|whether|if|once|whereas)\b/i;
+const independentSentenceReg =
+  /^(?:in\s+(?:fact|time)\b|\p{Letter}+\s+[^,.!?]{1,120},|(?:and|but|or|yet|so|then)\s+(?:(?:i|we|he|she|they|you|it)\b|(?:(?:the|a|an|my|our|their|his|her)\s+)?(?!(?:more|later|moved)\b)[\p{Letter}\p{Mark}'’-]+\s+[\p{Letter}\p{Mark}'’-]+\b))/iu;
 
 /** Keep merged fragments separate; boundary rules only need a suffix and word casing. */
 class SentenceBuffer {
@@ -246,11 +250,18 @@ export function sentenceSegment(
       const lastWord = suffix.match(/\S+$/)?.[0] ?? '';
 
       if (chunk.hasLineBreaks) {
-        if (chunks[idx + 1] && chunk.startsWithTitleCase) {
+        const nextChunk = chunks[idx + 1];
+        if (
+          nextChunk &&
+          (chunk.startsWithTitleCase ||
+            (caseNeutral &&
+              sentenceContinuationReg.test(nextChunk.trimStart()) &&
+              /[.!?]["'\])}>]\s*[\r\n]/.test(suffix)))
+        ) {
           // Catch line breaks embedded within valid sentences
           // i.e. sentences that start with a capital letter
           // and normalize every wrap before reprocessing the joined chunk.
-          chunk.append(` ${chunks[idx + 1]}`);
+          chunk.append(` ${nextChunk}`);
           chunk.normalizeWhitespace();
           pending = chunk;
         } else {
@@ -266,7 +277,11 @@ export function sentenceSegment(
       } else if (chunks[idx + 1] && abbrvReg.test(gateSuffix)) {
         const nextChunk = chunks[idx + 1];
         if (
-          (caseNeutral ? startsWithCasedCharacter(nextChunk) : strIsTitleCase(nextChunk)) &&
+          (caseNeutral
+            ? startsWithCasedCharacter(nextChunk) &&
+              (!sentenceContinuationReg.test(nextChunk.trimStart()) ||
+                independentSentenceReg.test(nextChunk.trimStart()))
+            : strIsTitleCase(nextChunk)) &&
           !excepReg.test(gateSuffix)
         ) {
           // Catch abbreviations followed by a capital letter and treat as a boundary.
@@ -451,7 +466,7 @@ function sentenceEnd(
   const gateSuffix = caseNeutral ? suffix.toLowerCase() : suffix;
   const nextCharacter = characterAt(input, next);
   const startsWithLetter = caseNeutral
-    ? isCasedCharacter(nextCharacter)
+    ? isNeutralSentenceStart(input, end, next)
     : charIsUpperCase(nextCharacter);
   const startsWithNumber =
     /^\p{Number}$/u.test(nextCharacter) &&
@@ -466,6 +481,19 @@ function sentenceEnd(
     return -1;
   }
   return abbrvReg.test(gateSuffix) && excepReg.test(gateSuffix) ? -1 : end;
+}
+
+function isNeutralSentenceStart(input: string, previousEnd: number, next: number): boolean {
+  if (!isCasedCharacter(characterAt(input, next))) {
+    return false;
+  }
+
+  const continuation = input.slice(next);
+  return (
+    !sentenceContinuationReg.test(continuation) ||
+    independentSentenceReg.test(continuation) ||
+    input.slice(previousEnd, next).includes('"')
+  );
 }
 
 function trimSpaces(input: string): string {

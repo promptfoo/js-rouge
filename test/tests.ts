@@ -481,6 +481,16 @@ describe('Utility Functions', () => {
       expect(segmentCaseNeutrally(input)).toEqual(expected);
     });
 
+    test.each([
+      'we need etc. and more animals.',
+      'at 8 a.m. and later we left.',
+      'i lived in calif. and moved east.',
+      'they worked at acme co. at noon.',
+      'she wrote "hello." then left.',
+    ])('keeps lowercase sentence continuations case-neutrally: %s', (input) => {
+      expect(segmentCaseNeutrally(input)).toEqual([input]);
+    });
+
     test('should match lowercase-equivalent Unicode abbreviations case-neutrally', () => {
       const mixedCase = 'Da\u212a.\nNext.';
       const lowerCase = mixedCase.toLowerCase();
@@ -492,6 +502,106 @@ describe('Utility Functions', () => {
     test('should preserve gate exceptions in case-neutral quoted continuations', () => {
       expect(segmentCaseNeutrally('"Mt." Next stop.')).toEqual(['"Mt." Next stop.']);
       expect(segmentCaseNeutrally('"mt." next stop.')).toEqual(['"mt." next stop.']);
+    });
+
+    test.each([
+      ['He answered "No." In fact, he left.', ['He answered "No."', 'In fact, he left.']],
+      ['He said "No." But I left.', ['He said "No."', 'But I left.']],
+      ['He said "No." But John left.', ['He said "No."', 'But John left.']],
+      ['He said "No." And the manager agreed.', ['He said "No."', 'And the manager agreed.']],
+      ['He said "No." And we left.', ['He said "No."', 'And we left.']],
+      ['He said "No." In time, we left.', ['He said "No."', 'In time, we left.']],
+      ['She paused. "Then we begin."', ['She paused.', '"Then we begin."']],
+    ])('retains capitalized sentence starts after closing delimiters in %s', (input, expected) => {
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        expected.map((sentence) => sentence.toLowerCase()),
+      );
+    });
+
+    test('keeps abbreviation continuations invariant under case folding', () => {
+      const input = 'Use etc. And more animals.';
+      expect(segmentCaseNeutrally(input)).toEqual([input]);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual([input.toLowerCase()]);
+    });
+
+    test('keeps independent abbreviation continuations invariant under case folding', () => {
+      const input = 'Use etc. In fact, this is common.';
+      const expected = ['Use etc.', 'In fact, this is common.'];
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        expected.map((sentence) => sentence.toLowerCase()),
+      );
+    });
+
+    test('recognizes independent clauses with noun subjects after abbreviations', () => {
+      const input = 'Use etc. But John left.';
+      const expected = ['Use etc.', 'But John left.'];
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        expected.map((sentence) => sentence.toLowerCase()),
+      );
+    });
+
+    test.each(['smiled', 'laughed', 'danced', 'recovered', 'reads'])(
+      'recognizes independent noun-subject clauses without a verb whitelist: %s',
+      (verb) => {
+        const input = `Use etc. But John ${verb}.`;
+        const expected = ['Use etc.', `But John ${verb}.`];
+        expect(segmentCaseNeutrally(input)).toEqual(expected);
+        expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+          expected.map((sentence) => sentence.toLowerCase()),
+        );
+      },
+    );
+
+    test.each([
+      'After that, John smiled.',
+      'Because he was late, John hurried.',
+      'While we waited, John arrived.',
+      'At noon, John left.',
+      'On Monday, work resumed.',
+      'With little warning, it ended.',
+      'By noon, we returned.',
+      'From there, everyone left.',
+      'To begin, we agreed.',
+      'As expected, it worked.',
+      'In July, we moved.',
+      'For example, John laughed.',
+    ])('recognizes independent sentence-initial clauses: %s', (continuation) => {
+      const input = `The list includes cats, dogs, etc. ${continuation}`;
+      const expected = ['The list includes cats, dogs, etc.', continuation];
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        expected.map((sentence) => sentence.toLowerCase()),
+      );
+    });
+
+    test.each(['because', 'while', 'after', 'before', 'although', 'unless', 'until', 'when'])(
+      'keeps subordinating continuation %s inside the sentence',
+      (conjunction) => {
+        const input = `we chose acme co. ${conjunction} it was reliable.`;
+        expect(segmentCaseNeutrally(input)).toEqual(ss(input));
+      },
+    );
+
+    test.each(['\n', '\r\n', '\r'])(
+      'keeps lowercase quote continuations after uncased starts across %j',
+      (lineBreak) => {
+        expect(segmentCaseNeutrally(`2020 saw "hello."${lineBreak}then left.`)).toEqual([
+          '2020 saw "hello." then left.',
+        ]);
+        expect(segmentCaseNeutrally(`2020 saw <hello.>${lineBreak}then left.`)).toEqual([
+          '2020 saw <hello.> then left.',
+        ]);
+      },
+    );
+
+    test('retains line boundaries after numeric headings', () => {
+      expect(segmentCaseNeutrally('2020 report\nand sales rose.')).toEqual([
+        '2020 report',
+        'and sales rose.',
+      ]);
     });
 
     test.each(['\u212a', '\u0130', 'I\u0307\u0323', 'I\u093e', 'I\u20dd', '\u{10400}\u0307'])(
@@ -1465,6 +1575,14 @@ describe('Core Functions', () => {
   );
 
   describe.each(metrics)('%s input handling', (_name, score) => {
+    test('does not change already-lowercase abbreviation scores in case-insensitive mode', () => {
+      const candidate = 'we need etc. and more animals.';
+      const reference = 'and more animals we need etc.';
+      expect(score(candidate, reference, { caseSensitive: false })).toBe(
+        score(candidate, reference),
+      );
+    });
+
     test.each(['\n', '\r\n', '\r'])('keeps wrapped quotes (%j)', (lineBreak) => {
       expect(score(`He said "Stop.${lineBreak}" Next.`, 'He said "Stop." Next.')).toBe(1);
       expect(score(`He said "Stop.${lineBreak}"`, 'He said "Stop."')).toBe(1);
