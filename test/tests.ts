@@ -604,14 +604,40 @@ describe('Utility Functions', () => {
     });
 
     test('does not interpret names or addresses as embedded lists', () => {
-      expect(ss('I met John A. Smith and Mary B. Jones.')).toEqual([
-        'I met John A. Smith and Mary B. Jones.',
-      ]);
+      const names = 'I met John A. Smith and Mary B. Jones.';
+      expect(ss(names)).toEqual([names]);
+      expect(segmentCaseNeutrally(names.toLowerCase())).toEqual(
+        segmentCaseNeutrally(names).map((sentence) => sentence.toLowerCase()),
+      );
+      expect(rouge.l(names, names.toLowerCase(), { caseSensitive: false })).toBe(1);
       expect(ss('The address is 1. Main and 2. Broadway.')).toEqual([
         'The address is 1.',
         'Main and 2.',
         'Broadway.',
       ]);
+    });
+
+    test('finds genuine lists after an earlier false marker', () => {
+      expect(ss('I met John A. Smith. Intro: 1. Alpha 2. Beta.')).toEqual([
+        'I met John A. Smith.',
+        'Intro:',
+        '1. Alpha',
+        '2. Beta.',
+      ]);
+    });
+
+    test('does not treat years as embedded list markers', () => {
+      expect(ss('Results: 1. Alpha was founded in 2020. Growth continued.')).toEqual([
+        'Results: 1.',
+        'Alpha was founded in 2020.',
+        'Growth continued.',
+      ]);
+    });
+
+    test('does not interpret parenthesized labels as list markers', () => {
+      const input = 'The winners were (team A) Alice and (team B) Bob.';
+      expect(ss(input)).toEqual([input]);
+      expect(segmentCaseNeutrally(input)).toEqual([input]);
     });
 
     test('keeps four-dot boundaries invariant under case folding', () => {

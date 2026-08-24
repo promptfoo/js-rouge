@@ -456,11 +456,17 @@ function nextListMarker(
   input: string,
   expression: RegExp,
   family?: RegExp,
+  expectedNumber?: number,
 ): RegExpExecArray | null {
   let marker = expression.exec(input);
   while (marker !== null) {
+    const closesParenthesis =
+      marker[0].endsWith(')') &&
+      input.lastIndexOf('(', marker.index) > input.lastIndexOf(')', marker.index);
     if (
       (family === undefined || family.test(marker[0])) &&
+      (expectedNumber === undefined || Number(marker[0].match(/\d+/)?.[0]) === expectedNumber) &&
+      !closesParenthesis &&
       (marker.index === 0 ||
         !/\b(?:section|chapter|page|figure|table|paragraph|article|clause)$/i.test(
           input.slice(Math.max(0, marker.index - 24), marker.index).trimEnd(),
@@ -473,27 +479,56 @@ function nextListMarker(
   return null;
 }
 
+interface ListCandidate {
+  current: RegExpExecArray;
+  next: RegExpExecArray;
+  family: RegExp | undefined;
+  expectedNumber: number | undefined;
+  prefix: string;
+}
+
+function findListCandidate(
+  input: string,
+  caseNeutral: boolean,
+  expression: RegExp,
+): ListCandidate | undefined {
+  let current = nextListMarker(input, expression);
+  while (current !== null) {
+    const marker = current[0].trim();
+    const preceding = input.slice(0, current.index);
+    const prefix = preceding.trim();
+    const ambiguousMarker =
+      /^\d+\.$/.test(marker) || (caseNeutral ? /^\p{Cased}\.$/u : /^\p{Lu}\.$/u).test(marker);
+    const startsAfterBoundary = /[.!?:]$/.test(prefix) || /[\r\n]\s*$/.test(preceding);
+
+    if (prefix.length === 0 || !ambiguousMarker || startsAfterBoundary) {
+      const family = [/\d/, /^\s*\p{Lu}/u, /^\s*\p{Ll}/u].find((pattern) => pattern.test(marker));
+      const markerNumber = marker.match(/\d+/)?.[0];
+      const expectedNumber =
+        prefix.length > 0 && markerNumber !== undefined ? Number(markerNumber) + 1 : undefined;
+      const next = nextListMarker(input, expression, family, expectedNumber);
+      if (next !== null && (prefix.length === 0 || marker !== next[0].trim())) {
+        return { current, next, family, expectedNumber, prefix };
+      }
+    }
+
+    expression.lastIndex = current.index + current[0].length;
+    current = nextListMarker(input, expression);
+  }
+  return undefined;
+}
+
 function segmentList(input: string, caseNeutral: boolean): string[] | undefined {
   const expression = new RegExp(listMarkerReg);
-  let current = nextListMarker(input, expression);
-  if (current === null) {
-    return undefined;
-  }
-  const firstMarker = current[0];
-  const family = [/\d/, /^\s*\p{Lu}/u, /^\s*\p{Ll}/u].find((pattern) => pattern.test(firstMarker));
-  let next = nextListMarker(input, expression, family);
-  if (next === null) {
+  const candidate = findListCandidate(input, caseNeutral, expression);
+  if (candidate === undefined) {
     return undefined;
   }
 
-  const prefix = input.slice(0, current.index).trim();
-  const ambiguousMarker = /^(?:\p{Lu}|\d+)\.$/u.test(firstMarker.trim());
-  if (
-    prefix.length > 0 &&
-    (firstMarker.trim() === next[0].trim() || (ambiguousMarker && !/[.!?:]$/.test(prefix)))
-  ) {
-    return undefined;
-  }
+  let current: RegExpExecArray | null = candidate.current;
+  let next: RegExpExecArray | null = candidate.next;
+  let expectedNumber = candidate.expectedNumber;
+  const { family, prefix } = candidate;
   const segments = prefix.length === 0 ? [] : sentenceSegment(prefix, { caseNeutral });
   do {
     const body = input.slice(current.index + current[0].length, next?.index ?? input.length).trim();
@@ -503,7 +538,10 @@ function segmentList(input: string, caseNeutral: boolean): string[] | undefined 
     }
     segments.push(`${current[0].trim()} ${sentences[0]}`, ...sentences.slice(1));
     current = next;
-    next = nextListMarker(input, expression, family);
+    if (expectedNumber !== undefined) {
+      expectedNumber++;
+    }
+    next = nextListMarker(input, expression, family, expectedNumber);
   } while (current !== null);
   return segments;
 }
