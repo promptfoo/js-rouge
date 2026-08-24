@@ -34,7 +34,7 @@ export function treeBankTokenize(input: string): string[] {
       (opensDoubleQuote(text, index, insideQuotes) &&
         (quote === '"' ||
           (index > 0 &&
-            text[index + 2] !== ' ' &&
+            /^[\p{Letter}\p{Number}]$/u.test(characterAt(text, index + 2)) &&
             text.slice(index + 2).match(/``|''|"/)?.[0] === "''")));
     return insideQuotes ? ' `` ' : " '' ";
   });
