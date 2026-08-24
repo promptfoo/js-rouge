@@ -534,6 +534,31 @@ describe('Utility Functions', () => {
       ]);
     });
 
+    test.each(['\n', '\r\n', '\r'])(
+      'keeps a terminal abbreviation boundary across %j',
+      (lineBreak) => {
+        const input = `Use etc.${lineBreak}Next sentence.`;
+        expect(ss(input)).toEqual(['Use etc.', 'Next sentence.']);
+        expect(segmentCaseNeutrally(input)).toEqual(['Use etc.', 'Next sentence.']);
+      },
+    );
+
+    test.each(['\t', '\u00a0'])(
+      'normalizes horizontal whitespace after abbreviations: %j',
+      (separator) => {
+        expect(ss(`We use etc.${separator}and more.`)).toEqual(['We use etc. and more.']);
+        expect(ss(`Dr.${separator}Jones arrived.`)).toEqual(['Dr. Jones arrived.']);
+      },
+    );
+
+    test.each(['\n', '\r\n', '\r'])(
+      'preserves wrapped honorifics and abbreviation exceptions across %j',
+      (lineBreak) => {
+        expect(ss(`Dr.${lineBreak}Jones arrived.`)).toEqual(['Dr. Jones arrived.']);
+        expect(ss(`Use e.g.${lineBreak}Examples.`)).toEqual(['Use e.g. Examples.']);
+      },
+    );
+
     test('should split two letter uppercase abbreviations at the end of a sentence', () => {
       expect(ss('They closed the deal with Pitt, Briggs & Co. It closed yesterday.')).toEqual([
         'They closed the deal with Pitt, Briggs & Co.',

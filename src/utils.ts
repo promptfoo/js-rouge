@@ -241,11 +241,21 @@ export function sentenceSegment(
       const lastWord = suffix.match(/\S+$/)?.[0] ?? '';
 
       if (chunk.hasLineBreaks) {
-        if (chunks[idx + 1] && chunk.startsWithTitleCase) {
+        const nextChunk = chunks[idx + 1];
+        const abbreviation = gateSuffix.trimEnd();
+        if (
+          nextChunk &&
+          abbrvReg.test(suffix.trimEnd()) &&
+          !excepReg.test(abbreviation) &&
+          strIsTitleCase(nextChunk)
+        ) {
+          chunk.normalizeWhitespace();
+          acc.push(chunk.text());
+        } else if (nextChunk && chunk.startsWithTitleCase) {
           // Catch line breaks embedded within valid sentences
           // i.e. sentences that start with a capital letter
           // and normalize every wrap before reprocessing the joined chunk.
-          chunk.append(` ${chunks[idx + 1]}`);
+          chunk.append(` ${nextChunk}`);
           chunk.normalizeWhitespace();
           pending = chunk;
         } else {
@@ -268,7 +278,7 @@ export function sentenceSegment(
           acc.push(chunk.text());
         } else {
           // Catch common abbreviations and merge them with a delimiting space
-          chunk.append(` ${trimSpaces(nextChunk.replace(/ +/g, ' '))}`);
+          chunk.append(` ${trimSpaces(nextChunk.replace(/[^\S\r\n]+/g, ' '))}`);
           pending = chunk;
         }
       } else if (chunks[idx + 1] && matchesAcronymSuffix(suffix, lastWord, caseNeutral)) {
