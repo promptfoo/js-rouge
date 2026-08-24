@@ -567,6 +567,17 @@ export function skipBigram(tokens: string[], maxSkip: number = Number.POSITIVE_I
     throw new RangeError('Input must have at least two words');
   }
 
+  const distance = Math.min(maxSkip, tokens.length - 1);
+  let work = distance * tokens.length - (distance * (distance + 1)) / 2;
+  for (let index = 0; index < tokens.length && work <= 1_000_000; index++) {
+    work +=
+      tokens[index].length *
+      (Math.min(distance, index) + Math.min(distance, tokens.length - index - 1));
+  }
+  if (work > 1_000_000) {
+    throw new RangeError('Skip-bigram generation exceeds the materialization limit');
+  }
+
   const acc: string[] = [];
   for (let baseIdx = 0; baseIdx < tokens.length - 1; baseIdx++) {
     const maxIdx = Math.min(baseIdx + 1 + maxSkip, tokens.length);
