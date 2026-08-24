@@ -121,7 +121,7 @@ const closingDelimiterReg = /[\])}>"']/;
 const openingBracketReg = /[([{<]/;
 const closingBracketReg = /[\])}>]/;
 const listMarkerReg =
-  /(?:^|\s)(?:(?:[•⁃]\s*)?\d+|\p{Cased})(?:\.\)|[.)])(?=\s+["'([{<]*\p{Cased})/gu;
+  /(?:^|\s)(?:(?:[•⁃]\s*)?\d+|\p{Cased}\p{M}*)(?:\.\)|[.)])(?=\s+["'([{<]*\p{Cased})/gu;
 const nestedListDepth = Symbol('nestedListDepth');
 const maxNestedListDepth = 32;
 const geographicAcronymReg = /\bU\.S(?:\.A)?\.$/i;
@@ -542,11 +542,16 @@ function findListCandidate(
     const marker = current[0].trim();
     const context = listMarkerPrefix(input, current);
     const ambiguousMarker =
-      /^\d+\.$/.test(marker) || (caseNeutral ? /^\p{Cased}\.$/u : /^\p{Lu}\.$/u).test(marker);
+      /^\d+\.$/.test(marker) ||
+      (caseNeutral ? /^\p{Cased}\p{M}*\.$/u : /^\p{Lu}\p{M}*\.$/u).test(marker);
 
     const family = listMarkerFamily(marker, caseNeutral);
     const first = firstByFamily.get(family.source);
-    if (first !== undefined && (first.emptyPrefix || first.marker[0].trim() !== marker)) {
+    const previousMarker = first?.marker[0].trim();
+    const distinctMarker = caseNeutral
+      ? previousMarker?.toLowerCase() !== marker.toLowerCase()
+      : previousMarker !== marker;
+    if (first !== undefined && (first.emptyPrefix || distinctMarker)) {
       return {
         current: first.marker,
         next: current,
@@ -592,10 +597,13 @@ function segmentList(input: string, caseNeutral: boolean, depth: number): string
     const sentences = /[.!?\r\n]/.test(body)
       ? segmentNestedSentence(body, caseNeutral, depth)
       : [body];
-    if (sentences.length > 1 && /^\p{Cased}\.$/u.test(sentences[0])) {
+    if (sentences.length > 1 && /^\p{Cased}\p{M}*\.$/u.test(sentences[0])) {
       sentences.splice(0, 2, `${sentences[0]} ${sentences[1]}`);
     }
-    segments.push(`${current[0].trim()} ${sentences[0]}`, ...sentences.slice(1));
+    segments.push(`${current[0].trim()} ${sentences[0]}`);
+    for (let index = 1; index < sentences.length; index++) {
+      segments.push(sentences[index]);
+    }
     current = next;
     next = nextListMarker(input, expression, state, family);
   } while (current !== null);

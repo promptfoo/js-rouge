@@ -600,6 +600,23 @@ describe('Utility Functions', () => {
       expect(rouge.l(input, input.toLowerCase(), { caseSensitive: false })).toBe(1);
     });
 
+    test('compares repeated alphabetical markers case-neutrally', () => {
+      const input = 'Intro: A. Alpha a. Beta.';
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        segmentCaseNeutrally(input).map((sentence) => sentence.toLowerCase()),
+      );
+      expect(rouge.l(input, input.toLowerCase(), { caseSensitive: false })).toBe(1);
+    });
+
+    test('accepts case-expanded combining marks in alphabetical markers', () => {
+      const input = 'Intro: İ. Alpha J. Beta.';
+      expect(segmentCaseNeutrally(input)).toEqual(['Intro:', 'İ. Alpha', 'J. Beta.']);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        segmentCaseNeutrally(input).map((sentence) => sentence.toLowerCase()),
+      );
+      expect(rouge.l(input, input.toLowerCase(), { caseSensitive: false })).toBe(1);
+    });
+
     test('handles many unmatched parenthesized marker candidates', () => {
       const input = `(${' a) A'.repeat(4000)}`;
       expect(ss(input)).toEqual([input]);
@@ -614,6 +631,11 @@ describe('Utility Functions', () => {
       const input = Array.from({ length: 2000 }, (_, index) => `End. ${2 * index + 1}. Alpha`).join(
         ' ',
       );
+      expect(() => ss(input)).not.toThrow();
+    });
+
+    test('appends large embedded list bodies without exceeding the argument limit', () => {
+      const input = `Intro. 1. ${'A!'.repeat(130_000)} 2. End.`;
       expect(() => ss(input)).not.toThrow();
     });
 
