@@ -540,6 +540,7 @@ describe('Utility Functions', () => {
         const input = `Use etc.${lineBreak}Next sentence.`;
         expect(ss(input)).toEqual(['Use etc.', 'Next sentence.']);
         expect(segmentCaseNeutrally(input)).toEqual(['Use etc.', 'Next sentence.']);
+        expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(['use etc.', 'next sentence.']);
       },
     );
 
@@ -556,6 +557,17 @@ describe('Utility Functions', () => {
       (lineBreak) => {
         expect(ss(`Dr.${lineBreak}Jones arrived.`)).toEqual(['Dr. Jones arrived.']);
         expect(ss(`Use e.g.${lineBreak}Examples.`)).toEqual(['Use e.g. Examples.']);
+      },
+    );
+
+    test.each(['\n', '\r\n', '\r'])(
+      'does not split abbreviations inside wrapped parentheses across %j',
+      (lineBreak) => {
+        const input = `We invested in (Acme Co.${lineBreak}International Holdings) today.`;
+        expect(ss(input)).toEqual(['We invested in (Acme Co. International Holdings) today.']);
+        expect(segmentCaseNeutrally(input)).toEqual([
+          'We invested in (Acme Co. International Holdings) today.',
+        ]);
       },
     );
 

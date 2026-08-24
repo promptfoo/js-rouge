@@ -1,4 +1,9 @@
-import { GATE_EXCEPTIONS, GATE_SUBSTITUTIONS, TREEBANK_CONTRACTIONS } from './constants';
+import {
+  ABBR_PLACES,
+  GATE_EXCEPTIONS,
+  GATE_SUBSTITUTIONS,
+  TREEBANK_CONTRACTIONS,
+} from './constants';
 import { lcsIndices } from './lcs';
 import { validateBeta, validateMaxSkip, validateNGramSize } from './validation';
 
@@ -80,6 +85,10 @@ function escapeRegExp(input: string): string {
 }
 
 const abbrvReg = new RegExp(`\\b(${GATE_SUBSTITUTIONS.map(escapeRegExp).join('|')})[.!?] ?$`, 'i');
+const placeAbbreviationReg = new RegExp(
+  `\\b(${ABBR_PLACES.map(escapeRegExp).join('|')})[.!?] ?$`,
+  'i',
+);
 const acronymReg = /[ |.][A-Z].?$/i;
 // Case mappings can add combining marks (for example, `İ` lowercases to `i` + dot above).
 const caseNeutralAcronymReg = /(?:^|[ |.])\p{Cased}\p{M}*.?$/u;
@@ -247,7 +256,11 @@ export function sentenceSegment(
           nextChunk &&
           abbrvReg.test(suffix.trimEnd()) &&
           !excepReg.test(abbreviation) &&
-          strIsTitleCase(nextChunk)
+          (caseNeutral
+            ? startsWithCasedCharacter(nextChunk) &&
+              (strIsTitleCase(nextChunk) || !placeAbbreviationReg.test(abbreviation))
+            : strIsTitleCase(nextChunk)) &&
+          !hasOpenSentenceDelimiter(chunk.text())
         ) {
           chunk.normalizeWhitespace();
           acc.push(chunk.text());
@@ -329,6 +342,22 @@ export function sentenceSegment(
 
   // If no matches were found, return the input treated as a single sentence
   return acc.length === 0 ? [input] : acc;
+}
+
+function hasOpenSentenceDelimiter(input: string): boolean {
+  let depth = 0;
+  let insideQuotes = false;
+  for (let index = 0; index < input.length; index++) {
+    const character = input[index];
+    if (character === '"') {
+      insideQuotes = opensDoubleQuote(input, index, insideQuotes);
+    } else if (openingBracketReg.test(character)) {
+      depth++;
+    } else if (closingBracketReg.test(character)) {
+      depth = Math.max(0, depth - 1);
+    }
+  }
+  return insideQuotes || depth > 0;
 }
 
 /** Options for rule-based sentence segmentation. */
