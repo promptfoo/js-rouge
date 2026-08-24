@@ -1240,6 +1240,16 @@ describe('Utility Functions', () => {
       expect(segmentCaseNeutrally(input)).toEqual(expected);
     });
 
+    test.each(['in English', 'on Monday', 'from Alice'])(
+      'closes s-ending quoted words before %s',
+      (continuation) => {
+        const input = `The word 'news' ${continuation} is useful. Next sentence.`;
+        const expected = [`The word 'news' ${continuation} is useful.`, 'Next sentence.'];
+        expect(ss(input)).toEqual(expected);
+        expect(segmentCaseNeutrally(input)).toEqual(expected);
+      },
+    );
+
     test.each([
       ['“Alpha.” Beta.', ['“Alpha.”', 'Beta.']],
       ['She said “First! Second!” Next she left.', ['She said “First! Second!”', 'Next she left.']],
@@ -1267,12 +1277,15 @@ describe('Utility Functions', () => {
       ]);
     });
 
-    test('keeps auxiliary-led questions separate from preceding quotations', () => {
-      const input = '"It ended." Was it really over? Next.';
-      const expected = ['"It ended."', 'Was it really over?', 'Next.'];
-      expect(ss(input)).toEqual(expected);
-      expect(segmentCaseNeutrally(input)).toEqual(expected);
-    });
+    test.each(['Was it really over?', 'Was Alice ready?', 'Is John ready?', 'Can anyone help?'])(
+      'keeps auxiliary-led question %s separate from preceding quotations',
+      (question) => {
+        const input = `"It ended." ${question} Next.`;
+        const expected = ['"It ended."', question, 'Next.'];
+        expect(ss(input)).toEqual(expected);
+        expect(segmentCaseNeutrally(input)).toEqual(expected);
+      },
+    );
 
     test('keeps proper-name dialogue attributions with the quotation', () => {
       const input = '“Stop!” Alice said. Next.';

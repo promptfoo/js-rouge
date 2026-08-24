@@ -146,7 +146,9 @@ function singleQuotationState(
     const possessive =
       previous.toLowerCase() === 's' &&
       /\s/.test(following) &&
-      /^(?:\p{Lu}\p{Ll}*\s+\p{Lu}|\p{Ll}+\s+\p{Lu})/u.test(input.slice(index + 1).trimStart());
+      /^(?:\p{Lu}\p{Ll}*\s+\p{Lu}|(?!(?:in|on|at|from|to|of|for|with|by)\b)\p{Ll}+\s+\p{Lu})/u.test(
+        input.slice(index + 1).trimStart(),
+      );
     return possessive || (following.length > 0 && !/[\s.,!?;:)\]}"”»\p{Pd}]/u.test(following));
   }
   return (
@@ -801,7 +803,7 @@ function isDialogueAttribution(input: string, closesQuotation: boolean): boolean
     return false;
   }
   return (
-    /^(?:aloud\b|(?:am|is|are|was|were|be|been|being|has|have|had|will|would|can|could|should|must)\s+(?!(?:i|we|he|she|they|you|it|this|that|these|those)\b))/i.test(
+    /^(?:aloud\b|(?:am|is|are|was|were|be|been|being|has|have|had|will|would|can|could|should|must)\s+(?![^.!?\r\n]{0,256}\?)(?!(?:i|we|he|she|they|you|it|this|that|these|those)\b))/i.test(
       input,
     ) ||
     /^(?:(?!(?:am|is|are|was|were|be|been|being|has|have|had)\b)[\p{Letter}\p{Mark}'’-]+\s+){1,3}(?:said|thought|asked|replied|answered)(?=\s*[,.;!?]|\s*$)/iu.test(
