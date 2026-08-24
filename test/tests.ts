@@ -659,19 +659,31 @@ describe('Utility Functions', () => {
       'İbBİσİU.İ',
       '中文README.MD before continuing.',
       'İ12345678.X more',
+      'İ́ΑΑΑΑΑΑΑΑ.X more',
     ])('preserves case-expanded dotted identifiers: %s', (input) => {
       expect(segmentCaseNeutrally(input)).toEqual([input]);
       expect(segmentCaseNeutrally(input.toLowerCase())).toEqual([input.toLowerCase()]);
     });
 
-    test.each(['κόσμος', 'κόσμος', '\u0301κόσμος'])(
+    test.each(['κόσμος', 'κόσμος', '\u0301κόσμος', 'İş'])(
       'preserves adjacent sentences after ordinary non-ASCII word %s',
       (word) => {
         const input = `${word}.No one answered.`;
         expect(segmentCaseNeutrally(input)).toEqual([`${word}.`, 'No one answered.']);
         expect(rouge.l(input, `${word}. No one answered.`, { caseSensitive: false })).toBe(1);
+        expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+          [`${word}.`, 'No one answered.'].map((sentence) => sentence.toLowerCase()),
+        );
       },
     );
+
+    test('does not let a truncated mark qualify an unrelated later word', () => {
+      const input = 'İ?0b/]]\té.𝒜B';
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        segmentCaseNeutrally(input).map((sentence) => sentence.toLowerCase()),
+      );
+      expect(rouge.l(input, input.toLowerCase(), { caseSensitive: false })).toBe(1);
+    });
 
     test('keeps bracketed references inside their sentence', () => {
       expect(ss('He wrote (see Fig.[2] for details). Next.')).toEqual([

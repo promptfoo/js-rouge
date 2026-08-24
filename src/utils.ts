@@ -733,6 +733,28 @@ function isUnspacedDelimitedSentenceStart(
   );
 }
 
+function caseNeutralIdentifierContext(
+  input: string,
+  index: number,
+  suffixStart: number,
+): { suffix: string; evidence: boolean } {
+  let start = suffixStart;
+  if (/^\p{Mark}/u.test(input.slice(start, index + 1))) {
+    while (start > 0 && /^\p{Mark}$/u.test(input[start - 1])) {
+      start--;
+    }
+    if (start > 0) {
+      start--;
+    }
+  }
+  const suffix = input.slice(start, index + 1);
+  const token = suffix.match(/[\p{Letter}\p{Mark}\p{Number}_-]+\.$/u)?.[0] ?? '';
+  const evidence =
+    (start < suffixStart && token.length === suffix.length && /^\p{Cased}$/u.test(input[start])) ||
+    /[A-Za-z0-9_-]/.test(token.replace(/İ\p{Mark}*|i\p{Mark}+/gu, ''));
+  return { suffix, evidence };
+}
+
 function isUnspacedSentenceBoundary(
   input: string,
   index: number,
@@ -754,8 +776,7 @@ function isUnspacedSentenceBoundary(
 
   const suffixStart = Math.max(0, index + 1 - sentenceSuffixLength);
   const suffix = input.slice(suffixStart, index + 1);
-  const identifierSuffix =
-    suffixStart > 0 && /^\p{Mark}/u.test(suffix) ? `${input[suffixStart - 1]}${suffix}` : suffix;
+  const identifier = caseNeutralIdentifierContext(input, index, suffixStart);
   const following = input.slice(next);
   const insideAddress =
     precedingToken.includes('@') && !/@[^\s.]+(?:\.[^\s.]+)+\.$/u.test(precedingToken);
@@ -769,9 +790,11 @@ function isUnspacedSentenceBoundary(
         hostnameLabel === hostnameLabel.toLowerCase() ||
         hostnameLabel === hostnameLabel.toUpperCase()));
   const dottedIdentifier = caseNeutral
-    ? /(?:^|[^\p{Letter}\p{Mark}\p{Number}_-])(?=[\p{Letter}\p{Mark}\p{Number}_-]*[A-Za-z0-9_İ-])(?:[\p{Letter}\p{Mark}\p{Number}_-]*\p{Cased}|\p{Mark})[\p{Letter}\p{Mark}\p{Number}_-]*\.$/u.test(
-        identifierSuffix,
-      ) && /^(?:[\p{Cased}\p{Number}_-]\p{M}*){1,2}(?=\s|[/.]|$)/u.test(following)
+    ? identifier.evidence &&
+      /(?:^|[^\p{Letter}\p{Mark}\p{Number}_-])(?:[\p{Letter}\p{Mark}\p{Number}_-]*\p{Cased}|\p{Mark})[\p{Letter}\p{Mark}\p{Number}_-]*\.$/u.test(
+        identifier.suffix,
+      ) &&
+      /^(?:[\p{Cased}\p{Number}_-]\p{M}*){1,2}(?=\s|[/.]|$)/u.test(following)
     : /\b\p{Lu}[\p{Letter}\p{Number}_-]*\.$/u.test(suffix) &&
       /^[\p{Lu}\p{Number}_-]+(?=\s|[/.]|$)/u.test(following);
   const initial = caseNeutral ? /^\p{Cased}\p{M}*\./u : /^\p{Lu}\./u;
