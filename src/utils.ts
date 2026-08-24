@@ -766,7 +766,7 @@ function isUnspacedSentenceBoundary(
         hostnameLabel === hostnameLabel.toLowerCase() ||
         hostnameLabel === hostnameLabel.toUpperCase()));
   const dottedIdentifier = caseNeutral
-    ? /(?:^|[^\p{Letter}\p{Mark}\p{Number}_-])(?:[\p{Letter}\p{Mark}\p{Number}_-]*\p{Cased}|\p{Mark})[\p{Letter}\p{Mark}\p{Number}_-]*\.$/u.test(
+    ? /(?:^|[^\p{Letter}\p{Mark}\p{Number}_-])(?=[\p{Letter}\p{Mark}\p{Number}_-]*[A-Za-z0-9_İ\p{Mark}-])(?:[\p{Letter}\p{Mark}\p{Number}_-]*\p{Cased}|\p{Mark})[\p{Letter}\p{Mark}\p{Number}_-]*\.$/u.test(
         suffix,
       ) && /^(?:[\p{Cased}\p{Number}_-]\p{M}*){1,2}(?=\s|[/.]|$)/u.test(following)
     : /\b\p{Lu}[\p{Letter}\p{Number}_-]*\.$/u.test(suffix) &&

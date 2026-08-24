@@ -664,6 +664,12 @@ describe('Utility Functions', () => {
       expect(segmentCaseNeutrally(input.toLowerCase())).toEqual([input.toLowerCase()]);
     });
 
+    test('preserves adjacent sentences after ordinary non-ASCII words', () => {
+      const input = 'κόσμος.No one answered.';
+      expect(segmentCaseNeutrally(input)).toEqual(['κόσμος.', 'No one answered.']);
+      expect(rouge.l(input, 'κόσμος. No one answered.', { caseSensitive: false })).toBe(1);
+    });
+
     test('keeps bracketed references inside their sentence', () => {
       expect(ss('He wrote (see Fig.[2] for details). Next.')).toEqual([
         'He wrote (see Fig.[2] for details).',
