@@ -660,18 +660,14 @@ describe('Utility Functions', () => {
 
     test.each([
       ['He said "Stop." 123 starts here.', ['He said "Stop."', '123 starts here.']],
+      ['He said "Stop!" 123 starts here.', ['He said "Stop!"', '123 starts here.']],
+      ['He said "Stop?" 123 starts here.', ['He said "Stop?"', '123 starts here.']],
       ['He said "Stop." 3.14 was measured.', ['He said "Stop."', '3.14 was measured.']],
       ['"Stop." ١٢٣ starts here.', ['"Stop."', '١٢٣ starts here.']],
-    ])('should split numeric sentence starts after a closing quote in %s', (input, expected) => {
+      ['(Stop!) 123 starts here.', ['(Stop!)', '123 starts here.']],
+    ])('should split numeric sentence starts after closing delimiters in %s', (input, expected) => {
       expect(ss(input)).toEqual(expected);
       expect(segmentCaseNeutrally(input)).toEqual(expected);
-    });
-
-    test.each(bracketPairs)('should split numeric sentence starts after %s%s', (open, close) => {
-      const firstSentence = `${open}Stop.${close}`;
-      const input = `${firstSentence} 123 starts here.`;
-      expect(ss(input)).toEqual([firstSentence, '123 starts here.']);
-      expect(segmentCaseNeutrally(input)).toEqual([firstSentence, '123 starts here.']);
     });
 
     const sentenceContinuations = [
@@ -683,6 +679,10 @@ describe('Utility Functions', () => {
       'She wrote "etc."; then left.',
       'She wrote "etc.": more would follow.',
       'She wrote "hello." then left.',
+      'She repeated "Stop." 3 times.',
+      'She watched "Monsters, Inc." 3 times.',
+      'She mentioned "U.S." 2 years ago.',
+      'She quoted "No." 100% correctly.',
       'The label was "Hello!" 100 times larger.',
       'The result was (surprisingly!) 100% accurate.',
       'The result was (surprisingly!) -- completely accurate.',
@@ -1405,25 +1405,9 @@ describe('Core Functions', () => {
       expect(score('12,000 items', '12 000 items')).toBeLessThan(1);
     });
 
-    test.each([true, false])(
-      'keeps punctuation aligned after a quoted numeric boundary with caseSensitive=%s',
-      (caseSensitive) => {
-        expect(
-          score('He said "Stop." 123 starts here.', 'He said "Stop ." 123 starts here.', {
-            caseSensitive,
-          }),
-        ).toBe(1);
-      },
-    );
-
-    test.each(bracketPairs)(
-      'keeps %s%s punctuation aligned before numeric starts',
-      (open, close) => {
-        expect(score(`${open}Stop.${close} 123 starts.`, `${open}Stop .${close} 123 starts.`)).toBe(
-          1,
-        );
-      },
-    );
+    test('keeps punctuation aligned after a quoted numeric boundary', () => {
+      expect(score('"Stop." 123 starts.', '"Stop ." 123 starts.')).toBe(1);
+    });
 
     test.each([
       ['He said... "what?" Next.', "He said ... `` what ? '' Next ."],

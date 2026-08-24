@@ -440,7 +440,9 @@ function sentenceEnd(
   const startsWithLetter = caseNeutral
     ? isCasedCharacter(nextCharacter)
     : charIsUpperCase(nextCharacter);
-  const startsWithNumber = input[index] === '.' && /^\p{Number}$/u.test(nextCharacter);
+  const startsWithNumber =
+    /^\p{Number}$/u.test(nextCharacter) &&
+    !/^\S+(?:\s*%|\s+(?:time|year)s?\b)/u.test(input.slice(next));
   if (!(startsWithLetter || startsWithNumber)) {
     return -1;
   }
