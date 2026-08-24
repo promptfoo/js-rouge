@@ -152,7 +152,7 @@ function singleQuotationState(
   return (
     (previous.length === 0 || /^[\s\p{Punctuation}]$/u.test(previous)) &&
     /\S/.test(following) &&
-    !/^(?:t(?:is|was|were|will|would|il|ill)|em|cause|cos|round|bout|neath|fore|tween|gainst|cept|(?:twen|thir|for|fif|six|seven|eigh|nine)ties|\d{2}s)\b/i.test(
+    !/^(?:t(?:is|was|were|will|would|il|ill)|em|cause|cos|round|bout|neath|fore|tween|gainst|cept|(?:twen|thir|for|fif|six|seven|eigh|nine)ties|\d{2}s?)\b/i.test(
       input.slice(index + 1),
     )
   );
@@ -776,9 +776,13 @@ function sentenceEnd(
   }
   const suffix = input.slice(Math.max(0, index + 1 - sentenceSuffixLength), index + 1);
   const gateSuffix = caseNeutral ? suffix.toLowerCase() : suffix;
+  const continuation = input.slice(next);
+  if (isDialogueAttribution(continuation, closesQuotation)) {
+    return -1;
+  }
   const nextCharacter = characterAt(input, next);
   const startsWithLetter = caseNeutral
-    ? isNeutralSentenceStart(input, end, next, closesQuotation)
+    ? isNeutralSentenceStart(input, end, next)
     : charIsUpperCase(nextCharacter);
   const startsWithNumber = isNumericSentenceStart(input, next, nextCharacter, gateSuffix);
   if (!(startsWithLetter || startsWithNumber)) {
@@ -790,6 +794,15 @@ function sentenceEnd(
     return -1;
   }
   return abbrvReg.test(gateSuffix) && excepReg.test(gateSuffix) ? -1 : end;
+}
+
+function isDialogueAttribution(input: string, closesQuotation: boolean): boolean {
+  return (
+    closesQuotation &&
+    /^(?:aloud\b|(?:[\p{Letter}\p{Mark}'’-]+\s+){1,3}(?:said|thought|asked|replied|answered)(?=\s*[,.;!?]|\s*$))/iu.test(
+      input,
+    )
+  );
 }
 
 function standaloneTerminalEnd(input: string, end: number, insideQuotes: boolean): number {
@@ -900,25 +913,16 @@ function isUnspacedSentenceBoundary(
   );
 }
 
-function isNeutralSentenceStart(
-  input: string,
-  previousEnd: number,
-  next: number,
-  closesQuotation: boolean,
-): boolean {
+function isNeutralSentenceStart(input: string, previousEnd: number, next: number): boolean {
   if (!isCasedCharacter(characterAt(input, next))) {
     return false;
   }
 
   const continuation = input.slice(next);
   return (
-    !(
-      closesQuotation &&
-      /^(?:aloud\b|(?:he|she|they|we|i)\s+(?:said|thought)(?=\s*[,.;!?]|\s*$))/i.test(continuation)
-    ) &&
-    (!sentenceContinuationReg.test(continuation) ||
-      independentSentenceReg.test(continuation) ||
-      input.slice(previousEnd, next).includes('"'))
+    !sentenceContinuationReg.test(continuation) ||
+    independentSentenceReg.test(continuation) ||
+    input.slice(previousEnd, next).includes('"')
   );
 }
 

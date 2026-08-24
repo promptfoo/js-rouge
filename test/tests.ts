@@ -1189,6 +1189,7 @@ describe('Utility Functions', () => {
       ["'twas late. We left.", ["'twas late.", 'We left.']],
       ["'Til tomorrow. We can wait.", ["'Til tomorrow.", 'We can wait.']],
       ["'round the bend. We continued.", ["'round the bend.", 'We continued.']],
+      ["It happened in '99. Next event.", ["It happened in '99.", 'Next event.']],
       ["She told 'em to leave. They refused.", ["She told 'em to leave.", 'They refused.']],
       ["She said 'cause it rained. We stayed.", ["She said 'cause it rained.", 'We stayed.']],
     ])('does not interpret apostrophe-led contractions as quotations: %s', (input, expected) => {
@@ -1240,6 +1241,16 @@ describe('Utility Functions', () => {
     test('keeps independent reporting-verb sentences separate', () => {
       const input = '"It ended." He said nothing afterward. Next.';
       const expected = ['"It ended."', 'He said nothing afterward.', 'Next.'];
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        expected.map((sentence) => sentence.toLowerCase()),
+      );
+    });
+
+    test('keeps proper-name dialogue attributions with the quotation', () => {
+      const input = '“Stop!” Alice said. Next.';
+      const expected = ['“Stop!” Alice said.', 'Next.'];
       expect(ss(input)).toEqual(expected);
       expect(segmentCaseNeutrally(input)).toEqual(expected);
       expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
