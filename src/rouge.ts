@@ -1,6 +1,11 @@
 import { lcsIndices as builtInLcsIndices } from './lcs';
 import * as utils from './utils';
-import { validateBeta, validateMaxSkip, validateNGramSize } from './validation';
+import {
+  validateBeta,
+  validateMaxSkip,
+  validateNGramMaterialization,
+  validateNGramSize,
+} from './validation';
 
 export * from './utils';
 
@@ -242,7 +247,11 @@ export function n(cand: string, ref: string, opts?: RougeNOptions): number {
   const getGrams = (input: string): string[] => {
     const tokens = tokenizeSummary(input, caseSensitive, tokenizer);
     if (nGram === utils.nGram) {
-      return tokens.length < size ? [] : nGram(encodeTokens(tokens), size);
+      if (tokens.length < size) {
+        return [];
+      }
+      validateNGramMaterialization(tokens, size);
+      return nGram(encodeTokens(tokens), size);
     }
     return nGram(tokens, size);
   };

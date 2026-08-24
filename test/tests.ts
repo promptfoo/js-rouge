@@ -355,6 +355,18 @@ describe('Utility Functions', () => {
       const tokens = new Array<string>(2000).fill('a');
       expect(() => nGram(tokens, 1000)).toThrow(/materialization limit/);
     });
+
+    test('should include joining spaces in the materialization limit', () => {
+      expect(() => nGram(new Array<string>(1999).fill('a'), 1000)).toThrow(/materialization limit/);
+    });
+
+    test('should preserve sparse token arrays', () => {
+      expect(nGram(new Array<string>(2), 2)).toEqual([' ']);
+      const tokens = new Array<string>(3);
+      tokens[0] = 'a';
+      tokens[2] = 'c';
+      expect(nGram(tokens, 2)).toEqual(['a ', ' c']);
+    });
   });
 
   describe('skipBigram', () => {
@@ -1694,6 +1706,37 @@ describe('Core Functions', () => {
         `,
         30_000,
         ['--max-old-space-size=64'],
+      );
+    }, 30_000);
+
+    test('should reject oversized tokens before encoding them', () => {
+      const tokenizer = (): string[] => new Array<string>(3).fill('x'.repeat(1_000_001));
+      const stringify = jest.spyOn(JSON, 'stringify');
+      try {
+        expect(() => n('candidate', 'reference', { tokenizer })).toThrow(/materialization limit/);
+        expect(stringify).not.toHaveBeenCalled();
+      } finally {
+        stringify.mockRestore();
+      }
+    });
+
+    test('should reject oversized token encoding within a small heap', () => {
+      expectBundledScriptToPass(
+        `
+          const token = 'x'.repeat(1_000_001);
+          const tokenizer = () => Array(96).fill(token);
+          try {
+            module.exports.n('candidate', 'reference', { tokenizer });
+            throw new Error('oversized tokens were accepted');
+          } catch (error) {
+            if (!(error instanceof RangeError) || !/materialization limit/.test(error.message)) {
+              throw error;
+            }
+          }
+          process.stdout.write('ok');
+        `,
+        30_000,
+        ['--max-old-space-size=32'],
       );
     }, 30_000);
 
