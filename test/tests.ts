@@ -654,6 +654,91 @@ describe('Utility Functions', () => {
       ]);
     });
 
+    test.each([
+      ['Alpha.[1] Beta.', ['Alpha.[1]', 'Beta.']],
+      ['Alpha.[7][8] Beta.', ['Alpha.[7][8]', 'Beta.']],
+      ['Alpha.[1,2] Beta.', ['Alpha.[1,2]', 'Beta.']],
+      ['Alpha.[1–3] Beta.', ['Alpha.[1–3]', 'Beta.']],
+      ['Alpha.[12] Beta.[34] Gamma.', ['Alpha.[12]', 'Beta.[34]', 'Gamma.']],
+      ['A conclusion.11 12 The next sentence.', ['A conclusion.11 12', 'The next sentence.']],
+      ['A conclusion.11 12 13 The next sentence.', ['A conclusion.11 12 13', 'The next sentence.']],
+      ['A conclusion (1987).1 The next sentence.', ['A conclusion (1987).1', 'The next sentence.']],
+      ['Text𐐀.1 Next.', ['Text𐐀.1', 'Next.']],
+      ['He said "Alpha.[1]" Beta.', ['He said "Alpha.[1]"', 'Beta.']],
+      ['He said "Alpha."[1] Beta.', ['He said "Alpha."[1]', 'Beta.']],
+      ['(Alpha.)[1] Beta.', ['(Alpha.)[1]', 'Beta.']],
+      ['“Alpha.[1]” Beta.', ['“Alpha.[1]”', 'Beta.']],
+      ['«Alpha.[1]» Beta.', ['«Alpha.[1]»', 'Beta.']],
+      ['Alpha.[1] “Beta.”', ['Alpha.[1]', '“Beta.”']],
+      [
+        "In the '90s, Alpha.[1] Today's report follows.",
+        ["In the '90s, Alpha.[1]", "Today's report follows."],
+      ],
+      ['Alpha.[1] 2 people remained.', ['Alpha.[1]', '2 people remained.']],
+      ['Really?[1] Next sentence.', ['Really?[1]', 'Next sentence.']],
+      ['Really?1 Next sentence.', ['Really?1', 'Next sentence.']],
+      ['Great![1] Next sentence.', ['Great![1]', 'Next sentence.']],
+    ])('keeps numeric citation suffixes with sentence boundaries in %s', (input, expected) => {
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        expected.map((sentence) => sentence.toLowerCase()),
+      );
+    });
+
+    test('does not mistake decimal numbers for numeric citation suffixes', () => {
+      const input = 'She has $100.00 in her bag.';
+      expect(ss(input)).toEqual([input]);
+      expect(segmentCaseNeutrally(input)).toEqual([input]);
+    });
+
+    test.each([
+      'Appendix A.1 Introduction',
+      'Appendix IV.1 Introduction',
+      'Section ABC.1 Introduction',
+      'ABC.1 Introduction.',
+      'I work for the U.S.[1] Government agency.',
+    ])('preserves dotted section identifiers and cited abbreviation continuations: %s', (input) => {
+      expect(ss(input)).toEqual([input]);
+      expect(segmentCaseNeutrally(input)).toEqual([input]);
+    });
+
+    test('preserves unlabeled dotted identifiers under case folding', () => {
+      const uppercase = 'ABC.1 Introduction.';
+      const lowercase = uppercase.toLowerCase();
+      expect(segmentCaseNeutrally(lowercase)).toEqual([lowercase]);
+      expect(rouge.l(uppercase, lowercase, { caseSensitive: false })).toBe(1);
+    });
+
+    test.each([
+      'She said "Alpha.[1] Beta." aloud.',
+      "She said 'Alpha.[1] Beta.' aloud.",
+      'She said ‘Alpha.[1] Beta.’ aloud.',
+      'She said “Alpha.[1] Beta.” aloud.',
+      'She said “He called ‘Alpha.[1]’ Beta.” aloud.',
+      'He said «Alpha.[1] Beta.» aloud.',
+      'He asked (really?)[1] John to continue.',
+      'He noted (Alpha.[1] Beta.) today.',
+      'See [Alpha.[1] Beta.] today.',
+    ])('does not split citations inside surrounding delimiters: %s', (input) => {
+      expect(ss(input)).toEqual([input]);
+    });
+
+    test('does not mistake a quoted numeric sentence start for a citation', () => {
+      const input = 'Alpha."2 people agreed."';
+      const expected = ['Alpha.', '"2 people agreed."'];
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
+    test('scores reordered cited reference sentences correctly', () => {
+      expect(rouge.l('Beta Alpha.[1]', 'Alpha.[1] Beta.')).toBeCloseTo(10 / 11);
+    });
+
+    test('segments citation-heavy documents without repeated quotation searches', () => {
+      expect(ss('Alpha.[1] Beta. '.repeat(4000))).toHaveLength(8000);
+    });
+
     test('keeps parenthesized page references inside their sentence', () => {
       const input = 'See p.(10) for details.';
       expect(ss(input)).toEqual([input]);
@@ -1409,6 +1494,21 @@ describe('Utility Functions', () => {
             const sentences = module.exports.sentenceSegment(summary);
             if (sentences.length !== 400000 || sentences[0] !== '1. Item') {
               throw new Error('List-marker segmentation changed');
+            }
+            process.stdout.write('ok');
+          `,
+          20_000,
+          ['--max-old-space-size=64'],
+        );
+      }, 25_000);
+
+      test('bounds unmatched citation quotation state within a constrained heap', () => {
+        expectBundledScriptToPass(
+          `
+            const summary = '‘'.repeat(7000000);
+            const sentences = module.exports.sentenceSegment(summary);
+            if (sentences.length !== 1 || sentences[0] !== summary) {
+              throw new Error('Unmatched quotation content changed');
             }
             process.stdout.write('ok');
           `,
