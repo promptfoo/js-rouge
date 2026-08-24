@@ -412,6 +412,10 @@ describe('Utility Functions', () => {
       expect(ss('Hello World. My name is Jonas.')).toEqual(['Hello World.', 'My name is Jonas.']);
     });
 
+    test('treats NEL as whitespace after sentence terminators', () => {
+      expect(ss('Alpha.\u0085Beta.')).toEqual(['Alpha.', 'Beta.']);
+    });
+
     test.each([
       ['astral uppercase', '\u{10400}', true],
       ['astral lowercase', '\u{10428}', false],
@@ -1015,12 +1019,19 @@ describe('Utility Functions', () => {
       expect(tbt(separator.repeat(3))).toEqual([]);
     });
 
-    test.each(['écannot', 'cannoté', 'Åwanna', 'wanna\u0301', "more'né"])(
-      'does not split contractions inside Unicode words: %s',
-      (word) => {
-        expect(tbt(word)).toEqual([word]);
-      },
-    );
+    test.each([
+      'écannot',
+      'cannoté',
+      'Åwanna',
+      'wanna\u0301',
+      "more'né",
+      'cannot‿foo',
+      'cannot\u200cfoo',
+      'cannot\u200dfoo',
+      'foo‿cannot',
+    ])('does not split contractions inside Unicode words: %s', (word) => {
+      expect(tbt(word)).toEqual([word]);
+    });
 
     test.each(['١٢,٣٤٥', '１２,３４５', '١٢:٣٤'])(
       'preserves numeric separators before Unicode decimal digits: %s',
@@ -1455,6 +1466,7 @@ describe('Core Functions', () => {
       expect(score('alpha\nbeta', 'alpha beta')).toBe(1);
       expect(score('alpha\u00a0beta', 'alpha beta')).toBe(1);
       expect(score('alpha\u0085beta', 'alpha beta')).toBe(1);
+      expect(score('Alpha.\u0085Beta.', 'Alpha. Beta.')).toBe(1);
     });
 
     test('should reject whitespace-only summaries like empty strings', () => {
@@ -1874,6 +1886,10 @@ describe('Core Functions', () => {
 
     const ref = 'police killed the gunman';
     const cands = ['police kill the gunman', 'the gunman kill police', 'the gunman police killed'];
+
+    test('preserves reordered sentence boundaries across NEL separators', () => {
+      expect(l('Alpha.\u0085Beta.', 'Beta.\u0085Alpha.')).toBe(1);
+    });
 
     test('should preserve word separation after an ellipsis for custom tokenizers', () => {
       const tokenizer = (input: string): string[] => input.split(/\s+/);

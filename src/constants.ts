@@ -1,14 +1,21 @@
+const unicodeWordCharacter =
+  '[\\p{Letter}\\p{Mark}\\p{Number}\\p{Connector_Punctuation}\\u200c\\u200d]';
+
+function contraction(pattern: string): RegExp {
+  return new RegExp(`(?<!${unicodeWordCharacter})${pattern}(?!${unicodeWordCharacter})`, 'giu');
+}
+
 export const TREEBANK_CONTRACTIONS: RegExp[] = [
-  /(?<![\p{Letter}\p{Mark}\p{Number}_])(can)(not)(?![\p{Letter}\p{Mark}\p{Number}_])/giu,
-  /(?<![\p{Letter}\p{Mark}\p{Number}_])(d)('ye)(?![\p{Letter}\p{Mark}\p{Number}_])/giu,
-  /(?<![\p{Letter}\p{Mark}\p{Number}_])(gim)(me)(?![\p{Letter}\p{Mark}\p{Number}_])/giu,
-  /(?<![\p{Letter}\p{Mark}\p{Number}_])(gon)(na)(?![\p{Letter}\p{Mark}\p{Number}_])/giu,
-  /(?<![\p{Letter}\p{Mark}\p{Number}_])(got)(ta)(?![\p{Letter}\p{Mark}\p{Number}_])/giu,
-  /(?<![\p{Letter}\p{Mark}\p{Number}_])(lem)(me)(?![\p{Letter}\p{Mark}\p{Number}_])/giu,
-  /(?<![\p{Letter}\p{Mark}\p{Number}_])(more)('n)(?![\p{Letter}\p{Mark}\p{Number}_])/giu,
-  /(?<![\p{Letter}\p{Mark}\p{Number}_])(wan)(na) /giu,
-  / ('t)(is)(?![\p{Letter}\p{Mark}\p{Number}_])/giu,
-  / ('t)(was)(?![\p{Letter}\p{Mark}\p{Number}_])/giu,
+  contraction('(can)(not)'),
+  contraction("(d)('ye)"),
+  contraction('(gim)(me)'),
+  contraction('(gon)(na)'),
+  contraction('(got)(ta)'),
+  contraction('(lem)(me)'),
+  contraction("(more)('n)"),
+  contraction('(wan)(na)(?= )'),
+  contraction("('t)(is)"),
+  contraction("('t)(was)"),
 ];
 
 export const HONORIFICS: string[] = [

@@ -220,7 +220,7 @@ export function sentenceSegment(
   }
 
   // Scan terminals before applying abbreviation and line-wrap rules.
-  const chunks = sentenceChunks(input, caseNeutral);
+  const chunks = sentenceChunks(input.replace(/\u0085/g, ' '), caseNeutral);
 
   const acc: string[] = [];
   let pending: SentenceBuffer | undefined;
