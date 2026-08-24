@@ -1096,6 +1096,10 @@ describe('Utility Functions', () => {
       ["``hello''", ['``', 'hello', "''"]],
       ["''hello''", ["''", 'hello', "''"]],
       ["Second fragment '' attribution.", ['Second', 'fragment', "''", 'attribution', '.']],
+      [
+        "Second fragment '' attribution ``third''.",
+        ['Second', 'fragment', "''", 'attribution', '``', 'third', "''", '.'],
+      ],
     ])('should recognize existing Treebank quotation markers in %s', (input, expected) => {
       expect(tbt(input)).toEqual(expected);
     });
@@ -1441,8 +1445,8 @@ describe('Core Functions', () => {
       ["He said ''hello''.", 'He said "hello".'],
       ["He said ``hello''.", 'He said "hello".'],
       [
-        "``First sentence. Second fragment '' attribution.",
-        '``First sentence. Second fragment" attribution.',
+        "``First sentence. Second fragment '' attribution ``third''.",
+        '``First sentence. Second fragment" attribution "third".',
       ],
     ])('should normalize existing Treebank quotation markers in %s', (input, expected) => {
       expect(score(input, expected)).toBe(1);

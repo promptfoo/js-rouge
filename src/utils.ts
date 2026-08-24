@@ -32,7 +32,7 @@ export function treeBankTokenize(input: string): string[] {
     insideQuotes =
       quote === '``' ||
       (opensDoubleQuote(text, index, insideQuotes) &&
-        (quote === '"' || (index > 0 && text.includes("''", index + 2))));
+        (quote === '"' || (index > 0 && text.slice(index + 2).match(/``|''|"/)?.[0] === "''")));
     return insideQuotes ? ' `` ' : " '' ";
   });
 
