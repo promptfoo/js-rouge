@@ -1196,9 +1196,16 @@ describe('Utility Functions', () => {
       expect(segmentCaseNeutrally(input)).toEqual(expected);
     });
 
-    test('retains outer straight quotations around nested curly quotations', () => {
-      const input = 'She said "She answered “No.” Then left." Next.';
-      const expected = ['She said "She answered “No.” Then left."', 'Next.'];
+    test.each([
+      [
+        'She said "She answered “No.” Then left." Next.',
+        ['She said "She answered “No.” Then left."', 'Next.'],
+      ],
+      [
+        "She said 'She answered “No.” Then left.' Next.",
+        ["She said 'She answered “No.” Then left.'", 'Next.'],
+      ],
+    ])('retains outer quotations around nested curly quotations: %s', (input, expected) => {
       expect(ss(input)).toEqual(expected);
       expect(segmentCaseNeutrally(input)).toEqual(expected);
     });
@@ -1220,9 +1227,23 @@ describe('Utility Functions', () => {
     test.each([
       ['“Alpha.” Beta.', ['“Alpha.”', 'Beta.']],
       ['She said “First! Second!” Next she left.', ['She said “First! Second!”', 'Next she left.']],
+      [
+        'Er sagte „Hallo.“ Dann ging er. Nächster Satz.',
+        ['Er sagte „Hallo.“', 'Dann ging er.', 'Nächster Satz.'],
+      ],
     ])('keeps curly closing quotations with their sentence in %s', (input, expected) => {
       expect(ss(input)).toEqual(expected);
       expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
+    test('keeps independent reporting-verb sentences separate', () => {
+      const input = '"It ended." He said nothing afterward. Next.';
+      const expected = ['"It ended."', 'He said nothing afterward.', 'Next.'];
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        expected.map((sentence) => sentence.toLowerCase()),
+      );
     });
 
     test('scores reordered curly-quoted reference sentences correctly', () => {
