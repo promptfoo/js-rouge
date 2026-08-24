@@ -355,6 +355,18 @@ describe('Utility Functions', () => {
       const tokens = new Array<string>(2000).fill('a');
       expect(() => nGram(tokens, 1000)).toThrow(/materialization limit/);
     });
+
+    test('should include joining spaces in the materialization limit', () => {
+      expect(() => nGram(new Array<string>(1999).fill('a'), 1000)).toThrow(/materialization limit/);
+    });
+
+    test('should preserve sparse token arrays', () => {
+      expect(nGram(new Array<string>(2), 2)).toEqual([' ']);
+      const tokens = new Array<string>(3);
+      tokens[0] = 'a';
+      tokens[2] = 'c';
+      expect(nGram(tokens, 2)).toEqual(['a ', ' c']);
+    });
   });
 
   describe('skipBigram', () => {
@@ -1694,6 +1706,149 @@ describe('Core Functions', () => {
         `,
         30_000,
         ['--max-old-space-size=64'],
+      );
+    }, 30_000);
+
+    test('should reject oversized tokens before encoding them', () => {
+      const tokenizer = (): string[] => new Array<string>(3).fill('x'.repeat(1_000_001));
+      const stringify = jest.spyOn(JSON, 'stringify');
+      try {
+        expect(() => n('candidate', 'reference', { tokenizer })).toThrow(/materialization limit/);
+        expect(stringify).not.toHaveBeenCalled();
+      } finally {
+        stringify.mockRestore();
+      }
+    });
+
+    test.each(['', 'a', '"', '\u0000', '\ud800'])(
+      'accounts for JSON token quoting and escapes before allocating: %j',
+      (token) => {
+        const tokenizer = (): string[] => new Array<string>(400_000).fill(token);
+        const stringify = jest.spyOn(JSON, 'stringify');
+        try {
+          expect(() => n('candidate', 'reference', { tokenizer })).toThrow(/materialization limit/);
+          expect(stringify).not.toHaveBeenCalled();
+        } finally {
+          stringify.mockRestore();
+        }
+      },
+    );
+
+    test('retains correctly encoded surrogate pairs under the limit', () => {
+      const tokenizer = (): string[] => ['\ud83d\ude00', '\t'];
+      expect(n('candidate', 'reference', { tokenizer })).toBe(1);
+    });
+
+    test('budgets both summaries and distinct reference gram entries before encoding', () => {
+      const tokens = Array.from({ length: 120_000 }, (_, index) =>
+        String.fromCodePoint(0x1_00_00 + index),
+      );
+      const tokenizer = (): string[] => tokens;
+      const stringify = jest.spyOn(JSON, 'stringify');
+      try {
+        expect(() => n('candidate', 'reference', { tokenizer })).toThrow(/materialization limit/);
+        expect(stringify).not.toHaveBeenCalled();
+      } finally {
+        stringify.mockRestore();
+      }
+    });
+
+    test('rejects an oversized candidate before tokenizing the reference', () => {
+      const tokenizer = jest.fn((input: string): string[] => {
+        if (input === 'candidate') {
+          return new Array<string>(400_000).fill('');
+        }
+        throw new Error('The reference tokenizer should not run');
+      });
+      expect(() => n('candidate', 'reference', { tokenizer })).toThrow(/materialization limit/);
+      expect(tokenizer).toHaveBeenCalledTimes(1);
+    });
+
+    test('snapshots reusable tokenizer buffers before tokenizing the reference', () => {
+      const buffer: string[] = [];
+      const tokenizer = (input: string): string[] => {
+        buffer.length = 0;
+        buffer.push(input);
+        return buffer;
+      };
+      expect(n('candidate', 'reference', { tokenizer })).toBe(0);
+    });
+
+    test('should reject oversized token encoding within a small heap', () => {
+      expectBundledScriptToPass(
+        `
+          const token = 'x'.repeat(1_000_001);
+          const tokenizer = () => Array(96).fill(token);
+          try {
+            module.exports.n('candidate', 'reference', { tokenizer });
+            throw new Error('oversized tokens were accepted');
+          } catch (error) {
+            if (!(error instanceof RangeError) || !/materialization limit/.test(error.message)) {
+              throw error;
+            }
+          }
+          process.stdout.write('ok');
+        `,
+        30_000,
+        ['--max-old-space-size=32'],
+      );
+    }, 30_000);
+
+    test('rejects large short-token arrays before JSON encoding under a small heap', () => {
+      expectBundledScriptToPass(
+        `
+          const tokenizer = () => new Array(800000).fill('a');
+          try {
+            module.exports.n('candidate', 'reference', { tokenizer });
+            throw new Error('Oversized token encoding was accepted');
+          } catch (error) {
+            if (!(error instanceof RangeError) || !/materialization limit/.test(error.message)) {
+              throw error;
+            }
+          }
+          process.stdout.write('ok');
+        `,
+        30_000,
+        ['--max-old-space-size=32'],
+      );
+    }, 30_000);
+
+    test('rejects large empty-token arrays before allocating the encoding map', () => {
+      expectBundledScriptToPass(
+        `
+          const tokenizer = () => new Array(400000).fill('');
+          try {
+            module.exports.n('candidate', 'reference', { tokenizer });
+            throw new Error('Oversized encoding map was accepted');
+          } catch (error) {
+            if (!(error instanceof RangeError) || !/materialization limit/.test(error.message)) {
+              throw error;
+            }
+          }
+          process.stdout.write('ok');
+        `,
+        30_000,
+        ['--max-old-space-size=32'],
+      );
+    }, 30_000);
+
+    test('rejects combined distinct-summary allocations within a constrained heap', () => {
+      expectBundledScriptToPass(
+        `
+          const tokens = Array.from({ length: 120000 }, (_, index) => String.fromCodePoint(0x10000 + index));
+          const tokenizer = () => tokens;
+          try {
+            module.exports.n('candidate', 'reference', { tokenizer });
+            throw new Error('Combined distinct-gram allocations were accepted');
+          } catch (error) {
+            if (!(error instanceof RangeError) || !/materialization limit/.test(error.message)) {
+              throw error;
+            }
+          }
+          process.stdout.write('ok');
+        `,
+        30_000,
+        ['--max-old-space-size=32'],
       );
     }, 30_000);
 

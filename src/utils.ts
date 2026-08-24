@@ -1,6 +1,11 @@
 import { GATE_EXCEPTIONS, GATE_SUBSTITUTIONS, TREEBANK_CONTRACTIONS } from './constants';
 import { lcsIndices } from './lcs';
-import { validateBeta, validateMaxSkip, validateNGramSize } from './validation';
+import {
+  validateBeta,
+  validateMaxSkip,
+  validateNGramMaterialization,
+  validateNGramSize,
+} from './validation';
 
 /**
  * Splits a sentence into an array of word tokens
@@ -590,8 +595,6 @@ export const NGRAM_DEFAULT_OPTS: NGramOptions = {
   val: '<S>',
 };
 
-const MAX_NGRAM_MATERIALIZATION_WORK = 1_000_000;
-
 /**
  * Returns n-grams for an array of word tokens.
  *
@@ -617,18 +620,7 @@ export function nGram(tokens: string[], n = 2, pad: Partial<NGramOptions> = {}):
   }
 
   const gramCount = paddedLength - n + 1;
-  let materializationWork = paddingLength + n * gramCount;
-  for (let i = 0; i < paddedLength && materializationWork <= MAX_NGRAM_MATERIALIZATION_WORK; i++) {
-    const token =
-      i < startPaddingSize || i >= startPaddingSize + tokens.length
-        ? value
-        : tokens[i - startPaddingSize];
-    materializationWork +=
-      Math.max(token.length - 1, 0) * Math.min(i + 1, n, gramCount, paddedLength - i);
-  }
-  if (materializationWork > MAX_NGRAM_MATERIALIZATION_WORK) {
-    throw new RangeError('N-gram generation exceeds the materialization limit');
-  }
+  validateNGramMaterialization(tokens, n, startPaddingSize, endPaddingSize, value);
 
   const startPadding = new Array<string>(startPaddingSize).fill(value);
   const endPadding = new Array<string>(endPaddingSize).fill(value);
