@@ -2184,6 +2184,51 @@ describe('Core Functions', () => {
       expect(l(text, 'cat. cat.', { tokenizer })).toBeCloseTo(expected);
     });
 
+    test('stops built-in LCS evaluation once the candidate token budget is exhausted', () => {
+      const segmenter = (input: string): string[] => input.split('|');
+      const tokenizer = (input: string): string[] => input.split(' ');
+      expect(l('a b', 'a b|a b|a b', { segmenter, tokenizer })).toBe(1 / 2);
+    });
+
+    test('does not suppress custom LCS callbacks after the candidate budget is exhausted', () => {
+      const segmenter = (input: string): string[] => input.split('|');
+      const customLcs = jest.fn(() => ['a']);
+      expect(l('a', 'a|a', { segmenter, lcs: customLcs })).toBeCloseTo(2 / 3);
+      expect(customLcs).toHaveBeenCalledTimes(2);
+    });
+
+    test('still validates custom LCS-index callbacks after the candidate budget is exhausted', () => {
+      const segmenter = (input: string): string[] => input.split('|');
+      let invocation = 0;
+      expect(() =>
+        l('a', 'a|a', {
+          segmenter,
+          lcsIndices: () => (++invocation === 1 ? [0] : [1]),
+        }),
+      ).toThrow(/strictly increasing integer indices within the reference/);
+    });
+
+    test('handles repeated reference sentences without redundant LCS work', () => {
+      expectBundledScriptToPass(
+        `
+          const sentence = Array.from({ length: 120 }, () => 'a').join(' ');
+          const reference = Array.from({ length: 1500 }, () => sentence).join('|');
+          const segmenter = (input) => input.split('|');
+          const tokenizer = (input) => input.split(' ');
+          const score = module.exports.l(sentence, reference, {
+            beta: Number.POSITIVE_INFINITY,
+            segmenter,
+            tokenizer,
+          });
+          if (score !== 1 / 1500) {
+            throw new Error('Clipped ROUGE-L recall changed');
+          }
+          process.stdout.write('ok');
+        `,
+        3000,
+      );
+    }, 10_000);
+
     test.each([true, false])('keeps boundaries with caseSensitive=%s', (caseSensitive) => {
       const tokenizer = (text: string): string[] => text.match(/[A-Za-z]+/g) || [];
       const first = 'Alpha works at Acme Co. Beta sleeps near Luna Inc.';
