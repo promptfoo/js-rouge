@@ -467,7 +467,10 @@ function listQuoteCloser(input: string, index: number): string | undefined {
   if (
     character === "'" &&
     (index === 0 || /^[\s\p{Punctuation}]$/u.test(input[index - 1])) &&
-    !/^\p{Number}$/u.test(characterAt(input, index + 1))
+    !/^\p{Number}$/u.test(characterAt(input, index + 1)) &&
+    !/^(?:t(?:is|was|were|will|would|il|ill)|em|cause|cos|round|bout|neath|fore|tween|gainst|cept|(?:twen|thir|for|fif|six|seven|eigh|nine)ties)\b/i.test(
+      input.slice(index + 1, index + 32),
+    )
   ) {
     return "'";
   }
@@ -591,7 +594,7 @@ function findListCandidate(
 
     const family = listMarkerFamily(marker, caseNeutral);
     const first = firstByFamily.get(family.source);
-    const identity = caseNeutral ? marker.toLowerCase() : marker;
+    const identity = caseNeutral ? marker.toUpperCase().toLowerCase() : marker;
     const distinctMarker = first?.identity !== identity;
     if (first !== undefined && (first.emptyPrefix || distinctMarker)) {
       const candidate: ListCandidate = {

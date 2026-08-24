@@ -612,6 +612,15 @@ describe('Utility Functions', () => {
       expect(rouge.l(input, input.toLowerCase(), { caseSensitive: false })).toBe(1);
     });
 
+    test('compares final-sigma list markers with full Unicode case folding', () => {
+      const input = 'Intro: Σ. Alpha ς. Beta.';
+      const expected = ['Intro: Σ.', 'Alpha ς.', 'Beta.'];
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input.toUpperCase())).toEqual(
+        expected.map((sentence) => sentence.toUpperCase()),
+      );
+    });
+
     test('accepts case-expanded combining marks in alphabetical markers', () => {
       const input = 'Intro: İ. Alpha J. Beta.';
       expect(segmentCaseNeutrally(input)).toEqual(['Intro:', 'İ. Alpha', 'J. Beta.']);
@@ -755,6 +764,15 @@ describe('Utility Functions', () => {
           'b) Beta.',
         ]);
       }
+    });
+
+    test('ignores apostrophe-led contractions while finding embedded lists', () => {
+      expect(ss("'Twas nice. Options: a) Alpha b) Beta.")).toEqual([
+        "'Twas nice.",
+        'Options:',
+        'a) Alpha',
+        'b) Beta.',
+      ]);
     });
 
     test('does not split parenthesized labels inside a quotation', () => {
@@ -2876,6 +2894,13 @@ describe('Core Functions', () => {
 
     test('preserves reordered sentence boundaries across NEL separators', () => {
       expect(l('Alpha.\u0085Beta.', 'Beta.\u0085Alpha.')).toBe(1);
+    });
+
+    test('bounds Cartesian comparisons after expanding large embedded lists', () => {
+      const summary = Array.from({ length: 1001 }, (_, index) =>
+        index % 2 === 0 ? 'a) Alpha' : 'b) Beta',
+      ).join(' ');
+      expect(() => l(summary, summary)).toThrow(/sentence comparison exceeds the work limit/);
     });
 
     test('should preserve word separation after an ellipsis for custom tokenizers', () => {
