@@ -1552,6 +1552,32 @@ describe('Utility Functions', () => {
         expect(ss('Wait...what?')).toEqual(['Wait...what?']);
       });
 
+      test.each([
+        ['Alpha... Beta.', ['Alpha...', 'Beta.']],
+        [
+          'This is e.g. Mr. Smith, who talks slowly... And this is another sentence.',
+          ['This is e.g. Mr. Smith, who talks slowly...', 'And this is another sentence.'],
+        ],
+      ])('recognizes terminal three-dot ellipses in %s', (input, expected) => {
+        expect(ss(input)).toEqual(expected);
+        expect(segmentCaseNeutrally(input)).toEqual(expected);
+        expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+          expected.map((sentence) => sentence.toLowerCase()),
+        );
+      });
+
+      test.each(['Wait... what?', 'Wait... and then continued.'])(
+        'keeps lowercase ellipsis continuations together in %s',
+        (input) => {
+          expect(ss(input)).toEqual([input]);
+          expect(segmentCaseNeutrally(input)).toEqual([input]);
+        },
+      );
+
+      test('scores reference sentences ending in a three-dot ellipsis correctly', () => {
+        expect(rouge.l('Beta Alpha...', 'Alpha... Beta.')).toBeCloseTo(6 / 7);
+      });
+
       test.each(lineBreaks)('joins wrapped ellipses across %j', (lineBreak) => {
         expect(ss(`Wait...${lineBreak}what?`)).toEqual(['Wait... what?']);
         expect(ss(`Wait...${lineBreak}what? Next step`)).toEqual(['Wait... what?', 'Next step']);

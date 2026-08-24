@@ -428,10 +428,14 @@ export function sentenceSegment(
         // Catch mid-sentence ellipses (and their derivatives) and merge them
         const nextChunk = chunks[idx + 1];
         const nextSentence = nextChunk.trim() || chunks[idx + 2] || '';
-        if (
-          /\.{4}$/.test(suffix) &&
-          (caseNeutral ? startsWithCasedCharacter(nextSentence) : strIsTitleCase(nextSentence))
-        ) {
+        const startsSentence = caseNeutral
+          ? startsWithCasedCharacter(nextSentence) &&
+            (/\.{4}$/.test(suffix) ||
+              (!/^(?:what|and\s+then)\b/i.test(nextSentence) &&
+                (!sentenceContinuationReg.test(nextSentence) ||
+                  independentSentenceReg.test(nextSentence))))
+          : strIsTitleCase(nextSentence);
+        if (/\.{3,4}$/.test(suffix) && startsSentence) {
           acc.push(chunk.text());
           continue;
         }
