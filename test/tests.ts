@@ -1495,6 +1495,21 @@ describe('Utility Functions', () => {
         );
       }, 25_000);
 
+      test('bounds unmatched citation quotation state within a constrained heap', () => {
+        expectBundledScriptToPass(
+          `
+            const summary = '‘'.repeat(7000000);
+            const sentences = module.exports.sentenceSegment(summary);
+            if (sentences.length !== 1 || sentences[0] !== summary) {
+              throw new Error('Unmatched quotation content changed');
+            }
+            process.stdout.write('ok');
+          `,
+          20_000,
+          ['--max-old-space-size=64'],
+        );
+      }, 25_000);
+
       test('should segment abbreviation chains within a small heap', () => {
         expectBundledScriptToPass(
           `

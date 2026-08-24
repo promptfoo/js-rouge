@@ -568,11 +568,11 @@ function sentenceChunks(input: string, caseNeutral: boolean): string[] {
 function updateCitationQuotationState(input: string, index: number, closers: string[]): void {
   const character = input[index];
   if (character === '“' || character === '‘') {
-    closers.push(character === '“' ? '”' : '’');
+    pushCitationQuotation(closers, character === '“' ? '”' : '’');
     return;
   }
   if (character === '«') {
-    closers.push('»');
+    pushCitationQuotation(closers, '»');
     return;
   }
   if (character === '”' || character === '’' || character === '»') {
@@ -600,7 +600,13 @@ function updateCitationQuotationState(input: string, index: number, closers: str
       input.slice(index + 1, index + 32),
     )
   ) {
-    closers.push("'");
+    pushCitationQuotation(closers, "'");
+  }
+}
+
+function pushCitationQuotation(closers: string[], closing: string): void {
+  if (closers.length < 64) {
+    closers.push(closing);
   }
 }
 
