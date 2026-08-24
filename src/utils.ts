@@ -207,15 +207,10 @@ class SentenceBuffer {
     const previous = index === 0 ? this.#lastCharacter : text[index - 1];
     const following = text[index + 1] ?? '';
     if (this.#insideSingleQuotes) {
-      const openingQuote = text.lastIndexOf("'", index - 1);
-      const singleQuotedWord = openingQuote >= 0 && !/\s/.test(text.slice(openingQuote + 1, index));
       const possessive =
         previous.toLowerCase() === 's' &&
         /\s/.test(following) &&
-        !singleQuotedWord &&
-        !/^(?:said|asked|replied|wrote|today|yesterday|tomorrow|then|and|but|or|in|on|at|for|with|to|from)\b/i.test(
-          text.slice(index + 1).trimStart(),
-        );
+        /^(?:\p{Lu}|\p{Ll}+\s+\p{Lu})/u.test(text.slice(index + 1).trimStart());
       this.#insideSingleQuotes =
         possessive || (following.length > 0 && !/[\s.,!?;:)\]}]/.test(following));
       return;

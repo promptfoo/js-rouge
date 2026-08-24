@@ -574,6 +574,15 @@ describe('Utility Functions', () => {
       ]);
     });
 
+    test('closes single-quoted spans after their opening fragment', () => {
+      expect(
+        ss("We invested in 'Acme Co.\nInternational Holdings' before we use etc.\nNext sentence."),
+      ).toEqual([
+        "We invested in 'Acme Co. International Holdings' before we use etc.",
+        'Next sentence.',
+      ]);
+    });
+
     test('does not treat comparison operators as opening delimiters', () => {
       expect(ss('The result was x < 5 and we use etc.\nNext sentence.')).toEqual([
         'The result was x < 5 and we use etc.',
