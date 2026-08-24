@@ -3,6 +3,7 @@ import * as utils from './utils';
 import {
   validateBeta,
   validateMaxSkip,
+  validateNGramMaterialization,
   validateNGramScoringMaterialization,
   validateNGramSize,
 } from './validation';
@@ -248,11 +249,13 @@ export function n(cand: string, ref: string, opts?: RougeNOptions): number {
   let candGrams: string[];
   let refGrams: string[];
   if (nGram === utils.nGram) {
+    const candidateWork =
+      candTokens.length < size ? 0 : validateNGramMaterialization(candTokens, size, 0, 0, '', true);
     const refTokens = tokenizeSummary(ref, caseSensitive, tokenizer);
     if (candTokens.length < size || refTokens.length < size) {
       return 0;
     }
-    validateNGramScoringMaterialization(candTokens, refTokens, size);
+    validateNGramScoringMaterialization(candidateWork, refTokens, size);
     candGrams = nGram(encodeTokens(candTokens), size);
     refGrams = nGram(encodeTokens(refTokens), size);
   } else {

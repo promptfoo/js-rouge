@@ -1753,6 +1753,27 @@ describe('Core Functions', () => {
       }
     });
 
+    test('rejects an oversized candidate before tokenizing the reference', () => {
+      const tokenizer = jest.fn((input: string): string[] => {
+        if (input === 'candidate') {
+          return new Array<string>(400_000).fill('');
+        }
+        throw new Error('The reference tokenizer should not run');
+      });
+      expect(() => n('candidate', 'reference', { tokenizer })).toThrow(/materialization limit/);
+      expect(tokenizer).toHaveBeenCalledTimes(1);
+    });
+
+    test('snapshots reusable tokenizer buffers before tokenizing the reference', () => {
+      const buffer: string[] = [];
+      const tokenizer = (input: string): string[] => {
+        buffer.length = 0;
+        buffer.push(input);
+        return buffer;
+      };
+      expect(n('candidate', 'reference', { tokenizer })).toBe(0);
+    });
+
     test('should reject oversized token encoding within a small heap', () => {
       expectBundledScriptToPass(
         `

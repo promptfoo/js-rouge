@@ -68,11 +68,10 @@ export function validateNGramMaterialization(
 }
 
 export function validateNGramScoringMaterialization(
-  candidate: string[],
+  candidateWork: number,
   reference: string[],
   n: number,
 ): void {
-  const candidateWork = validateNGramMaterialization(candidate, n, 0, 0, '', true);
   const referenceWork = validateNGramMaterialization(reference, n, 0, 0, '', true);
   const referenceGrams = reference.length - n + 1;
   if (candidateWork + referenceWork + referenceGrams > MAX_NGRAM_MATERIALIZATION_WORK) {
