@@ -517,10 +517,12 @@ function sentenceChunks(input: string, caseNeutral: boolean): string[] {
   let start = -1;
   let insideQuotes = false;
   const brackets = { depth: 0, standalone: false };
+  const citationQuotationClosers: string[] = [];
 
   for (let index = 0; index < input.length; index++) {
     const char = input[index];
     insideQuotes = quotationState(input, index, insideQuotes);
+    updateCitationQuotationState(input, index, citationQuotationClosers);
     if (openingBracketReg.test(char)) {
       if (brackets.depth === 0) {
         brackets.standalone = start === -1;
@@ -547,7 +549,7 @@ function sentenceChunks(input: string, caseNeutral: boolean): string[] {
       char === '!'
     ) {
       const end =
-        citationEnd(input, index, caseNeutral, insideQuotes, brackets.depth) ??
+        citationEnd(input, index, caseNeutral, insideQuotes, brackets, citationQuotationClosers) ??
         sentenceEnd(input, index, insideQuotes, brackets, caseNeutral);
       if (end === -1) {
         continue;
@@ -561,6 +563,41 @@ function sentenceChunks(input: string, caseNeutral: boolean): string[] {
 
   chunks.push(input.slice(lastEnd));
   return chunks;
+}
+
+function updateCitationQuotationState(input: string, index: number, closers: string[]): void {
+  const character = input[index];
+  if (character === '“' || character === '‘') {
+    closers.push(character === '“' ? '”' : '’');
+    return;
+  }
+  if (character === '”' || character === '’') {
+    if (closers.at(-1) === character) {
+      closers.pop();
+    }
+    return;
+  }
+  if (character !== "'") {
+    return;
+  }
+
+  const previous = input[index - 1] ?? '';
+  const following = input[index + 1] ?? '';
+  if (closers.at(-1) === "'") {
+    if (following.length === 0 || /[\s.,!?;:)\]}\p{Pd}]/u.test(following)) {
+      closers.pop();
+    }
+    return;
+  }
+  if (
+    (previous.length === 0 || /^[\s\p{Punctuation}]$/u.test(previous)) &&
+    /\S/.test(following) &&
+    !/^(?:\d{2}s|t(?:is|was|were|will|would|il|ill)|em|cause|cos|round|bout|neath|fore|tween|gainst|cept|(?:twen|thir|for|fif|six|seven|eigh|nine)ties)\b/i.test(
+      input.slice(index + 1, index + 32),
+    )
+  ) {
+    closers.push("'");
+  }
 }
 
 interface SpacedEllipsisRange {
@@ -707,32 +744,42 @@ function citationEnd(
   index: number,
   caseNeutral: boolean,
   insideQuotes: boolean,
-  bracketDepth: number,
+  brackets: { depth: number; standalone: boolean },
+  quotationClosers: readonly string[],
 ): number | undefined {
-  const delimiterEnd = closingDelimiterEnd(input, index, insideQuotes);
+  const nextCharacter = characterAt(input, index + 1);
+  if (nextCharacter !== '[' && !/^[\p{Number}\])}>"'”’]$/u.test(nextCharacter)) {
+    return undefined;
+  }
+  if (/^["'“‘]$/.test(nextCharacter) && !insideQuotes && quotationClosers.length === 0) {
+    return undefined;
+  }
+
+  const delimiterEnd = citationDelimiterEnd(input, index, insideQuotes);
   const closedBrackets = countClosingBrackets(input, index + 1, delimiterEnd);
   const following = characterAt(input, delimiterEnd);
-  if (!isCitationContext(input, index, following, Math.max(0, bracketDepth - closedBrackets))) {
+  if (
+    (closedBrackets > 0 && brackets.depth > 0 && !brackets.standalone) ||
+    !isCitationContext(input, index, following, Math.max(0, brackets.depth - closedBrackets))
+  ) {
     return undefined;
   }
 
   const citation = input
     .slice(delimiterEnd)
     .match(
-      /^(?:(?:\[\p{Number}+(?:\s*[,;\p{Pd}]\s*\p{Number}+)*\])+|\p{Number}+(?:[^\S\r\n]+\p{Number}+)?)/u,
+      /^(?:(?:\[\p{Number}+(?:\s*[,;\p{Pd}]\s*\p{Number}+)*\])+|\p{Number}+(?:[^\S\r\n]+\p{Number}+)*)/u,
     );
   if (citation === null) {
     return undefined;
   }
 
   const contentEnd = delimiterEnd + citation[0].length;
-  const closedQuote = insideQuotes && input.slice(index + 1, delimiterEnd).includes('"');
-  const closingQuote = closedQuote ? undefined : citationClosingQuote(input, index, insideQuotes);
-  let end = closingDelimiterEnd(input, contentEnd - 1, insideQuotes && !closedQuote);
-  if (closingQuote !== undefined && input[end] === closingQuote) {
-    end = closingDelimiterEnd(input, end, false);
-  }
-  if (closingQuote !== undefined && !input.slice(contentEnd, end).includes(closingQuote)) {
+  const leadingClosers = input.slice(index + 1, delimiterEnd);
+  const closedQuote = insideQuotes && leadingClosers.includes('"');
+  const end = citationDelimiterEnd(input, contentEnd - 1, insideQuotes && !closedQuote);
+  const closing = leadingClosers + input.slice(contentEnd, end);
+  if (!closesCitationQuotations(closing, insideQuotes, quotationClosers)) {
     return undefined;
   }
   if (!/\s/.test(input[end] ?? '')) {
@@ -740,7 +787,7 @@ function citationEnd(
   }
 
   let next = end;
-  while (next < input.length && /[\s"'([{<]/.test(input[next])) {
+  while (next < input.length && /[\s"'“‘([{<]/.test(input[next])) {
     next++;
   }
   const suffix = input.slice(Math.max(0, index + 1 - sentenceSuffixLength), index + 1);
@@ -754,42 +801,38 @@ function citationEnd(
     return undefined;
   }
 
-  const nextCharacter = characterAt(input, next);
+  const sentenceStart = characterAt(input, next);
   const startsWithLetter = caseNeutral
     ? isNeutralSentenceStart(input, end, next)
-    : nextCharacter.length > 0 && charIsUpperCase(nextCharacter);
+    : sentenceStart.length > 0 && charIsUpperCase(sentenceStart);
   const startsWithNumber =
-    /^\p{Number}$/u.test(nextCharacter) && !numericSentenceContinuationReg.test(continuation);
+    /^\p{Number}$/u.test(sentenceStart) && !numericSentenceContinuationReg.test(continuation);
   return startsWithLetter || startsWithNumber ? end : undefined;
 }
 
-function citationClosingQuote(
-  input: string,
-  index: number,
-  insideQuotes: boolean,
-): string | undefined {
-  if (insideQuotes) {
-    return '"';
+function citationDelimiterEnd(input: string, index: number, insideQuotes: boolean): number {
+  let end = closingDelimiterEnd(input, index, insideQuotes);
+  while (end < input.length && /[”’]/.test(input[end])) {
+    end = closingDelimiterEnd(input, end, false);
   }
-  for (const [opening, closing] of [
-    ['‘', '’'],
-    ['“', '”'],
-  ]) {
-    if (input.lastIndexOf(opening, index) > input.lastIndexOf(closing, index)) {
-      return closing;
+  return end;
+}
+
+function closesCitationQuotations(
+  closing: string,
+  insideQuotes: boolean,
+  quotationClosers: readonly string[],
+): boolean {
+  if (insideQuotes && !closing.includes('"')) {
+    return false;
+  }
+  let remaining = quotationClosers.length;
+  for (const character of closing) {
+    if (remaining > 0 && character === quotationClosers[remaining - 1]) {
+      remaining--;
     }
   }
-
-  const opening = input.lastIndexOf("'", index);
-  const preceding = input[opening - 1] ?? '';
-  if (
-    opening >= 0 &&
-    (opening === 0 || /^[\s\p{Punctuation}]$/u.test(preceding)) &&
-    input.indexOf("'", index + 1) !== -1
-  ) {
-    return "'";
-  }
-  return undefined;
+  return remaining === 0;
 }
 
 function isCitationContext(
