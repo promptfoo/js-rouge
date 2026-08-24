@@ -500,6 +500,13 @@ describe('Utility Functions', () => {
       ]);
     });
 
+    test('keeps name initials inside numbered list items', () => {
+      expect(ss('1. J. Smith will attend 2. A. Brown will attend')).toEqual([
+        '1. J. Smith will attend',
+        '2. A. Brown will attend',
+      ]);
+    });
+
     test('recognizes list markers without depending on item capitalization', () => {
       const input = '1. The first item 2. The second item';
       const expected = ['1. The first item', '2. The second item'];
@@ -548,8 +555,26 @@ describe('Utility Functions', () => {
     test.each([
       ['The build failed.App restarted.', ['The build failed.', 'App restarted.']],
       ['The service stopped.Dev investigated.', ['The service stopped.', 'Dev investigated.']],
+      [
+        'Visit https://example.com. Then it failed.App restarted.',
+        ['Visit https://example.com.', 'Then it failed.', 'App restarted.'],
+      ],
     ])('does not mistake an unspaced sentence for a hostname: %s', (input, expected) => {
       expect(ss(input)).toEqual(expected);
+    });
+
+    test.each(['He earned a Ph.D in physics.', 'Open README.MD before continuing.'])(
+      'keeps dotted identifiers inside a sentence: %s',
+      (input) => {
+        expect(ss(input)).toEqual([input]);
+      },
+    );
+
+    test('keeps bracketed references inside their sentence', () => {
+      expect(ss('He wrote (see Fig.[2] for details). Next.')).toEqual([
+        'He wrote (see Fig.[2] for details).',
+        'Next.',
+      ]);
     });
 
     test.each([

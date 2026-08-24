@@ -341,14 +341,19 @@ export function sentenceSegment(
   return acc.length === 0 ? [input] : acc;
 }
 
-function nextListMarker(input: string, expression: RegExp): RegExpExecArray | null {
+function nextListMarker(
+  input: string,
+  expression: RegExp,
+  numbered?: boolean,
+): RegExpExecArray | null {
   let marker = expression.exec(input);
   while (marker !== null) {
     if (
-      marker.index === 0 ||
-      !/\b(?:section|chapter|page|figure|table|paragraph|article|clause)$/i.test(
-        input.slice(Math.max(0, marker.index - 24), marker.index).trimEnd(),
-      )
+      (numbered === undefined || /\d/.test(marker[0]) === numbered) &&
+      (marker.index === 0 ||
+        !/\b(?:section|chapter|page|figure|table|paragraph|article|clause)$/i.test(
+          input.slice(Math.max(0, marker.index - 24), marker.index).trimEnd(),
+        ))
     ) {
       return marker;
     }
@@ -363,7 +368,8 @@ function segmentList(input: string, caseNeutral: boolean): string[] | undefined 
   if (current === null || input.slice(0, current.index).trim().length > 0) {
     return undefined;
   }
-  let next = nextListMarker(input, expression);
+  const numbered = /\d/.test(current[0]);
+  let next = nextListMarker(input, expression, numbered);
   if (next === null) {
     return undefined;
   }
@@ -372,9 +378,12 @@ function segmentList(input: string, caseNeutral: boolean): string[] | undefined 
   do {
     const body = input.slice(current.index + current[0].length, next?.index ?? input.length).trim();
     const sentences = /[.!?\r\n]/.test(body) ? sentenceSegment(body, { caseNeutral }) : [body];
+    if (sentences.length > 1 && /^\p{Cased}\.$/u.test(sentences[0])) {
+      sentences.splice(0, 2, `${sentences[0]} ${sentences[1]}`);
+    }
     segments.push(`${current[0].trim()} ${sentences[0]}`, ...sentences.slice(1));
     current = next;
-    next = nextListMarker(input, expression);
+    next = nextListMarker(input, expression, numbered);
   } while (current !== null);
   return segments;
 }
@@ -526,7 +535,11 @@ function sentenceEnd(
   brackets: { depth: number; standalone: boolean },
   caseNeutral: boolean,
 ): number {
-  if (!insideQuotes && isUnspacedDelimitedSentenceStart(input, index, caseNeutral)) {
+  if (
+    !insideQuotes &&
+    brackets.depth === 0 &&
+    isUnspacedDelimitedSentenceStart(input, index, caseNeutral)
+  ) {
     return index + 1;
   }
   const end = closingDelimiterEnd(input, index, insideQuotes);
@@ -593,6 +606,9 @@ function isUnspacedDelimitedSentenceStart(
   if (!/["([{<]/.test(input[next] ?? '')) {
     return false;
   }
+  if (/^\[\p{Number}+\]/u.test(input.slice(next))) {
+    return false;
+  }
   while (next < input.length && /["'([{<]/.test(input[next])) {
     next++;
   }
@@ -620,17 +636,19 @@ function isUnspacedSentenceBoundary(
 
   const suffix = input.slice(Math.max(0, index + 1 - sentenceSuffixLength), index + 1);
   const following = input.slice(next);
-  const preceding = input.slice(Math.max(0, index - 320), next);
-  const previousAt = preceding.lastIndexOf('@');
-  const insideAddress = previousAt !== -1 && !/\s/.test(preceding.slice(previousAt));
+  const precedingToken = input.slice(Math.max(0, index - 320), next).match(/\S+$/)?.[0] ?? '';
+  const insideAddress = precedingToken.includes('@');
   const hostnameLabel = following.match(
     /^(com|org|net|edu|gov|mil|io|dev|app|co|uk|us|ca|ai|info|biz|me|tv)(?=[/.\s]|$)/i,
   )?.[0];
   const insideHostname =
-    /https?:\/\/|www\./i.test(preceding) ||
+    /https?:\/\/|www\./i.test(precedingToken) ||
     (hostnameLabel !== undefined &&
       (hostnameLabel === hostnameLabel.toLowerCase() ||
         hostnameLabel === hostnameLabel.toUpperCase()));
+  const dottedIdentifier =
+    /\b\p{Lu}[\p{Letter}\p{Number}_-]*\.$/u.test(suffix) &&
+    /^[\p{Lu}\p{Number}_-]+(?=\s|[/.]|$)/u.test(following);
   const initial = caseNeutral ? /^\p{Cased}\./u : /^\p{Lu}\./u;
   const trailingInitial = caseNeutral ? /\b\p{Cased}\.$/u : /\b\p{Lu}\.$/u;
   const nextInitial = caseNeutral ? /^\p{Cased}(?=\s|$)/u : /^\p{Lu}(?=\s|$)/u;
@@ -645,7 +663,8 @@ function isUnspacedSentenceBoundary(
     (trailingInitial.test(suffix) && nextInitial.test(following)) ||
     /^[^\s]*@/.test(following) ||
     insideAddress ||
-    insideHostname
+    insideHostname ||
+    dottedIdentifier
   );
 }
 
