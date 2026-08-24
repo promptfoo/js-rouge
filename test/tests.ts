@@ -657,11 +657,14 @@ describe('Utility Functions', () => {
     test.each([
       ['Alpha.[1] Beta.', ['Alpha.[1]', 'Beta.']],
       ['Alpha.[7][8] Beta.', ['Alpha.[7][8]', 'Beta.']],
+      ['Alpha.[1,2] Beta.', ['Alpha.[1,2]', 'Beta.']],
+      ['Alpha.[1–3] Beta.', ['Alpha.[1–3]', 'Beta.']],
       ['Alpha.[12] Beta.[34] Gamma.', ['Alpha.[12]', 'Beta.[34]', 'Gamma.']],
       ['A conclusion.11 12 The next sentence.', ['A conclusion.11 12', 'The next sentence.']],
       ['A conclusion (1987).1 The next sentence.', ['A conclusion (1987).1', 'The next sentence.']],
       ['Text𐐀.1 Next.', ['Text𐐀.1', 'Next.']],
       ['He said "Alpha.[1]" Beta.', ['He said "Alpha.[1]"', 'Beta.']],
+      ['“Alpha.[1]” Beta.', ['“Alpha.[1]”', 'Beta.']],
       ['Alpha.[1] 2 people remained.', ['Alpha.[1]', '2 people remained.']],
       ['Really?[1] Next sentence.', ['Really?[1]', 'Next sentence.']],
       ['Really?1 Next sentence.', ['Really?1', 'Next sentence.']],
@@ -690,6 +693,9 @@ describe('Utility Functions', () => {
 
     test.each([
       'She said "Alpha.[1] Beta." aloud.',
+      "She said 'Alpha.[1] Beta.' aloud.",
+      'She said ‘Alpha.[1] Beta.’ aloud.',
+      'She said “Alpha.[1] Beta.” aloud.',
       'He noted (Alpha.[1] Beta.) today.',
       'See [Alpha.[1] Beta.] today.',
     ])('does not split citations inside surrounding delimiters: %s', (input) => {

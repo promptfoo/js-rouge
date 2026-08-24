@@ -716,14 +716,20 @@ function citationEnd(
 
   const citation = input
     .slice(index + 1)
-    .match(/^(?:(?:\[\p{Number}+\])+|\p{Number}+(?:[^\S\r\n]+\p{Number}+)?)/u);
+    .match(
+      /^(?:(?:\[\p{Number}+(?:\s*[,;\p{Pd}]\s*\p{Number}+)*\])+|\p{Number}+(?:[^\S\r\n]+\p{Number}+)?)/u,
+    );
   if (citation === null) {
     return undefined;
   }
 
   const contentEnd = index + 1 + citation[0].length;
-  const end = closingDelimiterEnd(input, contentEnd - 1, insideQuotes);
-  if (insideQuotes && !/["']/.test(input.slice(contentEnd, end))) {
+  const closingQuote = citationClosingQuote(input, index, insideQuotes);
+  let end = closingDelimiterEnd(input, contentEnd - 1, insideQuotes);
+  if (closingQuote !== undefined && input[end] === closingQuote) {
+    end = closingDelimiterEnd(input, end, false);
+  }
+  if (closingQuote !== undefined && !input.slice(contentEnd, end).includes(closingQuote)) {
     return undefined;
   }
   if (!/\s/.test(input[end] ?? '')) {
@@ -752,6 +758,35 @@ function citationEnd(
   const startsWithNumber =
     /^\p{Number}$/u.test(nextCharacter) && !numericSentenceContinuationReg.test(continuation);
   return startsWithLetter || startsWithNumber ? end : undefined;
+}
+
+function citationClosingQuote(
+  input: string,
+  index: number,
+  insideQuotes: boolean,
+): string | undefined {
+  if (insideQuotes) {
+    return '"';
+  }
+  for (const [opening, closing] of [
+    ['‘', '’'],
+    ['“', '”'],
+  ]) {
+    if (input.lastIndexOf(opening, index) > input.lastIndexOf(closing, index)) {
+      return closing;
+    }
+  }
+
+  const opening = input.lastIndexOf("'", index);
+  const preceding = input[opening - 1] ?? '';
+  if (
+    opening >= 0 &&
+    (opening === 0 || /^[\s\p{Punctuation}]$/u.test(preceding)) &&
+    input.indexOf("'", index + 1) !== -1
+  ) {
+    return "'";
+  }
+  return undefined;
 }
 
 function isCitationContext(
