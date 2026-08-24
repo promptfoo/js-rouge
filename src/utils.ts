@@ -620,6 +620,7 @@ function sentenceChunks(input: string, caseNeutral: boolean): string[] {
         insideQuotes || insideCurlyQuotes || insideSingleQuotes,
         brackets,
         caseNeutral,
+        curlyClosingQuote,
       );
       if (
         end === -1 ||
@@ -695,12 +696,20 @@ function isProtectedEllipsisPeriod(
 }
 
 /** Scan closing delimiters, including whitespace before a pending closing quote. */
-function closingDelimiterEnd(input: string, index: number, insideQuotes: boolean): number {
+function closingDelimiterEnd(
+  input: string,
+  index: number,
+  insideQuotes: boolean,
+  curlyClosingQuote: string | undefined,
+): number {
   let end = index + 1;
   let quotePending = insideQuotes;
   while (end < input.length) {
-    if (closingDelimiterReg.test(input[end]) || (quotePending && input[end] === '“')) {
-      quotePending &&= !/["'”“]/.test(input[end]);
+    if (
+      closingDelimiterReg.test(input[end]) ||
+      (quotePending && input[end] === curlyClosingQuote)
+    ) {
+      quotePending &&= !/["'”]/.test(input[end]) && input[end] !== curlyClosingQuote;
       end++;
       continue;
     }
@@ -713,7 +722,8 @@ function closingDelimiterEnd(input: string, index: number, insideQuotes: boolean
     if (
       next > end &&
       next < input.length &&
-      (closingBracketReg.test(input[next]) || (quotePending && /["'”“]/.test(input[next])))
+      (closingBracketReg.test(input[next]) ||
+        (quotePending && (/["'”]/.test(input[next]) || input[next] === curlyClosingQuote)))
     ) {
       end = next;
       continue;
@@ -730,6 +740,7 @@ function sentenceEnd(
   insideQuotes: boolean,
   brackets: { depth: number; standalone: boolean },
   caseNeutral: boolean,
+  curlyClosingQuote: string | undefined,
 ): number {
   if (
     !insideQuotes &&
@@ -738,7 +749,7 @@ function sentenceEnd(
   ) {
     return index + 1;
   }
-  const end = closingDelimiterEnd(input, index, insideQuotes);
+  const end = closingDelimiterEnd(input, index, insideQuotes, curlyClosingQuote);
   if (end < input.length && !/\s/.test(input[end])) {
     return isUnspacedSentenceBoundary(input, index, end, caseNeutral) ? end : -1;
   }
@@ -747,7 +758,8 @@ function sentenceEnd(
   }
 
   const closedBrackets = countClosingBrackets(input, index + 1, end);
-  const closesQuotation = insideQuotes && /["'”“]/.test(input[end - 1]);
+  const closesQuotation =
+    insideQuotes && (/["'”]/.test(input[end - 1]) || input[end - 1] === curlyClosingQuote);
   if (
     closedBrackets > 0 &&
     (closedBrackets < brackets.depth || !(brackets.standalone || closesQuotation))

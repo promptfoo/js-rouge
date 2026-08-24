@@ -1205,6 +1205,7 @@ describe('Utility Functions', () => {
         "She said 'She answered “No.” Then left.' Next.",
         ["She said 'She answered “No.” Then left.'", 'Next.'],
       ],
+      ['He said "First. “Second.” Then." Next.', ['He said "First. “Second.” Then."', 'Next.']],
     ])('retains outer quotations around nested curly quotations: %s', (input, expected) => {
       expect(ss(input)).toEqual(expected);
       expect(segmentCaseNeutrally(input)).toEqual(expected);
