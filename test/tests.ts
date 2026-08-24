@@ -1029,6 +1029,8 @@ describe('Utility Functions', () => {
       'cannot\u200cfoo',
       'cannot\u200dfoo',
       'foo‿cannot',
+      'cannot·foo',
+      'cannot・foo',
     ])('does not split contractions inside Unicode words: %s', (word) => {
       expect(tbt(word)).toEqual([word]);
     });

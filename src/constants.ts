@@ -1,5 +1,4 @@
-const unicodeWordCharacter =
-  '[\\p{Letter}\\p{Mark}\\p{Number}\\p{Connector_Punctuation}\\u200c\\u200d]';
+const unicodeWordCharacter = '[\\p{ID_Continue}\\u200c\\u200d]';
 
 function contraction(pattern: string): RegExp {
   return new RegExp(`(?<!${unicodeWordCharacter})${pattern}(?!${unicodeWordCharacter})`, 'giu');
