@@ -604,11 +604,16 @@ export function nGram(tokens: string[], n = 2, pad: Partial<NGramOptions> = {}):
   }
 
   const gramCount = paddedLength - n + 1;
-  const materializationWork = paddingLength + n * gramCount;
-  if (
-    !Number.isSafeInteger(materializationWork) ||
-    materializationWork > MAX_NGRAM_MATERIALIZATION_WORK
-  ) {
+  let materializationWork = paddingLength + n * gramCount;
+  for (let i = 0; i < paddedLength && materializationWork <= MAX_NGRAM_MATERIALIZATION_WORK; i++) {
+    const token =
+      i < startPaddingSize || i >= startPaddingSize + tokens.length
+        ? value
+        : tokens[i - startPaddingSize];
+    materializationWork +=
+      Math.max(token.length - 1, 0) * Math.min(i + 1, n, gramCount, paddedLength - i);
+  }
+  if (materializationWork > MAX_NGRAM_MATERIALIZATION_WORK) {
     throw new RangeError('N-gram generation exceeds the materialization limit');
   }
 

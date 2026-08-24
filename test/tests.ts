@@ -1598,9 +1598,9 @@ describe('Core Functions', () => {
     test('should reject excessive built-in n-grams within a small heap', () => {
       expectBundledScriptToPass(
         `
-          const summary = Array.from({ length: 6000 }, () => 'a').join(' ');
+          const summary = Array(600).fill('x'.repeat(1024)).join(' ');
           try {
-            module.exports.n(summary, summary, { n: 3000 });
+            module.exports.n(summary, summary, { n: 300 });
             throw new Error('excessive n-grams were accepted');
           } catch (error) {
             if (!(error instanceof RangeError) || !/materialization limit/.test(error.message)) {
