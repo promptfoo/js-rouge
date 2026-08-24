@@ -97,7 +97,8 @@ const sentenceSuffixLength = Math.max(10, ...GATE_SUBSTITUTIONS.map((word) => wo
 const closingDelimiterReg = /[\])}>"']/;
 const openingBracketReg = /[([{<]/;
 const closingBracketReg = /[\])}>]/;
-const listMarkerReg = /(?:^|\s)(?:(?:[•⁃]\s*)?\d+(?:\.\)|[.)])|\p{Cased}\.)(?=\s+\p{Cased})/gu;
+const listMarkerReg =
+  /(?:^|\s)(?:(?:[•⁃]\s*)?\d+(?:\.\)|[.)])|\p{Cased}\.)(?=\s+["'([{<]*\p{Cased})/gu;
 const geographicAcronymReg = /\bU\.S(?:\.A)?\.$/i;
 const geographicContinuationReg = /^(?:government|army|navy|military|congress)\b/i;
 
@@ -628,7 +629,10 @@ function isUnspacedSentenceBoundary(
   caseNeutral: boolean,
 ): boolean {
   const nextCharacter = characterAt(input, next);
-  if (!(caseNeutral ? isCasedCharacter(nextCharacter) : charIsUpperCase(nextCharacter))) {
+  const startsWithLetter = caseNeutral
+    ? isCasedCharacter(nextCharacter)
+    : charIsUpperCase(nextCharacter);
+  if (!(startsWithLetter || (input[index] !== '.' && /^\p{Number}$/u.test(nextCharacter)))) {
     return false;
   }
   const precedingToken = input.slice(Math.max(0, index - 320), next).match(/\S+$/)?.[0] ?? '';
@@ -639,7 +643,8 @@ function isUnspacedSentenceBoundary(
 
   const suffix = input.slice(Math.max(0, index + 1 - sentenceSuffixLength), index + 1);
   const following = input.slice(next);
-  const insideAddress = precedingToken.includes('@');
+  const insideAddress =
+    precedingToken.includes('@') && !/@[^\s.]+(?:\.[^\s.]+)+\.$/u.test(precedingToken);
   const hostnameLabel = following.match(
     /^(com|org|net|edu|gov|mil|io|dev|app|co|uk|us|ca|ai|info|biz|me|tv)(?=[/.\s]|$)/i,
   )?.[0];

@@ -514,6 +514,17 @@ describe('Utility Functions', () => {
       ]);
     });
 
+    test('recognizes quoted and bracketed list-item starts', () => {
+      expect(ss('1. "First item" 2. "Second item"')).toEqual([
+        '1. "First item"',
+        '2. "Second item"',
+      ]);
+      expect(ss('1. (First item) 2. (Second item)')).toEqual([
+        '1. (First item)',
+        '2. (Second item)',
+      ]);
+    });
+
     test('recognizes list markers without depending on item capitalization', () => {
       const input = '1. The first item 2. The second item';
       const expected = ['1. The first item', '2. The second item'];
@@ -549,6 +560,13 @@ describe('Utility Functions', () => {
     test('keeps uppercase email domain labels inside their address', () => {
       expect(ss('Mail Jane.Doe@example.COM for help.')).toEqual([
         'Mail Jane.Doe@example.COM for help.',
+      ]);
+    });
+
+    test('splits adjacent sentences after email addresses', () => {
+      expect(ss('Contact me@example.com.Next sentence.')).toEqual([
+        'Contact me@example.com.',
+        'Next sentence.',
       ]);
     });
 
@@ -624,7 +642,9 @@ describe('Utility Functions', () => {
       ['Use etc.Today is Tuesday.', ['Use etc.', 'Today is Tuesday.']],
       ['He moved to the U.S.Today is Tuesday.', ['He moved to the U.S.', 'Today is Tuesday.']],
       ['Are you ready?Yes, I am.', ['Are you ready?', 'Yes, I am.']],
+      ['Are any left?2 remain.', ['Are any left?', '2 remain.']],
       ['Stop!Run now.', ['Stop!', 'Run now.']],
+      ['Stop!2 people stayed.', ['Stop!', '2 people stayed.']],
     ])('recognizes adjacent terminal boundaries in %s', (input, expected) => {
       expect(ss(input)).toEqual(expected);
     });
