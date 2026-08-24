@@ -121,7 +121,7 @@ const closingDelimiterReg = /[\])}>"']/;
 const openingBracketReg = /[([{<]/;
 const closingBracketReg = /[\])}>]/;
 const listMarkerReg =
-  /(?:^|\s)(?:(?:[•⁃]\s*)?\d+(?:\.\)|[.)])|\p{Cased}\.)(?=\s+["'([{<]*\p{Cased})/gu;
+  /(?:^|\s)(?:(?:[•⁃]\s*)?\d+|\p{Cased})(?:\.\)|[.)])(?=\s+["'([{<]*\p{Cased})/gu;
 const geographicAcronymReg = /\bU\.S(?:\.A)?\.$/i;
 const geographicContinuationReg = /^(?:government|army|navy|military|congress)\b/i;
 const sentenceContinuationReg =
@@ -476,7 +476,7 @@ function nextListMarker(
 function segmentList(input: string, caseNeutral: boolean): string[] | undefined {
   const expression = new RegExp(listMarkerReg);
   let current = nextListMarker(input, expression);
-  if (current === null || input.slice(0, current.index).trim().length > 0) {
+  if (current === null) {
     return undefined;
   }
   const firstMarker = current[0];
@@ -486,7 +486,11 @@ function segmentList(input: string, caseNeutral: boolean): string[] | undefined 
     return undefined;
   }
 
-  const segments: string[] = [];
+  const prefix = input.slice(0, current.index).trim();
+  if (prefix.length > 0 && firstMarker.trim() === next[0].trim()) {
+    return undefined;
+  }
+  const segments = prefix.length === 0 ? [] : sentenceSegment(prefix, { caseNeutral });
   do {
     const body = input.slice(current.index + current[0].length, next?.index ?? input.length).trim();
     const sentences = /[.!?\r\n]/.test(body) ? sentenceSegment(body, { caseNeutral }) : [body];

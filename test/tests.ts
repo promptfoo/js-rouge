@@ -580,6 +580,28 @@ describe('Utility Functions', () => {
       ]);
     });
 
+    test('segments numbered lists after introductory prose', () => {
+      const input = 'Intro. 1. Alpha 2. Beta.';
+      expect(ss(input)).toEqual(['Intro.', '1. Alpha', '2. Beta.']);
+      expect(segmentCaseNeutrally(input)).toEqual(['Intro.', '1. Alpha', '2. Beta.']);
+      expect(rouge.n(input, '1. Alpha 2. Beta. Intro.')).toBe(1);
+      expect(rouge.l(input, '1. Alpha 2. Beta. Intro.')).toBe(1);
+    });
+
+    test.each([
+      ['a) Alpha b) Beta', ['a) Alpha', 'b) Beta']],
+      ['a.) Alpha b.) Beta', ['a.) Alpha', 'b.) Beta']],
+      ['A) Alpha B) Beta', ['A) Alpha', 'B) Beta']],
+      ['Intro. a) Alpha b) Beta', ['Intro.', 'a) Alpha', 'b) Beta']],
+    ])('recognizes parenthesized alphabetical list markers in %s', (input, expected) => {
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
+    test('scores reordered parenthesized alphabetical lists correctly', () => {
+      expect(rouge.l('a) Alpha b) Beta', 'b) Beta a) Alpha')).toBe(1);
+    });
+
     test('keeps four-dot boundaries invariant under case folding', () => {
       expect(segmentCaseNeutrally('First.... Second.')).toEqual(['First....', 'Second.']);
       expect(segmentCaseNeutrally('first.... second.')).toEqual(['first....', 'second.']);
