@@ -442,8 +442,8 @@ describe('Utility Functions', () => {
       const mixedCase = 'Da\u212a.\nNext.';
       const lowerCase = mixedCase.toLowerCase();
       expect(ss(mixedCase)).toEqual(['Da\u212a.', 'Next.']);
-      expect(segmentCaseNeutrally(mixedCase)).toEqual(['Da\u212a. Next.']);
-      expect(segmentCaseNeutrally(lowerCase)).toEqual(['dak. next.']);
+      expect(segmentCaseNeutrally(mixedCase)).toEqual(['Da\u212a.', 'Next.']);
+      expect(segmentCaseNeutrally(lowerCase)).toEqual(['dak.', 'next.']);
     });
 
     test('should preserve gate exceptions in case-neutral quoted continuations', () => {
@@ -594,8 +594,12 @@ describe('Utility Functions', () => {
 
     test('keeps wrapped place abbreviations invariant under case folding', () => {
       const input = 'He moved to Calif.\nNext year.';
-      expect(segmentCaseNeutrally(input)).toEqual(['He moved to Calif. Next year.']);
-      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(['he moved to calif. next year.']);
+      expect(segmentCaseNeutrally(input)).toEqual(['He moved to Calif.', 'Next year.']);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual([
+        'he moved to calif.',
+        'next year.',
+      ]);
+      expect(segmentCaseNeutrally(input)).toEqual(segmentCaseNeutrally(input.replace('\n', ' ')));
     });
 
     test.each(['\n', '\r\n', '\r'])(

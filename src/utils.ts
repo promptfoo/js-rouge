@@ -1,9 +1,4 @@
-import {
-  ABBR_PLACES,
-  GATE_EXCEPTIONS,
-  GATE_SUBSTITUTIONS,
-  TREEBANK_CONTRACTIONS,
-} from './constants';
+import { GATE_EXCEPTIONS, GATE_SUBSTITUTIONS, TREEBANK_CONTRACTIONS } from './constants';
 import { lcsIndices } from './lcs';
 import { validateBeta, validateMaxSkip, validateNGramSize } from './validation';
 
@@ -85,10 +80,6 @@ function escapeRegExp(input: string): string {
 }
 
 const abbrvReg = new RegExp(`\\b(${GATE_SUBSTITUTIONS.map(escapeRegExp).join('|')})[.!?] ?$`, 'i');
-const placeAbbreviationReg = new RegExp(
-  `\\b(${ABBR_PLACES.map(escapeRegExp).join('|')})[.!?] ?$`,
-  'i',
-);
 const acronymReg = /[ |.][A-Z].?$/i;
 // Case mappings can add combining marks (for example, `İ` lowercases to `i` + dot above).
 const caseNeutralAcronymReg = /(?:^|[ |.])\p{Cased}\p{M}*.?$/u;
@@ -317,11 +308,9 @@ export function sentenceSegment(
         const abbreviation = gateSuffix.trimEnd();
         if (
           nextSentence &&
-          abbrvReg.test(suffix.trimEnd()) &&
+          abbrvReg.test(abbreviation) &&
           !excepReg.test(abbreviation) &&
-          (caseNeutral
-            ? startsWithCasedCharacter(nextSentence) && !placeAbbreviationReg.test(abbreviation)
-            : strIsTitleCase(nextSentence)) &&
+          (caseNeutral ? startsWithCasedCharacter(nextSentence) : strIsTitleCase(nextSentence)) &&
           !chunk.hasOpenDelimiter
         ) {
           chunk.normalizeWhitespace();
