@@ -466,7 +466,24 @@ describe('Utility Functions', () => {
       ['She paused. "Then we begin."', ['She paused.', '"Then we begin."']],
     ])('retains capitalized sentence starts after closing delimiters in %s', (input, expected) => {
       expect(segmentCaseNeutrally(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        expected.map((sentence) => sentence.toLowerCase()),
+      );
     });
+
+    test('keeps abbreviation continuations invariant under case folding', () => {
+      const input = 'Use etc. And more animals.';
+      expect(segmentCaseNeutrally(input)).toEqual([input]);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual([input.toLowerCase()]);
+    });
+
+    test.each(['because', 'while', 'after', 'before', 'although', 'unless', 'until', 'when'])(
+      'keeps subordinating continuation %s inside the sentence',
+      (conjunction) => {
+        const input = `we chose acme co. ${conjunction} it was reliable.`;
+        expect(segmentCaseNeutrally(input)).toEqual(ss(input));
+      },
+    );
 
     test.each(['\n', '\r\n', '\r'])(
       'keeps lowercase quote continuations after uncased starts across %j',

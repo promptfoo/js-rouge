@@ -98,7 +98,7 @@ const closingDelimiterReg = /[\])}>"']/;
 const openingBracketReg = /[([{<]/;
 const closingBracketReg = /[\])}>]/;
 const sentenceContinuationReg =
-  /^(?:and|or|but|nor|for|yet|so|at|in|on|of|to|from|with|by|as|then)\b/i;
+  /^(?:and|or|but|nor|for|yet|so|at|in|on|of|to|from|with|by|as|then|because|while|after|before|although|though|since|unless|until|when|where|whether|if|once|whereas)\b/i;
 
 /** Keep merged fragments separate; boundary rules only need a suffix and word casing. */
 class SentenceBuffer {
@@ -247,9 +247,7 @@ export function sentenceSegment(
         if (
           nextChunk &&
           (chunk.startsWithTitleCase ||
-            (caseNeutral &&
-              sentenceContinuationReg.test(nextChunk.trimStart()) &&
-              !strIsTitleCase(nextChunk)))
+            (caseNeutral && sentenceContinuationReg.test(nextChunk.trimStart())))
         ) {
           // Catch line breaks embedded within valid sentences
           // i.e. sentences that start with a capital letter
@@ -272,7 +270,7 @@ export function sentenceSegment(
         if (
           (caseNeutral
             ? startsWithCasedCharacter(nextChunk) &&
-              (!sentenceContinuationReg.test(nextChunk.trimStart()) || strIsTitleCase(nextChunk))
+              !sentenceContinuationReg.test(nextChunk.trimStart())
             : strIsTitleCase(nextChunk)) &&
           !excepReg.test(gateSuffix)
         ) {
@@ -458,8 +456,7 @@ function sentenceEnd(
   const gateSuffix = caseNeutral ? suffix.toLowerCase() : suffix;
   const nextCharacter = characterAt(input, next);
   const startsWithLetter = caseNeutral
-    ? isCasedCharacter(nextCharacter) &&
-      (!sentenceContinuationReg.test(input.slice(next)) || charIsUpperCase(nextCharacter))
+    ? isNeutralSentenceStart(input, end, next)
     : charIsUpperCase(nextCharacter);
   const startsWithNumber =
     /^\p{Number}$/u.test(nextCharacter) &&
@@ -474,6 +471,19 @@ function sentenceEnd(
     return -1;
   }
   return abbrvReg.test(gateSuffix) && excepReg.test(gateSuffix) ? -1 : end;
+}
+
+function isNeutralSentenceStart(input: string, previousEnd: number, next: number): boolean {
+  if (!isCasedCharacter(characterAt(input, next))) {
+    return false;
+  }
+
+  const continuation = input.slice(next);
+  return (
+    !sentenceContinuationReg.test(continuation) ||
+    /^in fact\b/i.test(continuation) ||
+    input.slice(previousEnd, next).includes('"')
+  );
 }
 
 function trimSpaces(input: string): string {
