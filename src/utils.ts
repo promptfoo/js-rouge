@@ -437,7 +437,11 @@ function sentenceEnd(
     return end;
   }
   const nextCharacter = characterAt(input, next);
-  if (!(caseNeutral ? isCasedCharacter(nextCharacter) : charIsUpperCase(nextCharacter))) {
+  const startsWithLetter = caseNeutral
+    ? isCasedCharacter(nextCharacter)
+    : charIsUpperCase(nextCharacter);
+  const startsWithNumber = input[index] === '.' && /^\p{Number}$/u.test(nextCharacter);
+  if (!(startsWithLetter || startsWithNumber)) {
     return -1;
   }
 
