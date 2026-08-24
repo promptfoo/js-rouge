@@ -1094,6 +1094,46 @@ describe('Utility Functions', () => {
         '.',
       ]);
     });
+
+    test.each([
+      ["He said ''hello''.", ['He', 'said', '``', 'hello', "''", '.']],
+      ["He said ``hello''.", ['He', 'said', '``', 'hello', "''", '.']],
+      ["``hello''", ['``', 'hello', "''"]],
+      ["''hello''", ["''", 'hello', "''"]],
+      ["Second fragment '' attribution.", ['Second', 'fragment', "''", 'attribution', '.']],
+      [
+        "Second fragment '' attribution ``third''.",
+        ['Second', 'fragment', "''", 'attribution', '``', 'third', "''", '.'],
+      ],
+      [
+        "Second fragment '' attribution ''third''.",
+        ['Second', 'fragment', "''", 'attribution', '``', 'third', "''", '.'],
+      ],
+      [
+        "Second fragment '', attribution ''third''.",
+        ['Second', 'fragment', "''", ',', 'attribution', '``', 'third', "''", '.'],
+      ],
+    ])('should recognize existing Treebank quotation markers in %s', (input, expected) => {
+      expect(tbt(input)).toEqual(expected);
+    });
+
+    test.each([
+      ['alpha..omega', ['alpha..omega']],
+      ['alpha...omega', ['alpha', '...', 'omega']],
+      ['alpha....omega', ['alpha', '...', '.omega']],
+      ['alpha.....omega', ['alpha', '...', '..omega']],
+    ])('should preserve period multiplicity in %s', (input, expected) => {
+      expect(tbt(input)).toEqual(expected);
+    });
+
+    test.each([
+      ['alpha--omega', ['alpha', '--', 'omega']],
+      ['alpha---omega', ['alpha', '--', '-omega']],
+      ['alpha----omega', ['alpha', '--', '--', 'omega']],
+      ['alpha-----omega', ['alpha', '--', '--', '-omega']],
+    ])('should preserve dash multiplicity in %s', (input, expected) => {
+      expect(tbt(input)).toEqual(expected);
+    });
   });
 
   describe('jackKnife', () => {
@@ -1412,6 +1452,26 @@ describe('Core Functions', () => {
       expect(
         score(`He said "${open}Stop.${close}" Next.`, `He said "${open}Stop. ${close} " Next.`),
       ).toBe(1);
+    });
+
+    test.each([
+      ["He said ''hello''.", 'He said "hello".'],
+      ["He said ``hello''.", 'He said "hello".'],
+      [
+        "``First sentence. Second fragment '', attribution ''third''.",
+        '``First sentence. Second fragment", attribution "third".',
+      ],
+    ])('should normalize existing Treebank quotation markers in %s', (input, expected) => {
+      expect(score(input, expected)).toBe(1);
+    });
+
+    test.each([
+      ['alpha..omega', 'alpha...omega'],
+      ['alpha...omega', 'alpha....omega'],
+      ['alpha--omega', 'alpha---omega'],
+      ['alpha--omega', 'alpha----omega'],
+    ])('should distinguish punctuation runs in %s and %s', (candidate, reference) => {
+      expect(score(candidate, reference)).toBeLessThan(1);
     });
   });
 

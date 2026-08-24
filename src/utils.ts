@@ -28,20 +28,26 @@ export function treeBankTokenize(input: string): string[] {
 
   // Classify paired quotes before inserting spaces around punctuation.
   let insideQuotes = false;
-  let parse = text.replace(/"/g, (_quote: string, index: number): string => {
-    insideQuotes = opensDoubleQuote(text, index, insideQuotes);
+  let parse = text.replace(/``|''|"/g, (quote: string, index: number): string => {
+    insideQuotes =
+      quote === '``' ||
+      (opensDoubleQuote(text, index, insideQuotes) &&
+        (quote === '"' ||
+          (index > 0 &&
+            /^[\p{Letter}\p{Number}]$/u.test(characterAt(text, index + 2)) &&
+            text.slice(index + 2).match(/``|''|"/)?.[0] === "''")));
     return insideQuotes ? ' `` ' : " '' ";
   });
 
   // Preserve numeric separators and acronym dots, even at a heuristic sentence boundary.
   parse = parse
-    .replace(/\.\.\.*/g, ' ... ')
+    .replace(/\.{3}/g, ' ... ')
     .replace(/[:,](?!\d)/g, ' $& ')
     .replace(/[;@#$%&]/g, ' $& ')
     .replace(/([^.])(?<!\b[A-Za-z]\.[A-Za-z])(\.)([\])}>'\s]*)$/g, '$1 $2$3 ')
     .replace(/[?!]/g, ' $& ')
     .replace(/[\][(){}<>]/g, ' $& ')
-    .replace(/---*/g, ' -- ');
+    .replace(/--/g, ' -- ');
 
   // Wrap spaces at the start and end of the sentence for consistency
   // i.e. reduce the number of Regex matches required
