@@ -195,7 +195,8 @@ class SentenceBuffer {
         this.#trackSingleQuote(text, index);
       } else if (
         !(this.#insideDoubleQuotes || this.#insideSingleQuotes) &&
-        openingBracketReg.test(character)
+        openingBracketReg.test(character) &&
+        (character !== '<' || /^\p{Letter}$/u.test(characterAt(text, index + 1)))
       ) {
         this.#openingDelimiters.push(character);
       } else if (
@@ -215,9 +216,12 @@ class SentenceBuffer {
     const previous = index === 0 ? this.#lastCharacter : text[index - 1];
     const following = text[index + 1] ?? '';
     if (this.#insideSingleQuotes) {
+      const openingQuote = text.lastIndexOf("'", index - 1);
+      const singleQuotedWord = openingQuote >= 0 && !/\s/.test(text.slice(openingQuote + 1, index));
       const possessive =
         previous.toLowerCase() === 's' &&
         /\s/.test(following) &&
+        !singleQuotedWord &&
         !/^(?:said|asked|replied|wrote|today|yesterday|tomorrow|then|and|but|or|in|on|at|for|with|to|from)\b/i.test(
           text.slice(index + 1).trimStart(),
         );
@@ -309,14 +313,15 @@ export function sentenceSegment(
 
       if (chunk.hasLineBreaks) {
         const nextChunk = chunks[idx + 1];
+        const nextSentence = nextChunk?.replace(/^[\s"'([{<]+/, '');
         const abbreviation = gateSuffix.trimEnd();
         if (
-          nextChunk &&
+          nextSentence &&
           abbrvReg.test(suffix.trimEnd()) &&
           !excepReg.test(abbreviation) &&
           (caseNeutral
-            ? startsWithCasedCharacter(nextChunk) && !placeAbbreviationReg.test(abbreviation)
-            : strIsTitleCase(nextChunk)) &&
+            ? startsWithCasedCharacter(nextSentence) && !placeAbbreviationReg.test(abbreviation)
+            : strIsTitleCase(nextSentence)) &&
           !chunk.hasOpenDelimiter
         ) {
           chunk.normalizeWhitespace();

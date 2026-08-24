@@ -560,6 +560,27 @@ describe('Utility Functions', () => {
       },
     );
 
+    test.each(['"Next sentence."', '(Next sentence.)', '[Next sentence.]'])(
+      'recognizes opening punctuation after a wrapped abbreviation: %s',
+      (nextSentence) => {
+        expect(ss(`Use etc.\n${nextSentence}`)).toEqual(['Use etc.', nextSentence]);
+      },
+    );
+
+    test('closes single-quoted words ending in s', () => {
+      expect(ss("He called it 'Success' before we use etc.\nNext sentence.")).toEqual([
+        "He called it 'Success' before we use etc.",
+        'Next sentence.',
+      ]);
+    });
+
+    test('does not treat comparison operators as opening delimiters', () => {
+      expect(ss('The result was x < 5 and we use etc.\nNext sentence.')).toEqual([
+        'The result was x < 5 and we use etc.',
+        'Next sentence.',
+      ]);
+    });
+
     test.each(['\n', '\r\n', '\r'])(
       'does not split abbreviations inside wrapped parentheses across %j',
       (lineBreak) => {
