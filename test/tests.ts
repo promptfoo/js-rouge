@@ -1720,7 +1720,7 @@ describe('Core Functions', () => {
       }
     });
 
-    test.each(['a', '"', '\u0000', '\ud800'])(
+    test.each(['', 'a', '"', '\u0000', '\ud800'])(
       'accounts for JSON token quoting and escapes before allocating: %j',
       (token) => {
         const tokenizer = (): string[] => new Array<string>(400_000).fill(token);
@@ -1766,6 +1766,25 @@ describe('Core Functions', () => {
           try {
             module.exports.n('candidate', 'reference', { tokenizer });
             throw new Error('Oversized token encoding was accepted');
+          } catch (error) {
+            if (!(error instanceof RangeError) || !/materialization limit/.test(error.message)) {
+              throw error;
+            }
+          }
+          process.stdout.write('ok');
+        `,
+        30_000,
+        ['--max-old-space-size=32'],
+      );
+    }, 30_000);
+
+    test('rejects large empty-token arrays before allocating the encoding map', () => {
+      expectBundledScriptToPass(
+        `
+          const tokenizer = () => new Array(400000).fill('');
+          try {
+            module.exports.n('candidate', 'reference', { tokenizer });
+            throw new Error('Oversized encoding map was accepted');
           } catch (error) {
             if (!(error instanceof RangeError) || !/materialization limit/.test(error.message)) {
               throw error;

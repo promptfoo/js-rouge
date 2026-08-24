@@ -50,7 +50,7 @@ export function validateNGramMaterialization(
   const paddingLength = startPaddingSize + endPaddingSize;
   const paddedLength = tokens.length + paddingLength;
   const gramCount = paddedLength - n + 1;
-  let work = paddingLength + gramCount * (2 * n - 1);
+  let work = paddingLength + gramCount * (2 * n - 1) + (encoded ? tokens.length : 0);
 
   for (let index = 0; index < paddedLength && work <= MAX_NGRAM_MATERIALIZATION_WORK; index++) {
     const token =
