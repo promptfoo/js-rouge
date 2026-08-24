@@ -14,6 +14,11 @@
   "automergeType": "pr",
   "packageRules": [
     {
+      "description": "Keep lint-staged compatible with Node.js 18",
+      "matchPackageNames": ["lint-staged"],
+      "allowedVersions": "<16"
+    },
+    {
       "description": "Automerge non-major dev dependency updates",
       "matchDepTypes": ["devDependencies"],
       "matchUpdateTypes": ["minor", "patch"],
