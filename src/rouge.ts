@@ -27,7 +27,7 @@ export interface RougeSOptions {
   /** Maximum token index distance (1 includes adjacent words; default: Infinity) */
   maxSkip?: number;
   /** Custom skip-bigram generator function */
-  skipBigram?: (tokens: string[], maxSkip?: number) => string[];
+  skipBigram?: (tokens: string[], maxSkip: number) => string[];
   /** Custom string tokenizer */
   tokenizer?: (input: string) => string[];
 }
@@ -244,7 +244,7 @@ export function n(cand: string, ref: string, opts?: RougeNOptions): number {
     if (nGram === utils.nGram) {
       return tokens.length < size ? [] : nGram(encodeTokens(tokens), size);
     }
-    return nGram(tokens, size);
+    return [...nGram(tokens, size)];
   };
   const candGrams = getGrams(cand);
   const refGrams = getGrams(ref);
@@ -303,7 +303,7 @@ export function s(cand: string, ref: string, opts?: RougeSOptions): number {
   validateBeta(beta);
 
   if (skipBigram !== utils.skipBigram) {
-    const candGrams = skipBigram(tokenizeSummary(cand, caseSensitive, tokenizer), maxSkip);
+    const candGrams = [...skipBigram(tokenizeSummary(cand, caseSensitive, tokenizer), maxSkip)];
     const refGrams = skipBigram(tokenizeSummary(ref, caseSensitive, tokenizer), maxSkip);
     const skip2 = countMatchingGrams(candGrams, refGrams);
     if (skip2 === 0) {
@@ -378,8 +378,10 @@ export function l(cand: string, ref: string, opts?: RougeLOptions): number {
   }
   validateBeta(beta);
 
-  const tokenizeSentence = (sentence: string): string[] =>
-    tokenizer(caseSensitive ? sentence : sentence.toLowerCase());
+  const tokenizeSentence = (sentence: string): string[] => {
+    const tokens = tokenizer(caseSensitive ? sentence : sentence.toLowerCase());
+    return tokenizer === utils.treeBankTokenize ? tokens : [...tokens];
+  };
   const segmentSummary = (input: string): string[] =>
     segmenter === utils.sentenceSegment
       ? utils.sentenceSegment(input, { caseNeutral: !caseSensitive })
