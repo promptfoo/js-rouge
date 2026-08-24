@@ -595,7 +595,10 @@ function findListCandidate(
     const family = listMarkerFamily(marker, caseNeutral);
     const first = firstByFamily.get(family.source);
     const identity = caseNeutral ? marker.toUpperCase().toLowerCase() : marker;
-    const distinctMarker = first?.identity !== identity;
+    const joinedNameInitial =
+      /^\p{Cased}\p{M}*\.$/u.test(marker) &&
+      /(?:\b(?:and|or)|&)\s*$/i.test(input.slice(Math.max(0, current.index - 8), current.index));
+    const distinctMarker = first?.identity !== identity && !joinedNameInitial;
     if (first !== undefined && (first.emptyPrefix || distinctMarker)) {
       const candidate: ListCandidate = {
         current: first.marker,
@@ -843,7 +846,7 @@ function sentenceEnd(
     return isUnspacedSentenceBoundary(input, index, end, caseNeutral) ? end : -1;
   }
   if (end === index + 1) {
-    return end;
+    return colonIntroducedNameBoundary(input, index);
   }
 
   const closedBrackets = countClosingBrackets(input, index + 1, end);
@@ -884,6 +887,21 @@ function sentenceEnd(
     return -1;
   }
   return abbrvReg.test(gateSuffix) && excepReg.test(gateSuffix) ? -1 : end;
+}
+
+function colonIntroducedNameBoundary(input: string, index: number): number {
+  if (input[index] !== '.') {
+    return index + 1;
+  }
+  const joinsName =
+    /(?:[:&]|\b(?:and|or)\b)\s+\p{Cased}\p{M}*\.$/iu.test(
+      input.slice(Math.max(0, index - 40), index + 1),
+    ) &&
+    /^\s+\p{Cased}\p{Letter}/u.test(input.slice(index + 1, index + 40)) &&
+    /:\s+\p{Cased}\p{M}*\.\s+\p{Letter}+\s+(?:and|or|&)\s+\p{Cased}\p{M}*\.\s+\p{Letter}/iu.test(
+      input.slice(Math.max(0, index - 96), index + 96),
+    );
+  return joinsName ? -1 : index + 1;
 }
 
 function countClosingBrackets(input: string, start: number, end: number): number {

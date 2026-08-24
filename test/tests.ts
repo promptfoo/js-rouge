@@ -708,6 +708,14 @@ describe('Utility Functions', () => {
       ]);
     });
 
+    test('does not interpret colon-introduced author initials as list markers', () => {
+      const authors = 'Authors: A. Smith and B. Jones.';
+      const reversed = 'Authors: B. Jones and A. Smith.';
+      expect(ss(authors)).toEqual([authors]);
+      expect(segmentCaseNeutrally(authors)).toEqual([authors]);
+      expect(rouge.l(authors, reversed)).toBeCloseTo(0.625);
+    });
+
     test('finds genuine lists after an earlier false marker', () => {
       expect(ss('I met John A. Smith. Intro: 1. Alpha 2. Beta.')).toEqual([
         'I met John A. Smith.',
