@@ -680,7 +680,9 @@ describe('Utility Functions', () => {
       'She wrote "etc.": more would follow.',
       'She wrote "hello." then left.',
       'She repeated "Stop." 3 times.',
+      'She repeated "Stop." 3 TIMES.',
       'She watched "Monsters, Inc." 3 times.',
+      'She worked at "Acme Inc." 3 days a week.',
       'She mentioned "U.S." 2 years ago.',
       'She quoted "No." 100% correctly.',
       'The label was "Hello!" 100 times larger.',
@@ -1407,6 +1409,7 @@ describe('Core Functions', () => {
 
     test('keeps punctuation aligned after a quoted numeric boundary', () => {
       expect(score('"Stop." 123 starts.', '"Stop ." 123 starts.')).toBe(1);
+      expect(score('"Stop." 3 times.', '"STOP." 3 TIMES.', { caseSensitive: false })).toBe(1);
     });
 
     test.each([

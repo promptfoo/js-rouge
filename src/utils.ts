@@ -436,19 +436,20 @@ function sentenceEnd(
   if (next === input.length) {
     return end;
   }
+  const suffix = input.slice(Math.max(0, index + 1 - sentenceSuffixLength), index + 1);
+  const gateSuffix = caseNeutral ? suffix.toLowerCase() : suffix;
   const nextCharacter = characterAt(input, next);
   const startsWithLetter = caseNeutral
     ? isCasedCharacter(nextCharacter)
     : charIsUpperCase(nextCharacter);
   const startsWithNumber =
     /^\p{Number}$/u.test(nextCharacter) &&
-    !/^\S+(?:\s*%|\s+(?:time|year)s?\b)/u.test(input.slice(next));
+    !abbrvReg.test(gateSuffix) &&
+    !/^\S+(?:\s*%|\s+(?:time|year)s?\b)/iu.test(input.slice(next));
   if (!(startsWithLetter || startsWithNumber)) {
     return -1;
   }
 
-  const suffix = input.slice(Math.max(0, index + 1 - sentenceSuffixLength), index + 1);
-  const gateSuffix = caseNeutral ? suffix.toLowerCase() : suffix;
   // Keep bracketed ellipses inside the surrounding sentence.
   if (ellipseReg.test(suffix) && closedBrackets > 0) {
     return -1;
