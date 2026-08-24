@@ -344,12 +344,12 @@ export function sentenceSegment(
 function nextListMarker(
   input: string,
   expression: RegExp,
-  numbered?: boolean,
+  family?: RegExp,
 ): RegExpExecArray | null {
   let marker = expression.exec(input);
   while (marker !== null) {
     if (
-      (numbered === undefined || /\d/.test(marker[0]) === numbered) &&
+      (family === undefined || family.test(marker[0])) &&
       (marker.index === 0 ||
         !/\b(?:section|chapter|page|figure|table|paragraph|article|clause)$/i.test(
           input.slice(Math.max(0, marker.index - 24), marker.index).trimEnd(),
@@ -368,8 +368,9 @@ function segmentList(input: string, caseNeutral: boolean): string[] | undefined 
   if (current === null || input.slice(0, current.index).trim().length > 0) {
     return undefined;
   }
-  const numbered = /\d/.test(current[0]);
-  let next = nextListMarker(input, expression, numbered);
+  const firstMarker = current[0];
+  const family = [/\d/, /^\s*\p{Lu}/u, /^\s*\p{Ll}/u].find((pattern) => pattern.test(firstMarker));
+  let next = nextListMarker(input, expression, family);
   if (next === null) {
     return undefined;
   }
@@ -383,7 +384,7 @@ function segmentList(input: string, caseNeutral: boolean): string[] | undefined 
     }
     segments.push(`${current[0].trim()} ${sentences[0]}`, ...sentences.slice(1));
     current = next;
-    next = nextListMarker(input, expression, numbered);
+    next = nextListMarker(input, expression, family);
   } while (current !== null);
   return segments;
 }
@@ -603,10 +604,10 @@ function isUnspacedDelimitedSentenceStart(
   caseNeutral: boolean,
 ): boolean {
   let next = index + 1;
-  if (!/["([{<]/.test(input[next] ?? '')) {
+  if (!/["'([{<]/.test(input[next] ?? '')) {
     return false;
   }
-  if (/^\[\p{Number}+\]/u.test(input.slice(next))) {
+  if (/^(?:\[\p{Number}+\]|\(\p{Number}+\))/u.test(input.slice(next))) {
     return false;
   }
   while (next < input.length && /["'([{<]/.test(input[next])) {
@@ -630,25 +631,29 @@ function isUnspacedSentenceBoundary(
   if (!(caseNeutral ? isCasedCharacter(nextCharacter) : charIsUpperCase(nextCharacter))) {
     return false;
   }
+  const precedingToken = input.slice(Math.max(0, index - 320), next).match(/\S+$/)?.[0] ?? '';
+  const insideUrl = /https?:\/\/|www\./i.test(precedingToken);
   if (input[index] !== '.') {
-    return true;
+    return !insideUrl;
   }
 
   const suffix = input.slice(Math.max(0, index + 1 - sentenceSuffixLength), index + 1);
   const following = input.slice(next);
-  const precedingToken = input.slice(Math.max(0, index - 320), next).match(/\S+$/)?.[0] ?? '';
   const insideAddress = precedingToken.includes('@');
   const hostnameLabel = following.match(
     /^(com|org|net|edu|gov|mil|io|dev|app|co|uk|us|ca|ai|info|biz|me|tv)(?=[/.\s]|$)/i,
   )?.[0];
   const insideHostname =
-    /https?:\/\/|www\./i.test(precedingToken) ||
+    insideUrl ||
     (hostnameLabel !== undefined &&
-      (hostnameLabel === hostnameLabel.toLowerCase() ||
+      (caseNeutral ||
+        hostnameLabel === hostnameLabel.toLowerCase() ||
         hostnameLabel === hostnameLabel.toUpperCase()));
-  const dottedIdentifier =
-    /\b\p{Lu}[\p{Letter}\p{Number}_-]*\.$/u.test(suffix) &&
-    /^[\p{Lu}\p{Number}_-]+(?=\s|[/.]|$)/u.test(following);
+  const dottedIdentifier = caseNeutral
+    ? /\b\p{Cased}[\p{Letter}\p{Number}_-]*\.$/u.test(suffix) &&
+      /^[\p{Cased}\p{Number}_-]{1,2}(?=\s|[/.]|$)/u.test(following)
+    : /\b\p{Lu}[\p{Letter}\p{Number}_-]*\.$/u.test(suffix) &&
+      /^[\p{Lu}\p{Number}_-]+(?=\s|[/.]|$)/u.test(following);
   const initial = caseNeutral ? /^\p{Cased}\./u : /^\p{Lu}\./u;
   const trailingInitial = caseNeutral ? /\b\p{Cased}\.$/u : /\b\p{Lu}\.$/u;
   const nextInitial = caseNeutral ? /^\p{Cased}(?=\s|$)/u : /^\p{Lu}(?=\s|$)/u;

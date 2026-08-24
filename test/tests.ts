@@ -507,6 +507,13 @@ describe('Utility Functions', () => {
       ]);
     });
 
+    test('keeps name initials inside lettered list items', () => {
+      expect(ss('a. J. Smith will attend b. A. Brown will attend')).toEqual([
+        'a. J. Smith will attend',
+        'b. A. Brown will attend',
+      ]);
+    });
+
     test('recognizes list markers without depending on item capitalization', () => {
       const input = '1. The first item 2. The second item';
       const expected = ['1. The first item', '2. The second item'];
@@ -552,6 +559,17 @@ describe('Utility Functions', () => {
       },
     );
 
+    test('keeps mixed-case hostnames invariant under case folding', () => {
+      const input = 'Visit example.Com for help.';
+      expect(segmentCaseNeutrally(input)).toEqual([input]);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual([input.toLowerCase()]);
+    });
+
+    test.each(['?', '!'])('keeps uppercase URL components after a %s separator', (separator) => {
+      const input = `Visit https://example.com${separator}Next=value for details.`;
+      expect(ss(input)).toEqual([input]);
+    });
+
     test.each([
       ['The build failed.App restarted.', ['The build failed.', 'App restarted.']],
       ['The service stopped.Dev investigated.', ['The service stopped.', 'Dev investigated.']],
@@ -567,6 +585,8 @@ describe('Utility Functions', () => {
       'keeps dotted identifiers inside a sentence: %s',
       (input) => {
         expect(ss(input)).toEqual([input]);
+        expect(segmentCaseNeutrally(input)).toEqual([input]);
+        expect(segmentCaseNeutrally(input.toLowerCase())).toEqual([input.toLowerCase()]);
       },
     );
 
@@ -577,8 +597,14 @@ describe('Utility Functions', () => {
       ]);
     });
 
+    test('keeps parenthesized page references inside their sentence', () => {
+      const input = 'See p.(10) for details.';
+      expect(ss(input)).toEqual([input]);
+    });
+
     test.each([
       ['Hello world."Next sentence."', ['Hello world.', '"Next sentence."']],
+      ["Hello world.'Next sentence.'", ['Hello world.', "'Next sentence.'"]],
       ['Hello world.(Next sentence.)', ['Hello world.', '(Next sentence.)']],
       ['Hello world.(2 people agreed.)', ['Hello world.', '(2 people agreed.)']],
       ['Hello world.[2 people agreed.]', ['Hello world.', '[2 people agreed.]']],
