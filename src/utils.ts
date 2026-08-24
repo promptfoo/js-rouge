@@ -147,7 +147,7 @@ function singleQuotationState(
       previous.toLowerCase() === 's' &&
       /\s/.test(following) &&
       /^(?:\p{Lu}\p{Ll}*\s+\p{Lu}|\p{Ll}+\s+\p{Lu})/u.test(input.slice(index + 1).trimStart());
-    return possessive || (following.length > 0 && !/[\s.,!?;:)\]}\p{Pd}]/u.test(following));
+    return possessive || (following.length > 0 && !/[\s.,!?;:)\]}"”»\p{Pd}]/u.test(following));
   }
   return (
     (previous.length === 0 || /^[\s\p{Punctuation}]$/u.test(previous)) &&
@@ -801,13 +801,13 @@ function isDialogueAttribution(input: string, closesQuotation: boolean): boolean
     return false;
   }
   return (
-    /^(?:aloud\b|(?:am|is|are|was|were|be|been|being|has|have|had|will|would|can|could|should|must)\b)/i.test(
+    /^(?:aloud\b|(?:am|is|are|was|were|be|been|being|has|have|had|will|would|can|could|should|must)\s+(?!(?:i|we|he|she|they|you|it|this|that|these|those)\b))/i.test(
       input,
     ) ||
     /^(?:(?!(?:am|is|are|was|were|be|been|being|has|have|had)\b)[\p{Letter}\p{Mark}'’-]+\s+){1,3}(?:said|thought|asked|replied|answered)(?=\s*[,.;!?]|\s*$)/iu.test(
       input,
     ) ||
-    /^(?:said|thought|asked|replied|answered)\s+(?:[\p{Letter}\p{Mark}'’-]+\s*){1,3}(?=\s*[,.;!?]|\s*$)/iu.test(
+    /^(?:said|thought|asked|replied|answered)\s+[\p{Letter}\p{Mark}'’-]+(?:\s+[\p{Letter}\p{Mark}'’-]+){0,2}(?=\s*[,.;!?]|\s*$)/iu.test(
       input,
     )
   );

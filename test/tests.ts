@@ -1212,6 +1212,20 @@ describe('Utility Functions', () => {
       expect(segmentCaseNeutrally(input)).toEqual(expected);
     });
 
+    test.each([
+      [
+        'She said "He answered \'No.\'" Next. Last.',
+        ['She said "He answered \'No.\'"', 'Next.', 'Last.'],
+      ],
+      [
+        "She said “He answered 'No.'” Next. Last.",
+        ["She said “He answered 'No.'”", 'Next.', 'Last.'],
+      ],
+    ])('closes an inner single quote before its outer quotation: %s', (input, expected) => {
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
     test('keeps spaced single closing quotations with their sentence', () => {
       const input = "He said 'Stop. ' Next.";
       const expected = ["He said 'Stop. '", 'Next.'];
@@ -1251,6 +1265,13 @@ describe('Utility Functions', () => {
         'Nothing was said.',
         'Next.',
       ]);
+    });
+
+    test('keeps auxiliary-led questions separate from preceding quotations', () => {
+      const input = '"It ended." Was it really over? Next.';
+      const expected = ['"It ended."', 'Was it really over?', 'Next.'];
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
     });
 
     test('keeps proper-name dialogue attributions with the quotation', () => {
@@ -1506,6 +1527,13 @@ describe('Utility Functions', () => {
     // Using 500ms threshold to account for CI environment variability
     describe('ReDoS prevention', () => {
       const TIMEOUT_MS = 500;
+
+      test('rejects uninterrupted verb-first attribution subjects without backtracking', () => {
+        const input = `"Stop." said ${'a'.repeat(700)}#`;
+        const started = Date.now();
+        expect(ss(input)).toEqual([input]);
+        expect(Date.now() - started).toBeLessThan(TIMEOUT_MS);
+      });
 
       test('segments large spaced-ellipsis runs within a constrained heap', () => {
         expectBundledScriptToPass(
