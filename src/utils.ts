@@ -21,7 +21,7 @@ import { validateBeta, validateMaxSkip, validateNGramSize } from './validation';
  */
 export function treeBankTokenize(input: string): string[] {
   // Contraction rules below expect spaces, including at word boundaries.
-  const text = input.trim().replace(/\s+/g, ' ');
+  const text = input.replace(/[\s\u0085]+/g, ' ').trim();
   if (text.length === 0) {
     return [];
   }
@@ -42,7 +42,7 @@ export function treeBankTokenize(input: string): string[] {
   // Preserve numeric separators and acronym dots, even at a heuristic sentence boundary.
   parse = parse
     .replace(/\.{3}/g, ' ... ')
-    .replace(/[:,](?!\d)/g, ' $& ')
+    .replace(/[:,](?!\p{Decimal_Number})/gu, ' $& ')
     .replace(/[;@#$%&]/g, ' $& ')
     .replace(/([^.])(?<!\b[A-Za-z]\.[A-Za-z])(\.)([\])}>'\s]*)$/g, '$1 $2$3 ')
     .replace(/[?!]/g, ' $& ')

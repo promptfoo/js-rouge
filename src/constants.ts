@@ -1,14 +1,14 @@
 export const TREEBANK_CONTRACTIONS: RegExp[] = [
-  /\b(can)(not)\b/gi,
-  /\b(d)('ye)\b/gi,
-  /\b(gim)(me)\b/gi,
-  /\b(gon)(na)\b/gi,
-  /\b(got)(ta)\b/gi,
-  /\b(lem)(me)\b/gi,
-  /\b(more)('n)\b/gi,
-  /\b(wan)(na) /gi,
-  / ('t)(is)\b/gi,
-  / ('t)(was)\b/gi,
+  /(?<![\p{Letter}\p{Mark}\p{Number}_])(can)(not)(?![\p{Letter}\p{Mark}\p{Number}_])/giu,
+  /(?<![\p{Letter}\p{Mark}\p{Number}_])(d)('ye)(?![\p{Letter}\p{Mark}\p{Number}_])/giu,
+  /(?<![\p{Letter}\p{Mark}\p{Number}_])(gim)(me)(?![\p{Letter}\p{Mark}\p{Number}_])/giu,
+  /(?<![\p{Letter}\p{Mark}\p{Number}_])(gon)(na)(?![\p{Letter}\p{Mark}\p{Number}_])/giu,
+  /(?<![\p{Letter}\p{Mark}\p{Number}_])(got)(ta)(?![\p{Letter}\p{Mark}\p{Number}_])/giu,
+  /(?<![\p{Letter}\p{Mark}\p{Number}_])(lem)(me)(?![\p{Letter}\p{Mark}\p{Number}_])/giu,
+  /(?<![\p{Letter}\p{Mark}\p{Number}_])(more)('n)(?![\p{Letter}\p{Mark}\p{Number}_])/giu,
+  /(?<![\p{Letter}\p{Mark}\p{Number}_])(wan)(na) /giu,
+  / ('t)(is)(?![\p{Letter}\p{Mark}\p{Number}_])/giu,
+  / ('t)(was)(?![\p{Letter}\p{Mark}\p{Number}_])/giu,
 ];
 
 export const HONORIFICS: string[] = [

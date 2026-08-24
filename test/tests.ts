@@ -1000,7 +1000,7 @@ describe('Utility Functions', () => {
       expect(tbt('')).toEqual([]);
     });
 
-    const whitespace = [' ', '\t', '\n', '\r\n', '\u00a0'];
+    const whitespace = [' ', '\t', '\n', '\r\n', '\u00a0', '\u0085'];
     test.each(whitespace)('should split words separated by %j', (separator) => {
       expect(tbt(`alpha${separator}beta`)).toEqual(['alpha', 'beta']);
       expect(tbt(`${separator}They'll${separator}go.${separator}`)).toEqual([
@@ -1014,6 +1014,20 @@ describe('Utility Functions', () => {
     test.each(whitespace)('should not invent tokens for %j', (separator) => {
       expect(tbt(separator.repeat(3))).toEqual([]);
     });
+
+    test.each(['écannot', 'cannoté', 'Åwanna', 'wanna\u0301', "more'né"])(
+      'does not split contractions inside Unicode words: %s',
+      (word) => {
+        expect(tbt(word)).toEqual([word]);
+      },
+    );
+
+    test.each(['١٢,٣٤٥', '１２,３４５', '١٢:٣٤'])(
+      'preserves numeric separators before Unicode decimal digits: %s',
+      (number) => {
+        expect(tbt(number)).toEqual([number]);
+      },
+    );
 
     const uncommonContractions: [string, string[]][] = [
       ['cannot', ['can', 'not']],
@@ -1440,11 +1454,14 @@ describe('Core Functions', () => {
       expect(score('alpha\tbeta', 'alpha beta')).toBe(1);
       expect(score('alpha\nbeta', 'alpha beta')).toBe(1);
       expect(score('alpha\u00a0beta', 'alpha beta')).toBe(1);
+      expect(score('alpha\u0085beta', 'alpha beta')).toBe(1);
     });
 
     test('should reject whitespace-only summaries like empty strings', () => {
       expect(() => score(' \t\r\n', 'alpha beta')).toThrow('Candidate cannot be an empty string');
       expect(() => score('alpha beta', ' \t\r\n')).toThrow('Reference cannot be an empty string');
+      expect(() => score('\u0085', 'alpha beta')).toThrow('Candidate cannot be an empty string');
+      expect(() => score('alpha beta', '\u0085')).toThrow('Reference cannot be an empty string');
     });
 
     test('should separate colons without splitting numeric commas', () => {
