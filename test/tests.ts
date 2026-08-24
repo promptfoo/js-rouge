@@ -1554,6 +1554,8 @@ describe('Utility Functions', () => {
 
       test.each([
         ['Alpha... Beta.', ['Alpha...', 'Beta.']],
+        ['Alpha... "Beta."', ['Alpha...', '"Beta."']],
+        ['Alpha... (Beta.)', ['Alpha...', '(Beta.)']],
         [
           'This is e.g. Mr. Smith, who talks slowly... And this is another sentence.',
           ['This is e.g. Mr. Smith, who talks slowly...', 'And this is another sentence.'],
@@ -1577,6 +1579,7 @@ describe('Utility Functions', () => {
       test.each([
         'She said, "I... I cannot go."',
         'She said, “I... I cannot go.”',
+        'She said, ‘I can’t... Alpha.’',
         'We noted (Alpha... Beta) today.',
       ])('keeps three-dot ellipses inside surrounding delimiters: %s', (input) => {
         expect(ss(input)).toEqual([input]);

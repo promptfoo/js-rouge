@@ -212,7 +212,7 @@ class SentenceBuffer {
   #trackDelimiters(text: string): void {
     for (let index = 0; index < text.length; index++) {
       const character = text[index];
-      if (this.#trackTypographicQuote(character)) {
+      if (this.#trackTypographicQuote(text, index)) {
         continue;
       }
       if (character === '"') {
@@ -241,12 +241,21 @@ class SentenceBuffer {
     this.#lastCharacter = text.at(-1) ?? this.#lastCharacter;
   }
 
-  #trackTypographicQuote(character: string): boolean {
+  #trackTypographicQuote(text: string, index: number): boolean {
+    const character = text[index];
     if (character === '“' || character === '‘') {
       this.#typographicQuoteClosers.push(character === '“' ? '”' : '’');
       return true;
     }
     if (character === this.#typographicQuoteClosers.at(-1)) {
+      const previous = index === 0 ? this.#lastCharacter : text[index - 1];
+      if (
+        character === '’' &&
+        /^\p{Letter}$/u.test(previous) &&
+        /^\p{Letter}$/u.test(characterAt(text, index + 1))
+      ) {
+        return false;
+      }
       this.#typographicQuoteClosers.pop();
       return true;
     }
@@ -447,13 +456,14 @@ export function sentenceSegment(
         // Catch mid-sentence ellipses (and their derivatives) and merge them
         const nextChunk = chunks[idx + 1];
         const nextSentence = nextChunk.trim() || chunks[idx + 2] || '';
+        const sentenceStart = nextSentence.replace(/^[\s"'“‘«„([{<]+/, '');
         const startsSentence = caseNeutral
-          ? startsWithCasedCharacter(nextSentence) &&
+          ? startsWithCasedCharacter(sentenceStart) &&
             (/\.{4}$/.test(suffix) ||
-              (!/^(?:what|and\s+then)\b/i.test(nextSentence) &&
-                (!sentenceContinuationReg.test(nextSentence) ||
-                  independentSentenceReg.test(nextSentence))))
-          : strIsTitleCase(nextSentence);
+              (!/^(?:what|and\s+then)\b/i.test(sentenceStart) &&
+                (!sentenceContinuationReg.test(sentenceStart) ||
+                  independentSentenceReg.test(sentenceStart))))
+          : strIsTitleCase(sentenceStart);
         if (
           /\.{3,4}$/.test(suffix) &&
           startsSentence &&
