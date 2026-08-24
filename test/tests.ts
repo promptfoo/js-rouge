@@ -674,6 +674,14 @@ describe('Utility Functions', () => {
       expect(segmentCaseNeutrally(input)).toEqual([input]);
     });
 
+    test.each([
+      'She said "Alpha.[1] Beta." aloud.',
+      'He noted (Alpha.[1] Beta.) today.',
+      'See [Alpha.[1] Beta.] today.',
+    ])('does not split citations inside surrounding delimiters: %s', (input) => {
+      expect(ss(input)).toEqual([input]);
+    });
+
     test('scores reordered cited reference sentences correctly', () => {
       expect(rouge.l('Beta Alpha.[1]', 'Alpha.[1] Beta.')).toBeCloseTo(10 / 11);
     });

@@ -545,7 +545,7 @@ function sentenceChunks(input: string, caseNeutral: boolean): string[] {
       char === '!'
     ) {
       const end =
-        citationEnd(input, index, caseNeutral) ??
+        citationEnd(input, index, caseNeutral, insideQuotes, brackets.depth) ??
         sentenceEnd(input, index, insideQuotes, brackets, caseNeutral);
       if (end === -1) {
         continue;
@@ -702,9 +702,17 @@ function sentenceEnd(
   return abbrvReg.test(gateSuffix) && excepReg.test(gateSuffix) ? -1 : end;
 }
 
-function citationEnd(input: string, index: number, caseNeutral: boolean): number | undefined {
+function citationEnd(
+  input: string,
+  index: number,
+  caseNeutral: boolean,
+  insideQuotes: boolean,
+  bracketDepth: number,
+): number | undefined {
   const following = input[index + 1] ?? '';
   if (
+    insideQuotes ||
+    bracketDepth > 0 ||
     input[index] !== '.' ||
     (following !== '[' && !/^\p{Number}$/u.test(following)) ||
     (following !== '[' && !/^[\p{Letter}\p{Mark})\]]$/u.test(input[index - 1] ?? ''))
