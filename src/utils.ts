@@ -748,11 +748,12 @@ function caseNeutralIdentifierContext(input: string, index: number): boolean {
   if (!/\p{Cased}/u.test(token)) {
     return false;
   }
-  const normalized = token.normalize('NFC').toLowerCase().normalize('NFC');
-  const stableAscii = normalized.replace(/i\u0307\p{Mark}*/gu, '');
+  const stableAscii = token
+    .replace(/[Ii]\u0307\p{Mark}*/gu, '')
+    .replace(/[A-Za-z]\p{Mark}/gu, (cluster) => cluster.normalize('NFC'));
   return (
-    /[a-z0-9_]/.test(stableAscii) ||
-    (/\p{Script=Latin}/u.test(normalized) && /\p{Script=Greek}/u.test(normalized))
+    /[a-z0-9_]/i.test(stableAscii) ||
+    (/\p{Script=Latin}/u.test(token) && /\p{Script=Greek}/u.test(token))
   );
 }
 
@@ -799,18 +800,18 @@ function isUnspacedSentenceBoundary(
     : /\b\p{Lu}\.$/u;
   const nextInitial = caseNeutral ? /^\p{Cased}\p{M}*(?=\s|$)/u : /^\p{Lu}(?=\s|$)/u;
   const gateSuffix = caseNeutral ? suffix.toLowerCase() : suffix;
+  const contextChangingGreekInitial = /^[Σσς]\p{M}+\.\p{Cased}/u.test(following);
   const continuesAbbreviation =
     abbrvReg.test(gateSuffix) &&
     (excepReg.test(gateSuffix) ||
       (geographicAcronymReg.test(gateSuffix) && geographicContinuationReg.test(following)));
   return !(
     continuesAbbreviation ||
-    initial.test(following) ||
+    ((initial.test(following) || dottedIdentifier) && !contextChangingGreekInitial) ||
     (trailingInitial.test(suffix) && nextInitial.test(following)) ||
     /^[^\s]*@/.test(following) ||
     insideAddress ||
-    insideHostname ||
-    dottedIdentifier
+    insideHostname
   );
 }
 

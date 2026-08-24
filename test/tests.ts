@@ -684,6 +684,19 @@ describe('Utility Functions', () => {
       );
     });
 
+    test('does not normalize a Kelvin sign into ASCII identifier evidence', () => {
+      const input = 'K.No one answered.';
+      expect(segmentCaseNeutrally(input)).toEqual(['K.', 'No one answered.']);
+      expect(rouge.l(input, 'K. No one answered.', { caseSensitive: false })).toBe(1);
+    });
+
+    test('preserves case-folding context around marked Greek initials', () => {
+      const input = 'A.Σ́.No one answered.';
+      expect(rouge.n(input, input.toLowerCase(), { caseSensitive: false })).toBe(1);
+      expect(rouge.s(input, input.toLowerCase(), { caseSensitive: false })).toBe(1);
+      expect(rouge.l(input, input.toLowerCase(), { caseSensitive: false })).toBe(1);
+    });
+
     test('does not let a truncated mark qualify an unrelated later word', () => {
       const input = 'İ?0b/]]\té.𝒜B';
       expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
@@ -1434,6 +1447,13 @@ describe('Utility Functions', () => {
 
       test('scans recovered combining-mark prefixes without backtracking', () => {
         const input = `I${'\u0301'.repeat(16_000)}/aaaaaaa.X`;
+        const started = Date.now();
+        expect(segmentCaseNeutrally(input)).toEqual([input]);
+        expect(Date.now() - started).toBeLessThan(TIMEOUT_MS);
+      });
+
+      test('scans differently ordered combining marks without quadratic normalization', () => {
+        const input = `A${'\u0315\u0316'.repeat(32_000)}.X`;
         const started = Date.now();
         expect(segmentCaseNeutrally(input)).toEqual([input]);
         expect(Date.now() - started).toBeLessThan(TIMEOUT_MS);
