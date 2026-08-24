@@ -113,6 +113,10 @@ class SentenceBuffer {
   #parts: string[] = [];
   #normalizedThrough = 0;
   #words: { titleCase: boolean; lowerCase: boolean }[] = [];
+  #delimiterDepth = 0;
+  #insideDoubleQuotes = false;
+  #insideSingleQuotes = false;
+  #lastCharacter = '';
   hasLineBreaks = false;
   startsWithTitleCase = false;
 
@@ -133,6 +137,10 @@ class SentenceBuffer {
     return this.#words.at(-2)?.titleCase ?? false;
   }
 
+  get hasOpenDelimiter(): boolean {
+    return this.#delimiterDepth > 0 || this.#insideDoubleQuotes || this.#insideSingleQuotes;
+  }
+
   get suffix(): string {
     let suffix = '';
     for (let i = this.#parts.length - 1; i >= 0 && suffix.length < sentenceSuffixLength; i--) {
@@ -145,6 +153,8 @@ class SentenceBuffer {
     if (text.length === 0) {
       return;
     }
+
+    this.#trackDelimiters(text);
 
     // A merge without separating whitespace can continue the previous word.
     const previous = this.#words.at(-1);
@@ -169,6 +179,33 @@ class SentenceBuffer {
 
     this.hasLineBreaks = this.hasLineBreaks || breakReg.test(text);
     this.#parts.push(text);
+  }
+
+  #trackDelimiters(text: string): void {
+    for (let index = 0; index < text.length; index++) {
+      const character = text[index];
+      if (character === '"') {
+        this.#insideDoubleQuotes = opensDoubleQuote(text, index, this.#insideDoubleQuotes);
+      } else if (character === "'") {
+        this.#trackSingleQuote(text, index);
+      } else if (openingBracketReg.test(character)) {
+        this.#delimiterDepth++;
+      } else if (closingBracketReg.test(character)) {
+        this.#delimiterDepth = Math.max(0, this.#delimiterDepth - 1);
+      }
+    }
+    this.#lastCharacter = text.at(-1) ?? this.#lastCharacter;
+  }
+
+  #trackSingleQuote(text: string, index: number): void {
+    const previous = index === 0 ? this.#lastCharacter : text[index - 1];
+    const following = text[index + 1] ?? '';
+    if (this.#insideSingleQuotes) {
+      this.#insideSingleQuotes = following.length > 0 && !/[\s.,!?;:)\]}]/.test(following);
+      return;
+    }
+    this.#insideSingleQuotes =
+      (previous.length === 0 || /[\s([{<]/.test(previous)) && /\S/.test(following);
   }
 
   trimEnd(): void {
@@ -257,10 +294,9 @@ export function sentenceSegment(
           abbrvReg.test(suffix.trimEnd()) &&
           !excepReg.test(abbreviation) &&
           (caseNeutral
-            ? startsWithCasedCharacter(nextChunk) &&
-              (strIsTitleCase(nextChunk) || !placeAbbreviationReg.test(abbreviation))
+            ? startsWithCasedCharacter(nextChunk) && !placeAbbreviationReg.test(abbreviation)
             : strIsTitleCase(nextChunk)) &&
-          !hasOpenSentenceDelimiter(chunk.text())
+          !chunk.hasOpenDelimiter
         ) {
           chunk.normalizeWhitespace();
           acc.push(chunk.text());
@@ -342,22 +378,6 @@ export function sentenceSegment(
 
   // If no matches were found, return the input treated as a single sentence
   return acc.length === 0 ? [input] : acc;
-}
-
-function hasOpenSentenceDelimiter(input: string): boolean {
-  let depth = 0;
-  let insideQuotes = false;
-  for (let index = 0; index < input.length; index++) {
-    const character = input[index];
-    if (character === '"') {
-      insideQuotes = opensDoubleQuote(input, index, insideQuotes);
-    } else if (openingBracketReg.test(character)) {
-      depth++;
-    } else if (closingBracketReg.test(character)) {
-      depth = Math.max(0, depth - 1);
-    }
-  }
-  return insideQuotes || depth > 0;
 }
 
 /** Options for rule-based sentence segmentation. */

@@ -571,6 +571,20 @@ describe('Utility Functions', () => {
       },
     );
 
+    test('keeps wrapped place abbreviations invariant under case folding', () => {
+      const input = 'He moved to Calif.\nNext year.';
+      expect(segmentCaseNeutrally(input)).toEqual(['He moved to Calif. Next year.']);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(['he moved to calif. next year.']);
+    });
+
+    test.each(['\n', '\r\n', '\r'])(
+      'does not split abbreviations inside wrapped single quotes across %j',
+      (lineBreak) => {
+        const input = `We invested in 'Acme Co.${lineBreak}International Holdings' today.`;
+        expect(ss(input)).toEqual(["We invested in 'Acme Co. International Holdings' today."]);
+      },
+    );
+
     test('should split two letter uppercase abbreviations at the end of a sentence', () => {
       expect(ss('They closed the deal with Pitt, Briggs & Co. It closed yesterday.')).toEqual([
         'They closed the deal with Pitt, Briggs & Co.',
@@ -906,6 +920,22 @@ describe('Utility Functions', () => {
           ['--max-old-space-size=64'],
         );
       });
+
+      test('tracks enclosing delimiters without rescanning wrapped abbreviation chains', () => {
+        expectBundledScriptToPass(
+          `
+            const content = Array.from({ length: 4000 }, (_, index) => 'A' + index + ' etc.\\n').join('');
+            const summary = 'Intro (' + content + 'Tail) done.';
+            const sentences = module.exports.sentenceSegment(summary);
+            if (sentences.length !== 1 || !sentences[0].endsWith('Tail) done.')) {
+              throw new Error('Wrapped abbreviation segmentation changed');
+            }
+            process.stdout.write('ok');
+          `,
+          3000,
+          ['--max-old-space-size=64'],
+        );
+      }, 10_000);
 
       test('should handle long strings without sentence terminators quickly', () => {
         const input = 'a'.repeat(64_000);
