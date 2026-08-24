@@ -100,7 +100,7 @@ const closingBracketReg = /[\])}>]/;
 const sentenceContinuationReg =
   /^(?:and|or|but|nor|for|yet|so|at|in|on|of|to|from|with|by|as|then|because|while|after|before|although|though|since|unless|until|when|where|whether|if|once|whereas)\b/i;
 const independentSentenceReg =
-  /^(?:in\s+(?:fact|time)\b|(?:after|because|while|before|although|though|since|unless|until|when|where|whether|if|once|whereas)\s+[^,.!?]{1,120},|(?:and|but|or|yet|so|then)\s+(?:(?:i|we|he|she|they|you|it)\b|(?:(?:the|a|an|my|our|their|his|her)\s+)?[\p{Letter}\p{Mark}'’-]+\s+(?:is|are|was|were|has|have|had|did|does|can|could|will|would|should|left|leave|leaves|went|came|said|stayed|arrived|agreed|rose|works|worked|runs|ran)\b))/iu;
+  /^(?:in\s+(?:fact|time)\b|\p{Letter}+\s+[^,.!?]{1,120},|(?:and|but|or|yet|so|then)\s+(?:(?:i|we|he|she|they|you|it)\b|(?:(?:the|a|an|my|our|their|his|her)\s+)?[\p{Letter}\p{Mark}'’-]+\s+(?:is|are|was|were|has|have|had|did|does|can|could|will|would|should|left|leave|leaves|went|came|said|stayed|arrived|agreed|rose|works|worked|runs|ran)\b))/iu;
 
 /** Keep merged fragments separate; boundary rules only need a suffix and word casing. */
 class SentenceBuffer {

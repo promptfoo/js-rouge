@@ -504,7 +504,16 @@ describe('Utility Functions', () => {
       'After that, John smiled.',
       'Because he was late, John hurried.',
       'While we waited, John arrived.',
-    ])('recognizes independent sentence-initial subordinators: %s', (continuation) => {
+      'At noon, John left.',
+      'On Monday, work resumed.',
+      'With little warning, it ended.',
+      'By noon, we returned.',
+      'From there, everyone left.',
+      'To begin, we agreed.',
+      'As expected, it worked.',
+      'In July, we moved.',
+      'For example, John laughed.',
+    ])('recognizes independent sentence-initial clauses: %s', (continuation) => {
       const input = `The list includes cats, dogs, etc. ${continuation}`;
       const expected = ['The list includes cats, dogs, etc.', continuation];
       expect(segmentCaseNeutrally(input)).toEqual(expected);
