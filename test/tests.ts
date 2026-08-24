@@ -350,6 +350,11 @@ describe('Utility Functions', () => {
         /materialization limit/,
       );
     });
+
+    test('should reject excessive unpadded n-gram materialization', () => {
+      const tokens = new Array<string>(2000).fill('a');
+      expect(() => nGram(tokens, 1000)).toThrow(/materialization limit/);
+    });
   });
 
   describe('skipBigram', () => {
@@ -1589,6 +1594,25 @@ describe('Core Functions', () => {
       expect(n('a', 'a', { n: 1_000_000_000, nGram })).toBe(1);
       expect(nGram).toHaveBeenCalledTimes(2);
     });
+
+    test('should reject excessive built-in n-grams within a small heap', () => {
+      expectBundledScriptToPass(
+        `
+          const summary = Array.from({ length: 6000 }, () => 'a').join(' ');
+          try {
+            module.exports.n(summary, summary, { n: 3000 });
+            throw new Error('excessive n-grams were accepted');
+          } catch (error) {
+            if (!(error instanceof RangeError) || !/materialization limit/.test(error.message)) {
+              throw error;
+            }
+          }
+          process.stdout.write('ok');
+        `,
+        30_000,
+        ['--max-old-space-size=64'],
+      );
+    }, 30_000);
 
     test('should correctly compute ROUGE-N score with custom beta', () => {
       // With beta=0, F-score equals precision
