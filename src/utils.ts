@@ -571,7 +571,11 @@ function updateCitationQuotationState(input: string, index: number, closers: str
     closers.push(character === '“' ? '”' : '’');
     return;
   }
-  if (character === '”' || character === '’') {
+  if (character === '«') {
+    closers.push('»');
+    return;
+  }
+  if (character === '”' || character === '’' || character === '»') {
     if (closers.at(-1) === character) {
       closers.pop();
     }
@@ -787,7 +791,7 @@ function citationEnd(
   }
 
   let next = end;
-  while (next < input.length && /[\s"'“‘([{<]/.test(input[next])) {
+  while (next < input.length && /[\s"'“‘«([{<]/.test(input[next])) {
     next++;
   }
   const suffix = input.slice(Math.max(0, index + 1 - sentenceSuffixLength), index + 1);
@@ -812,7 +816,7 @@ function citationEnd(
 
 function citationDelimiterEnd(input: string, index: number, insideQuotes: boolean): number {
   let end = closingDelimiterEnd(input, index, insideQuotes);
-  while (end < input.length && /[”’]/.test(input[end])) {
+  while (end < input.length && /[”’»]/.test(input[end])) {
     end = closingDelimiterEnd(input, end, false);
   }
   return end;
@@ -850,12 +854,17 @@ function isCitationContext(
 
   const previous = Array.from(input.slice(Math.max(0, index - 2), index)).at(-1) ?? '';
   const previousStart = index - previous.length;
+  const precedingToken =
+    input.slice(Math.max(0, index - 64), index).match(/[\p{Letter}\p{Mark}\p{Number}_-]+$/u)?.[0] ??
+    '';
+  const standaloneIdentifier = /^[\p{Lu}\p{Number}_-]{2,}$/u.test(precedingToken);
   const labeledSection =
     /\b(?:appendix|section|chapter|part|figure|table|paragraph|article|clause)\s+[\p{Letter}\p{Number}_-]+$/iu.test(
       input.slice(Math.max(0, index - 96), index),
     );
   return (
     /^[\p{Letter}\p{Mark})\]]$/u.test(previous) &&
+    !standaloneIdentifier &&
     !labeledSection &&
     !(
       input[index] === '.' &&

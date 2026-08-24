@@ -668,6 +668,7 @@ describe('Utility Functions', () => {
       ['He said "Alpha."[1] Beta.', ['He said "Alpha."[1]', 'Beta.']],
       ['(Alpha.)[1] Beta.', ['(Alpha.)[1]', 'Beta.']],
       ['“Alpha.[1]” Beta.', ['“Alpha.[1]”', 'Beta.']],
+      ['«Alpha.[1]» Beta.', ['«Alpha.[1]»', 'Beta.']],
       ['Alpha.[1] “Beta.”', ['Alpha.[1]', '“Beta.”']],
       [
         "In the '90s, Alpha.[1] Today's report follows.",
@@ -695,6 +696,7 @@ describe('Utility Functions', () => {
       'Appendix A.1 Introduction',
       'Appendix IV.1 Introduction',
       'Section ABC.1 Introduction',
+      'ABC.1 Introduction.',
       'I work for the U.S.[1] Government agency.',
     ])('preserves dotted section identifiers and cited abbreviation continuations: %s', (input) => {
       expect(ss(input)).toEqual([input]);
@@ -707,6 +709,7 @@ describe('Utility Functions', () => {
       'She said ‘Alpha.[1] Beta.’ aloud.',
       'She said “Alpha.[1] Beta.” aloud.',
       'She said “He called ‘Alpha.[1]’ Beta.” aloud.',
+      'He said «Alpha.[1] Beta.» aloud.',
       'He asked (really?)[1] John to continue.',
       'He noted (Alpha.[1] Beta.) today.',
       'See [Alpha.[1] Beta.] today.',
