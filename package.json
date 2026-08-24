@@ -7,9 +7,14 @@
   "types": "dist/rouge.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/rouge.d.ts",
-      "import": "./dist/rouge.mjs",
-      "require": "./dist/rouge.js"
+      "import": {
+        "types": "./dist/rouge.d.mts",
+        "default": "./dist/rouge.mjs"
+      },
+      "require": {
+        "types": "./dist/rouge.d.ts",
+        "default": "./dist/rouge.js"
+      }
     }
   },
   "scripts": {
@@ -17,14 +22,15 @@
     "test:package": "node scripts/package-smoke.js",
     "build": "npm run clean && npm run build:js && npm run build:types",
     "build:js": "esbuild src/rouge.ts --bundle --minify --sourcemap --platform=node --target=node18 --outfile=dist/rouge.js && esbuild src/rouge.ts --bundle --minify --sourcemap --platform=neutral --format=esm --target=node18 --outfile=dist/rouge.mjs",
-    "build:types": "tsc -p tsconfig.json --emitDeclarationOnly --outDir dist",
+    "build:types": "tsc -p tsconfig.json --emitDeclarationOnly --outDir dist && node scripts/write-esm-types.js",
     "clean": "node -e \"require('node:fs').rmSync('dist', { recursive: true, force: true })\"",
     "type-check": "tsc -p tsconfig.test.json",
     "lint": "biome lint .",
     "format": "biome format --write . && prettier --write \"**/*.md\"",
     "check": "biome check --write . && prettier --write \"**/*.md\"",
+    "prepack": "npm run build",
     "prepublishOnly": "npm run build && npm run test:package",
-    "prepare": "husky"
+    "prepare": "node scripts/prepare.js"
   },
   "repository": {
     "type": "git",
@@ -50,7 +56,7 @@
     "@swc/core": "^1.15.5",
     "@swc/jest": "^0.2.39",
     "@types/jest": "^30.0.0",
-    "@types/node": "18.19.130",
+    "@types/node": "24.13.3",
     "esbuild": "^0.28.1",
     "husky": "^9.1.7",
     "jest": "^30.2.0",
@@ -63,6 +69,7 @@
   },
   "files": [
     "dist",
+    "scripts/prepare.js",
     "src",
     "README.md",
     "LICENSE"

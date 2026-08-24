@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
 const {
+  copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -31,12 +32,8 @@ function writeConsumerJson(file, value) {
 
 try {
   assert.ok(npmCli, 'Run the package smoke test through npm');
-  assert.ok(existsSync(join(repositoryRoot, 'dist', 'rouge.js')), 'Build the package first');
-  run(
-    process.execPath,
-    [npmCli, 'pack', '--ignore-scripts', '--pack-destination', temporaryRoot],
-    repositoryRoot,
-  );
+  rmSync(join(repositoryRoot, 'dist'), { force: true, recursive: true });
+  run(process.execPath, [npmCli, 'pack', '--pack-destination', temporaryRoot], repositoryRoot);
 
   const tarballs = readdirSync(temporaryRoot).filter((file) => file.endsWith('.tgz'));
   assert.equal(tarballs.length, 1, 'npm pack should create exactly one tarball');
@@ -51,21 +48,28 @@ assert.equal(s('a b', 'a b'), 1);
   writeConsumerFile(
     'commonjs.cjs',
     `const assert = require('node:assert/strict');
-const { l, n, s } = require('js-rouge');
+const rouge = require('js-rouge');
+const { l, n, s } = rouge;
+assert.equal(Object.hasOwn(rouge, 'default'), false);
 ${runtimeAssertions}`,
   );
   writeConsumerFile(
     'module.mjs',
     `import assert from 'node:assert/strict';
 import { l, n, s } from 'js-rouge';
+import * as rouge from 'js-rouge';
+assert.equal(Object.hasOwn(rouge, 'default'), false);
 ${runtimeAssertions}`,
   );
   writeConsumerFile(
     'types.ts',
     `import { n, type RougeNOptions } from 'js-rouge';
+// @ts-expect-error The ESM entry point does not export a default.
+import missingDefault from 'js-rouge';
 const options: RougeNOptions = { n: 2, caseSensitive: false };
 const score: number = n('a b', 'A B', options);
 void score;
+void missingDefault;
 `,
   );
   writeConsumerJson('tsconfig.json', {
@@ -105,6 +109,13 @@ void score;
   for (const field of ['dependencies', 'optionalDependencies', 'peerDependencies']) {
     assert.equal(installedPackage[field], undefined, `The package must not declare ${field}`);
   }
+
+  const productionRoot = join(temporaryRoot, 'production');
+  mkdirSync(join(productionRoot, 'scripts'), { recursive: true });
+  for (const file of ['package.json', 'package-lock.json', 'scripts/prepare.js']) {
+    copyFileSync(join(repositoryRoot, file), join(productionRoot, file));
+  }
+  run(process.execPath, [npmCli, 'ci', '--omit=dev', '--no-audit', '--no-fund'], productionRoot);
 
   const declarationMaps = readdirSync(join(installedRoot, 'dist')).filter((file) =>
     file.endsWith('.d.ts.map'),

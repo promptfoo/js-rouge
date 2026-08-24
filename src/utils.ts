@@ -1,6 +1,11 @@
 import { GATE_EXCEPTIONS, GATE_SUBSTITUTIONS, TREEBANK_CONTRACTIONS } from './constants';
 import { lcsIndices } from './lcs';
-import { validateBeta, validateMaxSkip, validateNGramSize } from './validation';
+import {
+  validateBeta,
+  validateMaxSkip,
+  validateNGramMaterialization,
+  validateNGramSize,
+} from './validation';
 
 /**
  * Splits a sentence into an array of word tokens
@@ -21,7 +26,7 @@ import { validateBeta, validateMaxSkip, validateNGramSize } from './validation';
  */
 export function treeBankTokenize(input: string): string[] {
   // Contraction rules below expect spaces, including at word boundaries.
-  const text = input.trim().replace(/\s+/g, ' ');
+  const text = input.replace(/[\s\u0085]+/g, ' ').trim();
   if (text.length === 0) {
     return [];
   }
@@ -34,7 +39,7 @@ export function treeBankTokenize(input: string): string[] {
       (opensDoubleQuote(text, index, insideQuotes) &&
         (quote === '"' ||
           (index > 0 &&
-            /^[\p{Letter}\p{Number}]$/u.test(characterAt(text, index + 2)) &&
+            /^[\p{Letter}\p{Number}\p{Sc}\p{Ps}]$/u.test(characterAt(text, index + 2)) &&
             text.slice(index + 2).match(/``|''|"/)?.[0] === "''")));
     return insideQuotes ? ' `` ' : " '' ";
   });
@@ -42,7 +47,7 @@ export function treeBankTokenize(input: string): string[] {
   // Preserve numeric separators and acronym dots, even at a heuristic sentence boundary.
   parse = parse
     .replace(/\.{3}/g, ' ... ')
-    .replace(/[:,](?!\d)/g, ' $& ')
+    .replace(/[:,](?!\p{Decimal_Number})/gu, ' $& ')
     .replace(/[;@#$%&]/g, ' $& ')
     .replace(/([^.])(?<!\b[A-Za-z]\.[A-Za-z])(\.)([\])}>'\s]*)$/g, '$1 $2$3 ')
     .replace(/[?!]/g, ' $& ')
@@ -75,6 +80,24 @@ function opensDoubleQuote(input: string, index: number, insideQuotes: boolean): 
   return !insideQuotes && (index === 0 || /[\s([{<]/.test(input[index - 1]));
 }
 
+function quotationState(input: string, index: number, insideQuotes: boolean): boolean {
+  if (input[index] === '"') {
+    return opensDoubleQuote(input, index, insideQuotes);
+  }
+  if (input.startsWith('``', index)) {
+    return true;
+  }
+  if (!input.startsWith("''", index)) {
+    return insideQuotes;
+  }
+  return (
+    !insideQuotes &&
+    opensDoubleQuote(input, index, false) &&
+    /^[\p{Letter}\p{Number}\p{Sc}\p{Ps}]$/u.test(characterAt(input, index + 2)) &&
+    input.slice(index + 2).includes("''")
+  );
+}
+
 function escapeRegExp(input: string): string {
   return input.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
@@ -101,6 +124,10 @@ const listMarkerReg =
   /(?:^|\s)(?:(?:[•⁃]\s*)?\d+(?:\.\)|[.)])|\p{Cased}\.)(?=\s+["'([{<]*\p{Cased})/gu;
 const geographicAcronymReg = /\bU\.S(?:\.A)?\.$/i;
 const geographicContinuationReg = /^(?:government|army|navy|military|congress)\b/i;
+const sentenceContinuationReg =
+  /^(?:and|or|but|nor|for|yet|so|at|in|on|of|to|from|with|by|as|then|because|while|after|before|although|though|since|unless|until|when|where|whether|if|once|whereas)\b/i;
+const independentSentenceReg =
+  /^(?:in\s+(?:fact|time)\b|\p{Letter}+\s+[^,.!?]{1,120},|(?:and|but|or|yet|so|then)\s+(?:(?:i|we|he|she|they|you|it)\b|(?:(?:the|a|an|my|our|their|his|her)\s+)?(?!(?:more|later|moved)\b)[\p{Letter}\p{Mark}'’-]+\s+[\p{Letter}\p{Mark}'’-]+\b))/iu;
 
 /** Keep merged fragments separate; boundary rules only need a suffix and word casing. */
 class SentenceBuffer {
@@ -108,6 +135,10 @@ class SentenceBuffer {
   #parts: string[] = [];
   #normalizedThrough = 0;
   #words: { titleCase: boolean; lowerCase: boolean }[] = [];
+  #openingDelimiters: string[] = [];
+  #insideDoubleQuotes = false;
+  #insideSingleQuotes = false;
+  #lastCharacter = '';
   hasLineBreaks = false;
   startsWithTitleCase = false;
 
@@ -128,6 +159,12 @@ class SentenceBuffer {
     return this.#words.at(-2)?.titleCase ?? false;
   }
 
+  get hasOpenDelimiter(): boolean {
+    return (
+      this.#openingDelimiters.length > 0 || this.#insideDoubleQuotes || this.#insideSingleQuotes
+    );
+  }
+
   get suffix(): string {
     let suffix = '';
     for (let i = this.#parts.length - 1; i >= 0 && suffix.length < sentenceSuffixLength; i--) {
@@ -140,6 +177,8 @@ class SentenceBuffer {
     if (text.length === 0) {
       return;
     }
+
+    this.#trackDelimiters(text);
 
     // A merge without separating whitespace can continue the previous word.
     const previous = this.#words.at(-1);
@@ -164,6 +203,51 @@ class SentenceBuffer {
 
     this.hasLineBreaks = this.hasLineBreaks || breakReg.test(text);
     this.#parts.push(text);
+  }
+
+  #trackDelimiters(text: string): void {
+    for (let index = 0; index < text.length; index++) {
+      const character = text[index];
+      if (character === '"') {
+        const previous = index === 0 ? this.#lastCharacter : text[index - 1];
+        this.#insideDoubleQuotes =
+          !this.#insideDoubleQuotes &&
+          (previous.length === 0 || /^[\s\p{Punctuation}]$/u.test(previous));
+      } else if (character === "'") {
+        this.#trackSingleQuote(text, index);
+      } else if (
+        !(this.#insideDoubleQuotes || this.#insideSingleQuotes) &&
+        openingBracketReg.test(character) &&
+        (character !== '<' || /^\p{Letter}$/u.test(characterAt(text, index + 1)))
+      ) {
+        this.#openingDelimiters.push(character);
+      } else if (
+        !(this.#insideDoubleQuotes || this.#insideSingleQuotes) &&
+        closingBracketReg.test(character)
+      ) {
+        const opener = '([{<'[')]}>'.indexOf(character)];
+        if (this.#openingDelimiters.at(-1) === opener) {
+          this.#openingDelimiters.pop();
+        }
+      }
+    }
+    this.#lastCharacter = text.at(-1) ?? this.#lastCharacter;
+  }
+
+  #trackSingleQuote(text: string, index: number): void {
+    const previous = index === 0 ? this.#lastCharacter : text[index - 1];
+    const following = text[index + 1] ?? '';
+    if (this.#insideSingleQuotes) {
+      const possessive =
+        previous.toLowerCase() === 's' &&
+        /\s/.test(following) &&
+        /^(?:\p{Lu}|\p{Ll}+\s+\p{Lu})/u.test(text.slice(index + 1).trimStart());
+      this.#insideSingleQuotes =
+        possessive || (following.length > 0 && !/[\s.,!?;:)\]}]/.test(following));
+      return;
+    }
+    this.#insideSingleQuotes =
+      (previous.length === 0 || /^[\s\p{Punctuation}]$/u.test(previous)) && /\S/.test(following);
   }
 
   trimEnd(): void {
@@ -229,7 +313,7 @@ export function sentenceSegment(
   }
 
   // Scan terminals before applying abbreviation and line-wrap rules.
-  const chunks = sentenceChunks(input, caseNeutral);
+  const chunks = sentenceChunks(input.replace(/\u0085/g, ' '), caseNeutral);
 
   const acc: string[] = [];
   let pending: SentenceBuffer | undefined;
@@ -250,11 +334,33 @@ export function sentenceSegment(
       const lastWord = suffix.match(/\S+$/)?.[0] ?? '';
 
       if (chunk.hasLineBreaks) {
-        if (chunks[idx + 1] && chunk.startsWithTitleCase) {
+        const nextChunk = chunks[idx + 1];
+        const nextSentence = nextChunk?.replace(/^[\s"'([{<]+/, '');
+        const abbreviation = gateSuffix.trimEnd();
+        if (
+          nextSentence &&
+          abbrvReg.test(abbreviation) &&
+          !excepReg.test(abbreviation) &&
+          (caseNeutral
+            ? startsWithCasedCharacter(nextSentence) &&
+              (!sentenceContinuationReg.test(nextSentence) ||
+                independentSentenceReg.test(nextSentence))
+            : strIsTitleCase(nextSentence)) &&
+          !chunk.hasOpenDelimiter
+        ) {
+          chunk.normalizeWhitespace();
+          acc.push(chunk.text());
+        } else if (
+          nextChunk &&
+          (chunk.startsWithTitleCase ||
+            (caseNeutral &&
+              sentenceContinuationReg.test(nextChunk.trimStart()) &&
+              /[.!?]["'\])}>]\s*[\r\n]/.test(suffix)))
+        ) {
           // Catch line breaks embedded within valid sentences
           // i.e. sentences that start with a capital letter
           // and normalize every wrap before reprocessing the joined chunk.
-          chunk.append(` ${chunks[idx + 1]}`);
+          chunk.append(` ${nextChunk}`);
           chunk.normalizeWhitespace();
           pending = chunk;
         } else {
@@ -270,7 +376,11 @@ export function sentenceSegment(
       } else if (chunks[idx + 1] && abbrvReg.test(gateSuffix)) {
         const nextChunk = chunks[idx + 1];
         if (
-          (caseNeutral ? startsWithCasedCharacter(nextChunk) : strIsTitleCase(nextChunk)) &&
+          (caseNeutral
+            ? startsWithCasedCharacter(nextChunk) &&
+              (!sentenceContinuationReg.test(nextChunk.trimStart()) ||
+                independentSentenceReg.test(nextChunk.trimStart()))
+            : strIsTitleCase(nextChunk)) &&
           !excepReg.test(gateSuffix) &&
           !(
             geographicAcronymReg.test(gateSuffix) &&
@@ -281,7 +391,7 @@ export function sentenceSegment(
           acc.push(chunk.text());
         } else {
           // Catch common abbreviations and merge them with a delimiting space
-          chunk.append(` ${trimSpaces(nextChunk.replace(/ +/g, ' '))}`);
+          chunk.append(` ${trimSpaces(nextChunk.replace(/[^\S\r\n]+/g, ' '))}`);
           pending = chunk;
         }
       } else if (chunks[idx + 1] && matchesAcronymSuffix(suffix, lastWord, caseNeutral)) {
@@ -408,9 +518,7 @@ function sentenceChunks(input: string, caseNeutral: boolean): string[] {
 
   for (let index = 0; index < input.length; index++) {
     const char = input[index];
-    if (char === '"') {
-      insideQuotes = opensDoubleQuote(input, index, insideQuotes);
-    }
+    insideQuotes = quotationState(input, index, insideQuotes);
     if (openingBracketReg.test(char)) {
       if (brackets.depth === 0) {
         brackets.standalone = start === -1;
@@ -553,7 +661,8 @@ function sentenceEnd(
   }
 
   const closedBrackets = countClosingBrackets(input, index + 1, end);
-  const closesQuotation = insideQuotes && input[end - 1] === '"';
+  const closesQuotation =
+    insideQuotes && (input[end - 1] === '"' || input.slice(end - 2, end) === "''");
   if (
     closedBrackets > 0 &&
     (closedBrackets < brackets.depth || !(brackets.standalone || closesQuotation))
@@ -572,12 +681,14 @@ function sentenceEnd(
   const gateSuffix = caseNeutral ? suffix.toLowerCase() : suffix;
   const nextCharacter = characterAt(input, next);
   const startsWithLetter = caseNeutral
-    ? isCasedCharacter(nextCharacter)
+    ? isNeutralSentenceStart(input, end, next)
     : charIsUpperCase(nextCharacter);
   const startsWithNumber =
     /^\p{Number}$/u.test(nextCharacter) &&
     !abbrvReg.test(gateSuffix) &&
-    !/^\S+(?:\s*%|\s+(?:time|year)s?\b)/iu.test(input.slice(next));
+    !/^\S+(?:\s*%|\s+(?:time|year)s?\b|\s+(?:month|week|day|hour|minute|second|star|point|percent)s?(?=\s*[.!?](?:\s|$)|\s*$))/iu.test(
+      input.slice(next),
+    );
   if (!(startsWithLetter || startsWithNumber)) {
     return -1;
   }
@@ -675,6 +786,19 @@ function isUnspacedSentenceBoundary(
     insideAddress ||
     insideHostname ||
     dottedIdentifier
+  );
+}
+
+function isNeutralSentenceStart(input: string, previousEnd: number, next: number): boolean {
+  if (!isCasedCharacter(characterAt(input, next))) {
+    return false;
+  }
+
+  const continuation = input.slice(next);
+  return (
+    !sentenceContinuationReg.test(continuation) ||
+    independentSentenceReg.test(continuation) ||
+    input.slice(previousEnd, next).includes('"')
   );
 }
 
@@ -782,6 +906,17 @@ export function skipBigram(tokens: string[], maxSkip: number = Number.POSITIVE_I
     throw new RangeError('Input must have at least two words');
   }
 
+  const distance = Math.min(maxSkip, tokens.length - 1);
+  let work = distance * tokens.length - (distance * (distance + 1)) / 2;
+  for (let index = 0; index < tokens.length && work <= 1_000_000; index++) {
+    work +=
+      tokens[index].length *
+      (Math.min(distance, index) + Math.min(distance, tokens.length - index - 1));
+  }
+  if (work > 1_000_000) {
+    throw new RangeError('Skip-bigram generation exceeds the materialization limit');
+  }
+
   const acc: string[] = [];
   for (let baseIdx = 0; baseIdx < tokens.length - 1; baseIdx++) {
     const maxIdx = Math.min(baseIdx + 1 + maxSkip, tokens.length);
@@ -804,8 +939,6 @@ export const NGRAM_DEFAULT_OPTS: NGramOptions = {
   end: false,
   val: '<S>',
 };
-
-const MAX_NGRAM_MATERIALIZATION_WORK = 1_000_000;
 
 /**
  * Returns n-grams for an array of word tokens.
@@ -832,18 +965,7 @@ export function nGram(tokens: string[], n = 2, pad: Partial<NGramOptions> = {}):
   }
 
   const gramCount = paddedLength - n + 1;
-  let materializationWork = paddingLength + n * gramCount;
-  for (let i = 0; i < paddedLength && materializationWork <= MAX_NGRAM_MATERIALIZATION_WORK; i++) {
-    const token =
-      i < startPaddingSize || i >= startPaddingSize + tokens.length
-        ? value
-        : tokens[i - startPaddingSize];
-    materializationWork +=
-      Math.max(token.length - 1, 0) * Math.min(i + 1, n, gramCount, paddedLength - i);
-  }
-  if (materializationWork > MAX_NGRAM_MATERIALIZATION_WORK) {
-    throw new RangeError('N-gram generation exceeds the materialization limit');
-  }
+  validateNGramMaterialization(tokens, n, startPaddingSize, endPaddingSize, value);
 
   const startPadding = new Array<string>(startPaddingSize).fill(value);
   const endPadding = new Array<string>(endPaddingSize).fill(value);

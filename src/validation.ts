@@ -16,3 +16,65 @@ export function validateBeta(beta: number): void {
     throw new RangeError('beta must be a non-negative number or Infinity');
   }
 }
+
+const MAX_NGRAM_MATERIALIZATION_WORK = 1_000_000;
+
+function encodedTokenLength(token: string): number {
+  let length = token.length + 2;
+  for (let index = 0; index < token.length; index++) {
+    const code = token.charCodeAt(index);
+    if (code === 34 || code === 92) {
+      length++;
+    } else if (code < 32) {
+      length += code === 8 || code === 9 || code === 10 || code === 12 || code === 13 ? 1 : 5;
+    } else if (code >= 0xd8_00 && code <= 0xdf_ff) {
+      const following = token.charCodeAt(index + 1);
+      if (code <= 0xdb_ff && following >= 0xdc_00 && following <= 0xdf_ff) {
+        index++;
+      } else {
+        length += 5;
+      }
+    }
+  }
+  return length;
+}
+
+export function validateNGramMaterialization(
+  tokens: string[],
+  n: number,
+  startPaddingSize = 0,
+  endPaddingSize = 0,
+  paddingValue = '',
+  encoded = false,
+): number {
+  const paddingLength = startPaddingSize + endPaddingSize;
+  const paddedLength = tokens.length + paddingLength;
+  const gramCount = paddedLength - n + 1;
+  let work = paddingLength + gramCount * (2 * n - 1) + (encoded ? tokens.length : 0);
+
+  for (let index = 0; index < paddedLength && work <= MAX_NGRAM_MATERIALIZATION_WORK; index++) {
+    const token =
+      index < startPaddingSize || index >= startPaddingSize + tokens.length
+        ? paddingValue
+        : (tokens[index - startPaddingSize] ?? '');
+    const length = encoded ? encodedTokenLength(token) : token.length;
+    work += Math.max(length - 1, 0) * Math.min(index + 1, n, gramCount, paddedLength - index);
+  }
+
+  if (work > MAX_NGRAM_MATERIALIZATION_WORK) {
+    throw new RangeError('N-gram generation exceeds the materialization limit');
+  }
+  return work;
+}
+
+export function validateNGramScoringMaterialization(
+  candidateWork: number,
+  reference: string[],
+  n: number,
+): void {
+  const referenceWork = validateNGramMaterialization(reference, n, 0, 0, '', true);
+  const referenceGrams = reference.length - n + 1;
+  if (candidateWork + referenceWork + referenceGrams > MAX_NGRAM_MATERIALIZATION_WORK) {
+    throw new RangeError('N-gram generation exceeds the materialization limit');
+  }
+}

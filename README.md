@@ -164,7 +164,7 @@ Omitted options and fields explicitly set to `undefined` use the documented defa
 
 ROUGE-N and ROUGE-S count repeated matching grams up to the smaller of their frequencies in the candidate and reference. Correcting earlier versions' set-based counting changes scores for repeated grams; rerun evaluation baselines when comparing versions.
 
-Built-in ROUGE-S scoring counts skip-bigram frequencies without allocating the full pair arrays. Calling the exported `skipBigram()` utility or supplying a custom `skipBigram` callback still materializes the callback's returned array.
+Built-in ROUGE-S scoring counts skip-bigram frequencies without allocating the full pair arrays. The exported `skipBigram()` utility bounds its pair and character materialization and throws `RangeError` when the limit is exceeded. Custom `skipBigram` callbacks remain responsible for their returned arrays.
 
 Built-in scoring preserves token boundaries even when custom tokenizers return tokens containing spaces, quotes, or separators. For example, `["new york", "city"]` and `["new", "york city"]` no longer count as the same bigram. The exported `nGram()` and `skipBigram()` utilities retain their readable, space-joined output strings; those strings are not collision-free identifiers for arbitrary token arrays. Custom gram generators still receive the original tokens and their returned strings are used as identities, so those callbacks remain responsible for any encoding they need.
 
