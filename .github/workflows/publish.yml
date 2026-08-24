@@ -5,20 +5,55 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing release tag to publish again
+        required: false
+        type: string
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      checks: read
+    steps:
+      - name: Wait for exact-commit CI and security checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          required=("build (18)" "build (20)" "build (22)" "build (24)" "Analyze (actions)" "Analyze (javascript-typescript)")
+          while true; do
+            runs="$(gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/check-runs?per_page=100")"
+            pending=0
+            for name in "${required[@]}"; do
+              result="$(jq -r --arg name "$name" '[.check_runs[] | select(.app.slug == "github-actions" and .name == $name)][0] | "\(.status // "missing") \(.conclusion // "")"' <<< "$runs")"
+              case "$result" in
+                'completed success') ;;
+                completed*) echo "$name failed: $result"; exit 1 ;;
+                *) pending=1 ;;
+              esac
+            done
+            if [ "$pending" -eq 0 ]; then
+              break
+            fi
+            sleep 10
+          done
+
   release-please:
+    needs: validate
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
     outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
+      publish: ${{ steps.publication.outputs.publish }}
     steps:
       # Use GitHub App token so the created PR triggers CI workflows
       # (PRs created with GITHUB_TOKEN don't trigger workflows to prevent loops)
       # Pin to SHA for supply chain security
       - name: Create GitHub App Token
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.release_tag == '' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3
         id: app-token
         with:
@@ -26,14 +61,34 @@ jobs:
           private-key: ${{ secrets.PROMPTFOOBOT_APP_PRIVATE_KEY }}
 
       - name: Release Please
+        if: ${{ github.event_name != 'workflow_dispatch' || inputs.release_tag == '' }}
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5
         id: release
         with:
           token: ${{ steps.app-token.outputs.token }}
 
+      - name: Select release publication
+        id: publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_CREATED: ${{ steps.release.outputs.release_created }}
+        run: |
+          if [ -n "$RELEASE_TAG" ]; then
+            tag="$(gh release view "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)"
+            target="$(gh api "repos/$GITHUB_REPOSITORY/commits/$tag" --jq .sha)"
+            if [ "$target" != "$GITHUB_SHA" ]; then
+              echo "Release $RELEASE_TAG points to $target, not $GITHUB_SHA"
+              exit 1
+            fi
+            echo 'publish=true' >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=${RELEASE_CREATED:-false}" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     needs: release-please
-    if: ${{ needs.release-please.outputs.release_created }}
+    if: ${{ needs.release-please.outputs.publish == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -51,7 +106,7 @@ jobs:
 
   publish-npm:
     needs: [build, release-please]
-    if: ${{ needs.release-please.outputs.release_created }}
+    if: ${{ needs.release-please.outputs.publish == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
