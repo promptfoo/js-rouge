@@ -1,14 +1,20 @@
+const unicodeWordCharacter = '[\\p{ID_Continue}\\u200c\\u200d]';
+
+function contraction(pattern: string): RegExp {
+  return new RegExp(`(?<!${unicodeWordCharacter})${pattern}(?!${unicodeWordCharacter})`, 'giu');
+}
+
 export const TREEBANK_CONTRACTIONS: RegExp[] = [
-  /\b(can)(not)\b/gi,
-  /\b(d)('ye)\b/gi,
-  /\b(gim)(me)\b/gi,
-  /\b(gon)(na)\b/gi,
-  /\b(got)(ta)\b/gi,
-  /\b(lem)(me)\b/gi,
-  /\b(more)('n)\b/gi,
-  /\b(wan)(na) /gi,
-  / ('t)(is)\b/gi,
-  / ('t)(was)\b/gi,
+  contraction('(can)(not)'),
+  contraction("(d)('ye)"),
+  contraction('(gim)(me)'),
+  contraction('(gon)(na)'),
+  contraction('(got)(ta)'),
+  contraction('(lem)(me)'),
+  contraction("(more)('n)"),
+  contraction('(wan)(na)(?= )'),
+  contraction("('t)(is)"),
+  contraction("('t)(was)"),
 ];
 
 export const HONORIFICS: string[] = [
