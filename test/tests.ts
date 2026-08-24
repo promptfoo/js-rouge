@@ -856,6 +856,11 @@ describe('Utility Functions', () => {
 
     test('retains genuine numeric sentence boundaries after quotes', () => {
       expect(ss('"Stop." 123 starts here.')).toEqual(['"Stop."', '123 starts here.']);
+      expect(ss('She said "Stop." 2 days passed.')).toEqual(['She said "Stop."', '2 days passed.']);
+      expect(ss('She said "Stop." 5 stars appeared.')).toEqual([
+        'She said "Stop."',
+        '5 stars appeared.',
+      ]);
     });
 
     test('recognizes Treebank closing quotes after bracketed sentences', () => {

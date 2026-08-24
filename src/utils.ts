@@ -468,7 +468,7 @@ function sentenceEnd(
   const startsWithNumber =
     /^\p{Number}$/u.test(nextCharacter) &&
     !abbrvReg.test(gateSuffix) &&
-    !/^\S+(?:\s*%|\s+(?:time|year|month|week|day|hour|minute|second|star|point|percent)s?\b)/iu.test(
+    !/^\S+(?:\s*%|\s+(?:time|year)s?\b|\s+(?:month|week|day|hour|minute|second|star|point|percent)s?(?=\s*[.!?](?:\s|$)|\s*$))/iu.test(
       input.slice(next),
     );
   if (!(startsWithLetter || startsWithNumber)) {
