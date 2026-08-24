@@ -461,6 +461,22 @@ describe('Utility Functions', () => {
       expect(segmentCaseNeutrally('"mt." next stop.')).toEqual(['"mt." next stop.']);
     });
 
+    test.each([
+      ['He answered "No." In fact, he left.', ['He answered "No."', 'In fact, he left.']],
+      ['She paused. "Then we begin."', ['She paused.', '"Then we begin."']],
+    ])('retains capitalized sentence starts after closing delimiters in %s', (input, expected) => {
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
+    test.each(['\n', '\r\n', '\r'])(
+      'keeps lowercase quote continuations after uncased starts across %j',
+      (lineBreak) => {
+        expect(segmentCaseNeutrally(`2020 saw "hello."${lineBreak}then left.`)).toEqual([
+          '2020 saw "hello." then left.',
+        ]);
+      },
+    );
+
     test.each(['\u212a', '\u0130', 'I\u0307\u0323', 'I\u093e', 'I\u20dd', '\u{10400}\u0307'])(
       'should treat combining marks as part of a case-neutral initial: %s',
       (initial) => {

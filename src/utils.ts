@@ -243,11 +243,18 @@ export function sentenceSegment(
       const lastWord = suffix.match(/\S+$/)?.[0] ?? '';
 
       if (chunk.hasLineBreaks) {
-        if (chunks[idx + 1] && chunk.startsWithTitleCase) {
+        const nextChunk = chunks[idx + 1];
+        if (
+          nextChunk &&
+          (chunk.startsWithTitleCase ||
+            (caseNeutral &&
+              sentenceContinuationReg.test(nextChunk.trimStart()) &&
+              !strIsTitleCase(nextChunk)))
+        ) {
           // Catch line breaks embedded within valid sentences
           // i.e. sentences that start with a capital letter
           // and normalize every wrap before reprocessing the joined chunk.
-          chunk.append(` ${chunks[idx + 1]}`);
+          chunk.append(` ${nextChunk}`);
           chunk.normalizeWhitespace();
           pending = chunk;
         } else {
@@ -265,7 +272,7 @@ export function sentenceSegment(
         if (
           (caseNeutral
             ? startsWithCasedCharacter(nextChunk) &&
-              !sentenceContinuationReg.test(nextChunk.trimStart())
+              (!sentenceContinuationReg.test(nextChunk.trimStart()) || strIsTitleCase(nextChunk))
             : strIsTitleCase(nextChunk)) &&
           !excepReg.test(gateSuffix)
         ) {
@@ -451,7 +458,8 @@ function sentenceEnd(
   const gateSuffix = caseNeutral ? suffix.toLowerCase() : suffix;
   const nextCharacter = characterAt(input, next);
   const startsWithLetter = caseNeutral
-    ? isCasedCharacter(nextCharacter) && !sentenceContinuationReg.test(input.slice(next))
+    ? isCasedCharacter(nextCharacter) &&
+      (!sentenceContinuationReg.test(input.slice(next)) || charIsUpperCase(nextCharacter))
     : charIsUpperCase(nextCharacter);
   const startsWithNumber =
     /^\p{Number}$/u.test(nextCharacter) &&
