@@ -664,7 +664,7 @@ describe('Utility Functions', () => {
       expect(segmentCaseNeutrally(input.toLowerCase())).toEqual([input.toLowerCase()]);
     });
 
-    test.each(['κόσμος', 'κόσμος'])(
+    test.each(['κόσμος', 'κόσμος', '\u0301κόσμος'])(
       'preserves adjacent sentences after ordinary non-ASCII word %s',
       (word) => {
         const input = `${word}.No one answered.`;

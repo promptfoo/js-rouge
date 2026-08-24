@@ -752,7 +752,10 @@ function isUnspacedSentenceBoundary(
     return !insideUrl;
   }
 
-  const suffix = input.slice(Math.max(0, index + 1 - sentenceSuffixLength), index + 1);
+  const suffixStart = Math.max(0, index + 1 - sentenceSuffixLength);
+  const suffix = input.slice(suffixStart, index + 1);
+  const identifierSuffix =
+    suffixStart > 0 && /^\p{Mark}/u.test(suffix) ? `${input[suffixStart - 1]}${suffix}` : suffix;
   const following = input.slice(next);
   const insideAddress =
     precedingToken.includes('@') && !/@[^\s.]+(?:\.[^\s.]+)+\.$/u.test(precedingToken);
@@ -766,8 +769,8 @@ function isUnspacedSentenceBoundary(
         hostnameLabel === hostnameLabel.toLowerCase() ||
         hostnameLabel === hostnameLabel.toUpperCase()));
   const dottedIdentifier = caseNeutral
-    ? /(?:^|[^\p{Letter}\p{Mark}\p{Number}_-])(?=\p{Mark}|[\p{Letter}\p{Mark}\p{Number}_-]*[A-Za-z0-9_İ-])(?:[\p{Letter}\p{Mark}\p{Number}_-]*\p{Cased}|\p{Mark})[\p{Letter}\p{Mark}\p{Number}_-]*\.$/u.test(
-        suffix,
+    ? /(?:^|[^\p{Letter}\p{Mark}\p{Number}_-])(?=[\p{Letter}\p{Mark}\p{Number}_-]*[A-Za-z0-9_İ-])(?:[\p{Letter}\p{Mark}\p{Number}_-]*\p{Cased}|\p{Mark})[\p{Letter}\p{Mark}\p{Number}_-]*\.$/u.test(
+        identifierSuffix,
       ) && /^(?:[\p{Cased}\p{Number}_-]\p{M}*){1,2}(?=\s|[/.]|$)/u.test(following)
     : /\b\p{Lu}[\p{Letter}\p{Number}_-]*\.$/u.test(suffix) &&
       /^[\p{Lu}\p{Number}_-]+(?=\s|[/.]|$)/u.test(following);
