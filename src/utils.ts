@@ -733,11 +733,7 @@ function isUnspacedDelimitedSentenceStart(
   );
 }
 
-function caseNeutralIdentifierContext(
-  input: string,
-  index: number,
-  suffixStart: number,
-): { suffix: string; evidence: boolean } {
+function caseNeutralIdentifierContext(input: string, index: number, suffixStart: number): boolean {
   let start = suffixStart;
   if (/^\p{Mark}/u.test(input.slice(start, index + 1))) {
     while (start > 0 && /^\p{Mark}$/u.test(input[start - 1])) {
@@ -747,12 +743,26 @@ function caseNeutralIdentifierContext(
       start--;
     }
   }
-  const suffix = input.slice(start, index + 1);
-  const token = suffix.match(/[\p{Letter}\p{Mark}\p{Number}_-]+\.$/u)?.[0] ?? '';
-  const evidence =
-    (start < suffixStart && token.length === suffix.length && /^\p{Cased}$/u.test(input[start])) ||
-    /[A-Za-z0-9_-]/.test(token.replace(/İ\p{Mark}*|i\p{Mark}+/gu, ''));
-  return { suffix, evidence };
+  let tokenStart = index;
+  while (tokenStart > start) {
+    const previousUnit = input.charCodeAt(tokenStart - 1);
+    const width = previousUnit >= 0xdc_00 && previousUnit <= 0xdf_ff ? 2 : 1;
+    const character = input.slice(tokenStart - width, tokenStart);
+    if (!/^[\p{Letter}\p{Mark}\p{Number}_-]$/u.test(character)) {
+      break;
+    }
+    tokenStart -= width;
+  }
+  const token = input.slice(tokenStart, index);
+  if (!/\p{Cased}/u.test(token)) {
+    return false;
+  }
+  const normalized = token.normalize('NFC').toLowerCase().normalize('NFC');
+  const stableAscii = normalized.replace(/i\u0307\p{Mark}*/gu, '');
+  return (
+    /[a-z0-9_-]/.test(stableAscii) ||
+    (/\p{Script=Latin}/u.test(normalized) && /\p{Script=Greek}/u.test(normalized))
+  );
 }
 
 function isUnspacedSentenceBoundary(
@@ -776,7 +786,7 @@ function isUnspacedSentenceBoundary(
 
   const suffixStart = Math.max(0, index + 1 - sentenceSuffixLength);
   const suffix = input.slice(suffixStart, index + 1);
-  const identifier = caseNeutralIdentifierContext(input, index, suffixStart);
+  const identifier = caseNeutral && caseNeutralIdentifierContext(input, index, suffixStart);
   const following = input.slice(next);
   const insideAddress =
     precedingToken.includes('@') && !/@[^\s.]+(?:\.[^\s.]+)+\.$/u.test(precedingToken);
@@ -790,11 +800,7 @@ function isUnspacedSentenceBoundary(
         hostnameLabel === hostnameLabel.toLowerCase() ||
         hostnameLabel === hostnameLabel.toUpperCase()));
   const dottedIdentifier = caseNeutral
-    ? identifier.evidence &&
-      /(?:^|[^\p{Letter}\p{Mark}\p{Number}_-])(?:[\p{Letter}\p{Mark}\p{Number}_-]*\p{Cased}|\p{Mark})[\p{Letter}\p{Mark}\p{Number}_-]*\.$/u.test(
-        identifier.suffix,
-      ) &&
-      /^(?:[\p{Cased}\p{Number}_-]\p{M}*){1,2}(?=\s|[/.]|$)/u.test(following)
+    ? identifier && /^(?:[\p{Cased}\p{Number}_-]\p{M}*){1,2}(?=\s|[/.]|$)/u.test(following)
     : /\b\p{Lu}[\p{Letter}\p{Number}_-]*\.$/u.test(suffix) &&
       /^[\p{Lu}\p{Number}_-]+(?=\s|[/.]|$)/u.test(following);
   const initial = caseNeutral ? /^\p{Cased}\p{M}*\./u : /^\p{Lu}\./u;

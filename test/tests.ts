@@ -665,7 +665,7 @@ describe('Utility Functions', () => {
       expect(segmentCaseNeutrally(input.toLowerCase())).toEqual([input.toLowerCase()]);
     });
 
-    test.each(['κόσμος', 'κόσμος', '\u0301κόσμος', 'İş'])(
+    test.each(['κόσμος', 'κόσμος', '\u0301κόσμος', 'İş', 'İşğüşğüşğ', 'I\u0307ş', 'Ḱ'])(
       'preserves adjacent sentences after ordinary non-ASCII word %s',
       (word) => {
         const input = `${word}.No one answered.`;
@@ -1424,6 +1424,13 @@ describe('Utility Functions', () => {
     // Using 500ms threshold to account for CI environment variability
     describe('ReDoS prevention', () => {
       const TIMEOUT_MS = 500;
+
+      test('scans recovered combining-mark prefixes without backtracking', () => {
+        const input = `I${'\u0301'.repeat(16_000)}/aaaaaaa.X`;
+        const started = Date.now();
+        expect(segmentCaseNeutrally(input)).toEqual([input]);
+        expect(Date.now() - started).toBeLessThan(TIMEOUT_MS);
+      });
 
       test('segments large spaced-ellipsis runs within a constrained heap', () => {
         expectBundledScriptToPass(
