@@ -546,8 +546,18 @@ describe('Utility Functions', () => {
     );
 
     test.each([
+      ['The build failed.App restarted.', ['The build failed.', 'App restarted.']],
+      ['The service stopped.Dev investigated.', ['The service stopped.', 'Dev investigated.']],
+    ])('does not mistake an unspaced sentence for a hostname: %s', (input, expected) => {
+      expect(ss(input)).toEqual(expected);
+    });
+
+    test.each([
       ['Hello world."Next sentence."', ['Hello world.', '"Next sentence."']],
       ['Hello world.(Next sentence.)', ['Hello world.', '(Next sentence.)']],
+      ['Hello world.(2 people agreed.)', ['Hello world.', '(2 people agreed.)']],
+      ['Hello world.[2 people agreed.]', ['Hello world.', '[2 people agreed.]']],
+      ['Hello world."2 people agreed."', ['Hello world.', '"2 people agreed."']],
     ])('keeps opening delimiters with adjacent sentence starts in %s', (input, expected) => {
       expect(ss(input)).toEqual(expected);
     });
@@ -557,6 +567,15 @@ describe('Utility Functions', () => {
         'The treaty applies in the E.U.',
         'Congress meets tomorrow.',
       ]);
+    });
+
+    test.each([
+      ['Use etc.Today is Tuesday.', ['Use etc.', 'Today is Tuesday.']],
+      ['He moved to the U.S.Today is Tuesday.', ['He moved to the U.S.', 'Today is Tuesday.']],
+      ['Are you ready?Yes, I am.', ['Are you ready?', 'Yes, I am.']],
+      ['Stop!Run now.', ['Stop!', 'Run now.']],
+    ])('recognizes adjacent terminal boundaries in %s', (input, expected) => {
+      expect(ss(input)).toEqual(expected);
     });
 
     test.each([
@@ -1023,6 +1042,21 @@ describe('Utility Functions', () => {
           ['--max-old-space-size=64'],
         );
       }, 20_000);
+
+      test('streams large list-marker runs within a constrained heap', () => {
+        expectBundledScriptToPass(
+          `
+            const summary = '1. Item '.repeat(400000);
+            const sentences = module.exports.sentenceSegment(summary);
+            if (sentences.length !== 400000 || sentences[0] !== '1. Item') {
+              throw new Error('List-marker segmentation changed');
+            }
+            process.stdout.write('ok');
+          `,
+          20_000,
+          ['--max-old-space-size=64'],
+        );
+      }, 25_000);
 
       test('should segment abbreviation chains within a small heap', () => {
         expectBundledScriptToPass(

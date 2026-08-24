@@ -222,23 +222,9 @@ export function sentenceSegment(
     return [];
   }
 
-  const listMarkers = [...input.matchAll(listMarkerReg)].filter(
-    (marker) =>
-      marker.index === 0 ||
-      !/\b(?:section|chapter|page|figure|table|paragraph|article|clause)$/i.test(
-        input.slice(Math.max(0, marker.index - 24), marker.index).trimEnd(),
-      ),
-  );
-  if (listMarkers.length > 1 && input.slice(0, listMarkers[0].index).trim().length === 0) {
-    return listMarkers.flatMap((marker, index) => {
-      const markerText = marker[0].trim();
-      const body = input
-        .slice(marker.index + marker[0].length, listMarkers[index + 1]?.index ?? input.length)
-        .trim();
-      return sentenceSegment(body, { caseNeutral }).map((sentence, sentenceIndex) =>
-        sentenceIndex === 0 ? `${markerText} ${sentence}` : sentence,
-      );
-    });
+  const list = segmentList(input, caseNeutral);
+  if (list !== undefined) {
+    return list;
   }
 
   // Scan terminals before applying abbreviation and line-wrap rules.
@@ -353,6 +339,44 @@ export function sentenceSegment(
 
   // If no matches were found, return the input treated as a single sentence
   return acc.length === 0 ? [input] : acc;
+}
+
+function nextListMarker(input: string, expression: RegExp): RegExpExecArray | null {
+  let marker = expression.exec(input);
+  while (marker !== null) {
+    if (
+      marker.index === 0 ||
+      !/\b(?:section|chapter|page|figure|table|paragraph|article|clause)$/i.test(
+        input.slice(Math.max(0, marker.index - 24), marker.index).trimEnd(),
+      )
+    ) {
+      return marker;
+    }
+    marker = expression.exec(input);
+  }
+  return null;
+}
+
+function segmentList(input: string, caseNeutral: boolean): string[] | undefined {
+  const expression = new RegExp(listMarkerReg);
+  let current = nextListMarker(input, expression);
+  if (current === null || input.slice(0, current.index).trim().length > 0) {
+    return undefined;
+  }
+  let next = nextListMarker(input, expression);
+  if (next === null) {
+    return undefined;
+  }
+
+  const segments: string[] = [];
+  do {
+    const body = input.slice(current.index + current[0].length, next?.index ?? input.length).trim();
+    const sentences = /[.!?\r\n]/.test(body) ? sentenceSegment(body, { caseNeutral }) : [body];
+    segments.push(`${current[0].trim()} ${sentences[0]}`, ...sentences.slice(1));
+    current = next;
+    next = nextListMarker(input, expression);
+  } while (current !== null);
+  return segments;
 }
 
 /** Options for rule-based sentence segmentation. */
@@ -574,7 +598,9 @@ function isUnspacedDelimitedSentenceStart(
   }
   const character = characterAt(input, next);
   return (
-    character.length > 0 && (caseNeutral ? isCasedCharacter(character) : charIsUpperCase(character))
+    character.length > 0 &&
+    (/^\p{Number}$/u.test(character) ||
+      (caseNeutral ? isCasedCharacter(character) : charIsUpperCase(character)))
   );
 }
 
@@ -585,11 +611,11 @@ function isUnspacedSentenceBoundary(
   caseNeutral: boolean,
 ): boolean {
   const nextCharacter = characterAt(input, next);
-  if (
-    input[index] !== '.' ||
-    !(caseNeutral ? isCasedCharacter(nextCharacter) : charIsUpperCase(nextCharacter))
-  ) {
+  if (!(caseNeutral ? isCasedCharacter(nextCharacter) : charIsUpperCase(nextCharacter))) {
     return false;
+  }
+  if (input[index] !== '.') {
+    return true;
   }
 
   const suffix = input.slice(Math.max(0, index + 1 - sentenceSuffixLength), index + 1);
@@ -597,16 +623,24 @@ function isUnspacedSentenceBoundary(
   const preceding = input.slice(Math.max(0, index - 320), next);
   const previousAt = preceding.lastIndexOf('@');
   const insideAddress = previousAt !== -1 && !/\s/.test(preceding.slice(previousAt));
+  const hostnameLabel = following.match(
+    /^(com|org|net|edu|gov|mil|io|dev|app|co|uk|us|ca|ai|info|biz|me|tv)(?=[/.\s]|$)/i,
+  )?.[0];
   const insideHostname =
     /https?:\/\/|www\./i.test(preceding) ||
-    /^(?:com|org|net|edu|gov|mil|io|dev|app|co|uk|us|ca|ai|info|biz|me|tv)(?=[/.\s]|$)/i.test(
-      following,
-    );
+    (hostnameLabel !== undefined &&
+      (hostnameLabel === hostnameLabel.toLowerCase() ||
+        hostnameLabel === hostnameLabel.toUpperCase()));
   const initial = caseNeutral ? /^\p{Cased}\./u : /^\p{Lu}\./u;
   const trailingInitial = caseNeutral ? /\b\p{Cased}\.$/u : /\b\p{Lu}\.$/u;
   const nextInitial = caseNeutral ? /^\p{Cased}(?=\s|$)/u : /^\p{Lu}(?=\s|$)/u;
+  const gateSuffix = caseNeutral ? suffix.toLowerCase() : suffix;
+  const continuesAbbreviation =
+    abbrvReg.test(gateSuffix) &&
+    (excepReg.test(gateSuffix) ||
+      (geographicAcronymReg.test(gateSuffix) && geographicContinuationReg.test(following)));
   return !(
-    abbrvReg.test(caseNeutral ? suffix.toLowerCase() : suffix) ||
+    continuesAbbreviation ||
     initial.test(following) ||
     (trailingInitial.test(suffix) && nextInitial.test(following)) ||
     /^[^\s]*@/.test(following) ||
