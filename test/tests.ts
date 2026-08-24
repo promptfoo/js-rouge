@@ -1720,6 +1720,25 @@ describe('Core Functions', () => {
       }
     });
 
+    test.each(['a', '"', '\u0000', '\ud800'])(
+      'accounts for JSON token quoting and escapes before allocating: %j',
+      (token) => {
+        const tokenizer = (): string[] => new Array<string>(400_000).fill(token);
+        const stringify = jest.spyOn(JSON, 'stringify');
+        try {
+          expect(() => n('candidate', 'reference', { tokenizer })).toThrow(/materialization limit/);
+          expect(stringify).not.toHaveBeenCalled();
+        } finally {
+          stringify.mockRestore();
+        }
+      },
+    );
+
+    test('retains correctly encoded surrogate pairs under the limit', () => {
+      const tokenizer = (): string[] => ['\ud83d\ude00', '\t'];
+      expect(n('candidate', 'reference', { tokenizer })).toBe(1);
+    });
+
     test('should reject oversized token encoding within a small heap', () => {
       expectBundledScriptToPass(
         `
@@ -1728,6 +1747,25 @@ describe('Core Functions', () => {
           try {
             module.exports.n('candidate', 'reference', { tokenizer });
             throw new Error('oversized tokens were accepted');
+          } catch (error) {
+            if (!(error instanceof RangeError) || !/materialization limit/.test(error.message)) {
+              throw error;
+            }
+          }
+          process.stdout.write('ok');
+        `,
+        30_000,
+        ['--max-old-space-size=32'],
+      );
+    }, 30_000);
+
+    test('rejects large short-token arrays before JSON encoding under a small heap', () => {
+      expectBundledScriptToPass(
+        `
+          const tokenizer = () => new Array(800000).fill('a');
+          try {
+            module.exports.n('candidate', 'reference', { tokenizer });
+            throw new Error('Oversized token encoding was accepted');
           } catch (error) {
             if (!(error instanceof RangeError) || !/materialization limit/.test(error.message)) {
               throw error;

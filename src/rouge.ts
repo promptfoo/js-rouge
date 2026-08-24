@@ -250,7 +250,7 @@ export function n(cand: string, ref: string, opts?: RougeNOptions): number {
       if (tokens.length < size) {
         return [];
       }
-      validateNGramMaterialization(tokens, size);
+      validateNGramMaterialization(tokens, size, 0, 0, '', true);
       return nGram(encodeTokens(tokens), size);
     }
     return nGram(tokens, size);
