@@ -1162,6 +1162,40 @@ describe('Utility Functions', () => {
       ]);
     });
 
+    test.each([
+      "She said 'First! Second!' aloud.",
+      'She said "First! Second!" aloud.',
+      "'Well?' she thought, 'First! Second!' aloud.",
+    ])('keeps internal sentence punctuation inside quoted spans: %s', (input) => {
+      expect(ss(input)).toEqual([input]);
+      expect(segmentCaseNeutrally(input)).toEqual([input]);
+    });
+
+    test('does not mistake apostrophe-prefixed decades for opening quotations', () => {
+      expect(
+        ss(
+          "I wrote this in the 'nineties. It has four sentences. This is the third, isn't it? And this is the last",
+        ),
+      ).toEqual([
+        "I wrote this in the 'nineties.",
+        'It has four sentences.',
+        "This is the third, isn't it?",
+        'And this is the last',
+      ]);
+    });
+
+    test.each([
+      ['“Alpha.” Beta.', ['“Alpha.”', 'Beta.']],
+      ['She said “First! Second!” Next she left.', ['She said “First! Second!”', 'Next she left.']],
+    ])('keeps curly closing quotations with their sentence in %s', (input, expected) => {
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
+    test('scores reordered curly-quoted reference sentences correctly', () => {
+      expect(rouge.l('Beta “Alpha.”', '“Alpha.” Beta.')).toBeCloseTo(4 / 5);
+    });
+
     test('should keep closing double quotes with their sentence', () => {
       expect(ss('He said... "what?" Next.')).toEqual(['He said... "what?"', 'Next.']);
       expect(ss('He said "hello." Then left.')).toEqual(['He said "hello."', 'Then left.']);
