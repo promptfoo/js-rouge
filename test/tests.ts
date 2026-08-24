@@ -1074,6 +1074,19 @@ describe('Utility Functions', () => {
       expect(segmentCaseNeutrally(input)).toEqual([input]);
     });
 
+    test('preserves independent sentences after a terminal versus abbreviation', () => {
+      const input = 'The standard abbreviation is vs. Today we compare, the full word is clearer.';
+      const expected = [
+        'The standard abbreviation is vs.',
+        'Today we compare, the full word is clearer.',
+      ];
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        expected.map((sentence) => sentence.toLowerCase()),
+      );
+    });
+
     test('should not split possessive two letter abbreviations', () => {
       expect(ss("That is JFK Jr.'s book.")).toEqual(["That is JFK Jr.'s book."]);
     });
@@ -1118,6 +1131,25 @@ describe('Utility Functions', () => {
       expect(segmentCaseNeutrally(input)).toEqual([input]);
       expect(segmentCaseNeutrally(input.toLowerCase())).toEqual([input.toLowerCase()]);
     });
+
+    test.each(['Senate', 'Commission'])(
+      'preserves wrapped and unspaced boundaries around U.S. %s',
+      (continuation) => {
+        for (const separator of ['\n', '\r\n', '\r']) {
+          const wrapped = `The U.S.${separator}${continuation} voted.`;
+          const normalized = `The U.S. ${continuation} voted.`;
+          expect(ss(wrapped)).toEqual([normalized]);
+          expect(segmentCaseNeutrally(wrapped)).toEqual([normalized]);
+        }
+
+        const unspaced = `I live in the U.S.${continuation} meets tomorrow.`;
+        expect(ss(unspaced)).toEqual(['I live in the U.S.', `${continuation} meets tomorrow.`]);
+        expect(segmentCaseNeutrally(unspaced)).toEqual([
+          'I live in the U.S.',
+          `${continuation} meets tomorrow.`,
+        ]);
+      },
+    );
 
     test('does not inflate ROUGE-L by splitting geographic noun phrases', () => {
       expect(rouge.l('The U.S. Senate voted.', 'Senate voted The U.S.')).toBeCloseTo(4 / 9);

@@ -130,6 +130,13 @@ const sentenceContinuationReg =
 const independentSentenceReg =
   /^(?:in\s+(?:fact|time)\b|\p{Letter}+\s+[^,.!?]{1,120},|(?:and|but|or|yet|so|then)\s+(?:(?:i|we|he|she|they|you|it)\b|(?:(?:the|a|an|my|our|their|his|her)\s+)?(?!(?:more|later|moved)\b)[\p{Letter}\p{Mark}'’-]+\s+[\p{Letter}\p{Mark}'’-]+\b))/iu;
 
+function isAbbreviationException(suffix: string, following: string): boolean {
+  return (
+    excepReg.test(suffix) &&
+    !(/\bvs\.$/i.test(suffix) && independentSentenceReg.test(following.trimStart()))
+  );
+}
+
 /** Keep merged fragments separate; boundary rules only need a suffix and word casing. */
 class SentenceBuffer {
   readonly #caseNeutral: boolean;
@@ -341,13 +348,17 @@ export function sentenceSegment(
         if (
           nextSentence &&
           abbrvReg.test(abbreviation) &&
-          !excepReg.test(abbreviation) &&
+          !isAbbreviationException(abbreviation, nextSentence) &&
           (caseNeutral
             ? startsWithCasedCharacter(nextSentence) &&
               (!sentenceContinuationReg.test(nextSentence) ||
                 independentSentenceReg.test(nextSentence))
             : strIsTitleCase(nextSentence)) &&
-          !chunk.hasOpenDelimiter
+          !chunk.hasOpenDelimiter &&
+          !(
+            geographicAcronymReg.test(abbreviation) &&
+            geographicContinuationReg.test(nextSentence.trim())
+          )
         ) {
           chunk.normalizeWhitespace();
           acc.push(chunk.text());
@@ -382,7 +393,7 @@ export function sentenceSegment(
               (!sentenceContinuationReg.test(nextChunk.trimStart()) ||
                 independentSentenceReg.test(nextChunk.trimStart()))
             : strIsTitleCase(nextChunk)) &&
-          !excepReg.test(gateSuffix) &&
+          !isAbbreviationException(gateSuffix, nextChunk) &&
           !(
             geographicAcronymReg.test(gateSuffix) &&
             geographicContinuationReg.test(nextChunk.trim())
@@ -698,7 +709,9 @@ function sentenceEnd(
   if (ellipseReg.test(suffix) && closedBrackets > 0) {
     return -1;
   }
-  return abbrvReg.test(gateSuffix) && excepReg.test(gateSuffix) ? -1 : end;
+  return abbrvReg.test(gateSuffix) && isAbbreviationException(gateSuffix, input.slice(next))
+    ? -1
+    : end;
 }
 
 function countClosingBrackets(input: string, start: number, end: number): number {
@@ -776,9 +789,7 @@ function isUnspacedSentenceBoundary(
   const nextInitial = caseNeutral ? /^\p{Cased}(?=\s|$)/u : /^\p{Lu}(?=\s|$)/u;
   const gateSuffix = caseNeutral ? suffix.toLowerCase() : suffix;
   const continuesAbbreviation =
-    abbrvReg.test(gateSuffix) &&
-    (excepReg.test(gateSuffix) ||
-      (geographicAcronymReg.test(gateSuffix) && geographicContinuationReg.test(following)));
+    abbrvReg.test(gateSuffix) && isAbbreviationException(gateSuffix, following);
   return !(
     continuesAbbreviation ||
     initial.test(following) ||
