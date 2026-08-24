@@ -1572,6 +1572,8 @@ describe('Utility Functions', () => {
         ['Alpha... "Beta."', ['Alpha...', '"Beta."']],
         ['Alpha... (Beta.)', ['Alpha...', '(Beta.)']],
         ['Alpha... 2024 was different.', ['Alpha...', '2024 was different.']],
+        ['Alpha... 100% of voters agreed.', ['Alpha...', '100% of voters agreed.']],
+        ['Alpha... 100 years have passed.', ['Alpha...', '100 years have passed.']],
         [
           'This is e.g. Mr. Smith, who talks slowly... And this is another sentence.',
           ['This is e.g. Mr. Smith, who talks slowly...', 'And this is another sentence.'],
@@ -1597,6 +1599,7 @@ describe('Utility Functions', () => {
         'She said, “I... I cannot go.”',
         'She said, ‘I can’t... Alpha.’',
         'She said, «I... Beta.»',
+        'Er sagte: „Ich... Ich kann nicht.“',
         'We noted (Alpha... Beta) today.',
       ])('keeps three-dot ellipses inside surrounding delimiters: %s', (input) => {
         expect(ss(input)).toEqual([input]);
@@ -1619,9 +1622,13 @@ describe('Utility Functions', () => {
       });
 
       test('keeps inline parentheticals with their ellipsis continuation', () => {
-        const input = 'He paused... (Perhaps deliberately) before answering.';
-        expect(ss(input)).toEqual([input]);
-        expect(segmentCaseNeutrally(input)).toEqual([input]);
+        for (const input of [
+          'He paused... (Perhaps deliberately) before answering.',
+          'He paused... (Perhaps, e.g., deliberately) before answering.',
+        ]) {
+          expect(ss(input)).toEqual([input]);
+          expect(segmentCaseNeutrally(input)).toEqual([input]);
+        }
       });
 
       test('scores reference sentences ending in a three-dot ellipsis correctly', () => {

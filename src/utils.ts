@@ -114,6 +114,8 @@ const pageNumberContinuationReg =
   /^\s*(?:\(\s*\p{Number}+\s*\)|#\s*\p{Number}+|\p{Number}+)(?=\s|[.,;:!?)]|$)/u;
 const numericSentenceContinuationReg =
   /^\S+(?:\s*%|\s+(?:time|year)s?\b|\s+(?:month|week|day|hour|minute|second|star|point|percent)s?(?=\s*[.!?](?:\s|$)|\s*$))/iu;
+const ellipsisQuantityContinuationReg =
+  /^\S+(?:\s*%|\s+(?:time|year|month|week|day|hour|minute|second|star|point|percent)s?)(?=\s*[.!?](?:\s|$)|\s*$)/iu;
 const breakReg = /[\r\n]+/;
 // Match a bounded ellipsis suffix to avoid excessive backtracking.
 const ellipseReg = /\.{2,10}$/;
@@ -245,16 +247,6 @@ class SentenceBuffer {
 
   #trackTypographicQuote(text: string, index: number): boolean {
     const character = text[index];
-    if (character === '“' || character === '‘' || character === '«') {
-      if (this.#typographicQuoteClosers.length < 64) {
-        if (character === '«') {
-          this.#typographicQuoteClosers.push('»');
-        } else {
-          this.#typographicQuoteClosers.push(character === '“' ? '”' : '’');
-        }
-      }
-      return true;
-    }
     if (character === this.#typographicQuoteClosers.at(-1)) {
       const previous = index === 0 ? this.#lastCharacter : text[index - 1];
       if (
@@ -265,6 +257,18 @@ class SentenceBuffer {
         return false;
       }
       this.#typographicQuoteClosers.pop();
+      return true;
+    }
+    if (character === '“' || character === '‘' || character === '«' || character === '„') {
+      if (this.#typographicQuoteClosers.length < 64) {
+        if (character === '«') {
+          this.#typographicQuoteClosers.push('»');
+        } else if (character === '„') {
+          this.#typographicQuoteClosers.push('“');
+        } else {
+          this.#typographicQuoteClosers.push(character === '“' ? '”' : '’');
+        }
+      }
       return true;
     }
     return false;
@@ -473,8 +477,9 @@ export function sentenceSegment(
                   independentSentenceReg.test(sentenceStart))))
           : strIsTitleCase(sentenceStart);
         const startsWithNumber =
-          /^\p{Number}/u.test(sentenceStart) && !numericSentenceContinuationReg.test(sentenceStart);
-        const inlineParenthetical = /^[([{<][^.!?]*[\])}>][^\S\r\n]+\p{Ll}/u.test(nextSentence);
+          /^\p{Number}/u.test(sentenceStart) &&
+          !ellipsisQuantityContinuationReg.test(sentenceStart);
+        const inlineParenthetical = hasInlineParenthetical(nextSentence);
         const startsSentence = (startsWithLetter || startsWithNumber) && !inlineParenthetical;
         if (
           /\.{3,4}$/.test(suffix) &&
@@ -503,6 +508,24 @@ export function sentenceSegment(
 
   // If no matches were found, return the input treated as a single sentence
   return acc.length === 0 ? [input] : acc;
+}
+
+function hasInlineParenthetical(input: string): boolean {
+  const opening = input[0];
+  const openingIndex = '([{<'.indexOf(opening);
+  if (openingIndex === -1) {
+    return false;
+  }
+  const closing = ')]}>'[openingIndex];
+  let depth = 0;
+  for (let index = 0; index < Math.min(input.length, 512); index++) {
+    if (input[index] === opening) {
+      depth++;
+    } else if (input[index] === closing && --depth === 0) {
+      return /^[^\S\r\n]+\p{Ll}/u.test(input.slice(index + 1, index + 64));
+    }
+  }
+  return false;
 }
 
 function nextListMarker(
