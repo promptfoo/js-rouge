@@ -1892,6 +1892,15 @@ describe('Core Functions', () => {
       expect(n('aaa', 'aa', { tokenizer, nGram })).toBeCloseTo(4 / 5);
     });
 
+    test('should snapshot reusable custom n-gram arrays', () => {
+      const scratch: string[] = [];
+      const nGram = (tokens: string[]): string[] => {
+        scratch.splice(0, scratch.length, ...tokens);
+        return scratch;
+      };
+      expect(n('alpha', 'beta', { nGram })).toBe(0);
+    });
+
     test('should not apply the built-in padding limit to custom ngram callbacks', () => {
       const nGram = jest.fn((): string[] => ['match']);
       expect(n('a', 'a', { n: 1_000_000_000, nGram })).toBe(1);
@@ -2109,6 +2118,15 @@ describe('Core Functions', () => {
 
     test('should return 0 for summaries with zero overlap', () => {
       expect(s('banana yoghurt', ref, undefined as any)).toBe(0);
+    });
+
+    test('should snapshot reusable custom skip-bigram arrays', () => {
+      const scratch: string[] = [];
+      const skipBigram = (tokens: string[], maxSkip: number): string[] => {
+        scratch.splice(0, scratch.length, tokens.slice(0, maxSkip + 1).join(' '));
+        return scratch;
+      };
+      expect(s('alpha one', 'beta two', { maxSkip: 1, skipBigram })).toBe(0);
     });
 
     test('should correctly compute ROUGE-S score for cand 1 with different opts', () => {
@@ -2464,6 +2482,15 @@ describe('Core Functions', () => {
 
     test('should return zero when custom tokenization removes every token', () => {
       expect(l('a', 'b', { tokenizer: () => [] })).toBe(0);
+    });
+
+    test('should snapshot reusable custom tokenizer arrays', () => {
+      const scratch: string[] = [];
+      const tokenizer = (input: string): string[] => {
+        scratch.splice(0, scratch.length, ...input.split(' '));
+        return scratch;
+      };
+      expect(l('alpha', 'beta', { tokenizer })).toBe(0);
     });
 
     test('should compute union LCS across all candidate sentences', () => {
