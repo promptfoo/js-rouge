@@ -684,11 +684,21 @@ describe('Utility Functions', () => {
       );
     });
 
-    test('does not normalize a Kelvin sign into ASCII identifier evidence', () => {
-      const input = 'K.No one answered.';
-      expect(segmentCaseNeutrally(input)).toEqual(['K.', 'No one answered.']);
-      expect(rouge.l(input, 'K. No one answered.', { caseSensitive: false })).toBe(1);
-    });
+    test.each(['K', 'KÁ'])(
+      'does not normalize Kelvin sign %s into ASCII identifier evidence',
+      (word) => {
+        const input = `${word}.No one answered.`;
+        const expected = [`${word}.`, 'No one answered.'];
+        expect(segmentCaseNeutrally(input)).toEqual(expected);
+        expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+          expected.map((sentence) => sentence.toLowerCase()),
+        );
+        for (const score of [rouge.n, rouge.s, rouge.l]) {
+          expect(score(input, input.toLowerCase(), { caseSensitive: false })).toBe(1);
+          expect(score(input, `${word}. No one answered.`, { caseSensitive: false })).toBe(1);
+        }
+      },
+    );
 
     test('preserves case-folding context around marked Greek initials', () => {
       const input = 'A.Σ́.No one answered.';

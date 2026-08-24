@@ -752,7 +752,7 @@ function caseNeutralIdentifierContext(input: string, index: number): boolean {
     .replace(/[Ii]\u0307\p{Mark}*/gu, '')
     .replace(/[A-Za-z]\p{Mark}/gu, (cluster) => cluster.normalize('NFC'));
   return (
-    /[a-z0-9_]/i.test(stableAscii) ||
+    /[a-jl-z0-9_]/i.test(stableAscii) ||
     (/\p{Script=Latin}/u.test(token) && /\p{Script=Greek}/u.test(token))
   );
 }
