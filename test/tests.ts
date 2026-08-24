@@ -660,6 +660,12 @@ describe('Utility Functions', () => {
       ['Alpha.[12] Beta.[34] Gamma.', ['Alpha.[12]', 'Beta.[34]', 'Gamma.']],
       ['A conclusion.11 12 The next sentence.', ['A conclusion.11 12', 'The next sentence.']],
       ['A conclusion (1987).1 The next sentence.', ['A conclusion (1987).1', 'The next sentence.']],
+      ['Text𐐀.1 Next.', ['Text𐐀.1', 'Next.']],
+      ['He said "Alpha.[1]" Beta.', ['He said "Alpha.[1]"', 'Beta.']],
+      ['Alpha.[1] 2 people remained.', ['Alpha.[1]', '2 people remained.']],
+      ['Really?[1] Next sentence.', ['Really?[1]', 'Next sentence.']],
+      ['Really?1 Next sentence.', ['Really?1', 'Next sentence.']],
+      ['Great![1] Next sentence.', ['Great![1]', 'Next sentence.']],
     ])('keeps numeric citation suffixes with sentence boundaries in %s', (input, expected) => {
       expect(ss(input)).toEqual(expected);
       expect(segmentCaseNeutrally(input)).toEqual(expected);
@@ -673,6 +679,14 @@ describe('Utility Functions', () => {
       expect(ss(input)).toEqual([input]);
       expect(segmentCaseNeutrally(input)).toEqual([input]);
     });
+
+    test.each(['Appendix A.1 Introduction', 'I work for the U.S.[1] Government agency.'])(
+      'preserves dotted section identifiers and cited abbreviation continuations: %s',
+      (input) => {
+        expect(ss(input)).toEqual([input]);
+        expect(segmentCaseNeutrally(input)).toEqual([input]);
+      },
+    );
 
     test.each([
       'She said "Alpha.[1] Beta." aloud.',

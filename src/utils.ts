@@ -112,6 +112,8 @@ const upperCaseReg = /^\p{Uppercase}$/u;
 // Recognize unambiguous page-reference forms: p. 10, p. (10), and p. #10.
 const pageNumberContinuationReg =
   /^\s*(?:\(\s*\p{Number}+\s*\)|#\s*\p{Number}+|\p{Number}+)(?=\s|[.,;:!?)]|$)/u;
+const numericSentenceContinuationReg =
+  /^\S+(?:\s*%|\s+(?:time|year)s?\b|\s+(?:month|week|day|hour|minute|second|star|point|percent)s?(?=\s*[.!?](?:\s|$)|\s*$))/iu;
 const breakReg = /[\r\n]+/;
 // Match a bounded ellipsis suffix to avoid excessive backtracking.
 const ellipseReg = /\.{2,10}$/;
@@ -688,9 +690,7 @@ function sentenceEnd(
   const startsWithNumber =
     /^\p{Number}$/u.test(nextCharacter) &&
     !abbrvReg.test(gateSuffix) &&
-    !/^\S+(?:\s*%|\s+(?:time|year)s?\b|\s+(?:month|week|day|hour|minute|second|star|point|percent)s?(?=\s*[.!?](?:\s|$)|\s*$))/iu.test(
-      input.slice(next),
-    );
+    !numericSentenceContinuationReg.test(input.slice(next));
   if (!(startsWithLetter || startsWithNumber)) {
     return -1;
   }
@@ -709,14 +709,8 @@ function citationEnd(
   insideQuotes: boolean,
   bracketDepth: number,
 ): number | undefined {
-  const following = input[index + 1] ?? '';
-  if (
-    insideQuotes ||
-    bracketDepth > 0 ||
-    input[index] !== '.' ||
-    (following !== '[' && !/^\p{Number}$/u.test(following)) ||
-    (following !== '[' && !/^[\p{Letter}\p{Mark})\]]$/u.test(input[index - 1] ?? ''))
-  ) {
+  const following = characterAt(input, index + 1);
+  if (!isCitationContext(input, index, following, bracketDepth)) {
     return undefined;
   }
 
@@ -727,7 +721,11 @@ function citationEnd(
     return undefined;
   }
 
-  const end = index + 1 + citation[0].length;
+  const contentEnd = index + 1 + citation[0].length;
+  const end = closingDelimiterEnd(input, contentEnd - 1, insideQuotes);
+  if (insideQuotes && !/["']/.test(input.slice(contentEnd, end))) {
+    return undefined;
+  }
   if (!/\s/.test(input[end] ?? '')) {
     return undefined;
   }
@@ -736,10 +734,49 @@ function citationEnd(
   while (next < input.length && /[\s"'([{<]/.test(input[next])) {
     next++;
   }
-  const startsSentence = caseNeutral
+  const suffix = input.slice(Math.max(0, index + 1 - sentenceSuffixLength), index + 1);
+  const gateSuffix = caseNeutral ? suffix.toLowerCase() : suffix;
+  const continuation = input.slice(next);
+  if (
+    abbrvReg.test(gateSuffix) &&
+    (excepReg.test(gateSuffix) ||
+      (geographicAcronymReg.test(gateSuffix) && geographicContinuationReg.test(continuation)))
+  ) {
+    return undefined;
+  }
+
+  const nextCharacter = characterAt(input, next);
+  const startsWithLetter = caseNeutral
     ? isNeutralSentenceStart(input, end, next)
-    : charIsUpperCase(characterAt(input, next));
-  return startsSentence ? end : undefined;
+    : nextCharacter.length > 0 && charIsUpperCase(nextCharacter);
+  const startsWithNumber =
+    /^\p{Number}$/u.test(nextCharacter) && !numericSentenceContinuationReg.test(continuation);
+  return startsWithLetter || startsWithNumber ? end : undefined;
+}
+
+function isCitationContext(
+  input: string,
+  index: number,
+  following: string,
+  bracketDepth: number,
+): boolean {
+  if (bracketDepth > 0 || (following !== '[' && !/^\p{Number}$/u.test(following))) {
+    return false;
+  }
+  if (following === '[') {
+    return true;
+  }
+
+  const previous = Array.from(input.slice(Math.max(0, index - 2), index)).at(-1) ?? '';
+  const previousStart = index - previous.length;
+  return (
+    /^[\p{Letter}\p{Mark})\]]$/u.test(previous) &&
+    !(
+      input[index] === '.' &&
+      /^\p{Letter}$/u.test(previous) &&
+      (previousStart === 0 || /\s/.test(input[previousStart - 1]))
+    )
+  );
 }
 
 function countClosingBrackets(input: string, start: number, end: number): number {
