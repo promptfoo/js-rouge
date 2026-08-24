@@ -1095,6 +1095,7 @@ describe('Utility Functions', () => {
       ["He said ``hello''.", ['He', 'said', '``', 'hello', "''", '.']],
       ["``hello''", ['``', 'hello', "''"]],
       ["''hello''", ["''", 'hello', "''"]],
+      ["Second fragment '' attribution.", ['Second', 'fragment', "''", 'attribution', '.']],
     ])('should recognize existing Treebank quotation markers in %s', (input, expected) => {
       expect(tbt(input)).toEqual(expected);
     });
@@ -1436,12 +1437,16 @@ describe('Core Functions', () => {
       ).toBe(1);
     });
 
-    test.each(["He said ''hello''.", "He said ``hello''."])(
-      'should normalize existing Treebank quotation markers in %s',
-      (input) => {
-        expect(score(input, 'He said "hello".')).toBe(1);
-      },
-    );
+    test.each([
+      ["He said ''hello''.", 'He said "hello".'],
+      ["He said ``hello''.", 'He said "hello".'],
+      [
+        "``First sentence. Second fragment '' attribution.",
+        '``First sentence. Second fragment" attribution.',
+      ],
+    ])('should normalize existing Treebank quotation markers in %s', (input, expected) => {
+      expect(score(input, expected)).toBe(1);
+    });
 
     test.each([
       ['alpha..omega', 'alpha...omega'],

@@ -29,15 +29,10 @@ export function treeBankTokenize(input: string): string[] {
   // Classify paired quotes before inserting spaces around punctuation.
   let insideQuotes = false;
   let parse = text.replace(/``|''|"/g, (quote: string, index: number): string => {
-    if (quote === '``') {
-      insideQuotes = true;
-      return ' `` ';
-    }
-    if (quote === "''") {
-      insideQuotes = index > 0 && opensDoubleQuote(text, index, insideQuotes);
-      return insideQuotes ? ' `` ' : " '' ";
-    }
-    insideQuotes = opensDoubleQuote(text, index, insideQuotes);
+    insideQuotes =
+      quote === '``' ||
+      (opensDoubleQuote(text, index, insideQuotes) &&
+        (quote === '"' || (index > 0 && text.includes("''", index + 2))));
     return insideQuotes ? ' `` ' : " '' ";
   });
 
