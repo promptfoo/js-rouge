@@ -136,6 +136,7 @@ class SentenceBuffer {
   #normalizedThrough = 0;
   #words: { titleCase: boolean; lowerCase: boolean }[] = [];
   #openingDelimiters: string[] = [];
+  #typographicQuoteClosers: string[] = [];
   #insideDoubleQuotes = false;
   #insideSingleQuotes = false;
   #lastCharacter = '';
@@ -161,7 +162,10 @@ class SentenceBuffer {
 
   get hasOpenDelimiter(): boolean {
     return (
-      this.#openingDelimiters.length > 0 || this.#insideDoubleQuotes || this.#insideSingleQuotes
+      this.#openingDelimiters.length > 0 ||
+      this.#typographicQuoteClosers.length > 0 ||
+      this.#insideDoubleQuotes ||
+      this.#insideSingleQuotes
     );
   }
 
@@ -208,6 +212,9 @@ class SentenceBuffer {
   #trackDelimiters(text: string): void {
     for (let index = 0; index < text.length; index++) {
       const character = text[index];
+      if (this.#trackTypographicQuote(character)) {
+        continue;
+      }
       if (character === '"') {
         const previous = index === 0 ? this.#lastCharacter : text[index - 1];
         this.#insideDoubleQuotes =
@@ -232,6 +239,18 @@ class SentenceBuffer {
       }
     }
     this.#lastCharacter = text.at(-1) ?? this.#lastCharacter;
+  }
+
+  #trackTypographicQuote(character: string): boolean {
+    if (character === '“' || character === '‘') {
+      this.#typographicQuoteClosers.push(character === '“' ? '”' : '’');
+      return true;
+    }
+    if (character === this.#typographicQuoteClosers.at(-1)) {
+      this.#typographicQuoteClosers.pop();
+      return true;
+    }
+    return false;
   }
 
   #trackSingleQuote(text: string, index: number): void {
@@ -441,8 +460,7 @@ export function sentenceSegment(
           (/\.{4}$/.test(suffix) ||
             !(
               chunk.hasOpenDelimiter ||
-              hasOpenTypographicQuote(chunk.text()) ||
-              /\b(?:am|is|are|was|were|i)\.{3}$/i.test(suffix)
+              /\b(?:am|is|are|was|were|be|been|being|i)\.{3}$/i.test(suffix)
             ))
         ) {
           acc.push(chunk.text());
@@ -463,13 +481,6 @@ export function sentenceSegment(
 
   // If no matches were found, return the input treated as a single sentence
   return acc.length === 0 ? [input] : acc;
-}
-
-function hasOpenTypographicQuote(input: string): boolean {
-  return (
-    input.lastIndexOf('“') > input.lastIndexOf('”') ||
-    input.lastIndexOf('‘') > input.lastIndexOf('’')
-  );
 }
 
 function nextListMarker(

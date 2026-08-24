@@ -1583,13 +1583,20 @@ describe('Utility Functions', () => {
         expect(segmentCaseNeutrally(input)).toEqual([input]);
       });
 
-      test.each(['And the winner is... Alice Smith.', 'I... I cannot go.'])(
-        'keeps capitalized ellipsis continuations in the same sentence: %s',
-        (input) => {
-          expect(ss(input)).toEqual([input]);
-          expect(segmentCaseNeutrally(input)).toEqual([input]);
-        },
-      );
+      test.each([
+        'And the winner is... Alice Smith.',
+        'And the winner will be... Alice Smith.',
+        'The winner has been... Alice Smith.',
+        'The winner is being... Alice Smith.',
+        'I... I cannot go.',
+      ])('keeps capitalized ellipsis continuations in the same sentence: %s', (input) => {
+        expect(ss(input)).toEqual([input]);
+        expect(segmentCaseNeutrally(input)).toEqual([input]);
+      });
+
+      test('handles long sequences of merged ellipses in one scan', () => {
+        expect(ss('It is... Alpha '.repeat(4000))).toHaveLength(1);
+      });
 
       test('scores reference sentences ending in a three-dot ellipsis correctly', () => {
         expect(rouge.l('Beta Alpha...', 'Alpha... Beta.')).toBeCloseTo(6 / 7);
