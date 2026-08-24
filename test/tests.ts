@@ -585,6 +585,23 @@ describe('Utility Functions', () => {
       },
     );
 
+    test.each([
+      [
+        "We invested—'Acme Co.\nInternational Holdings'—today.",
+        "We invested—'Acme Co. International Holdings'—today.",
+      ],
+      [
+        "He described 'the students' Acme Co.\nInternational project' today.",
+        "He described 'the students' Acme Co. International project' today.",
+      ],
+      [
+        'We invested in (score > 5, Acme Co.\nInternational Holdings) today.',
+        'We invested in (score > 5, Acme Co. International Holdings) today.',
+      ],
+    ])('keeps wrapped abbreviations inside punctuation-aware delimiters: %s', (input, expected) => {
+      expect(ss(input)).toEqual([expected]);
+    });
+
     test('should split two letter uppercase abbreviations at the end of a sentence', () => {
       expect(ss('They closed the deal with Pitt, Briggs & Co. It closed yesterday.')).toEqual([
         'They closed the deal with Pitt, Briggs & Co.',

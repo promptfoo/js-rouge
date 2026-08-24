@@ -113,7 +113,7 @@ class SentenceBuffer {
   #parts: string[] = [];
   #normalizedThrough = 0;
   #words: { titleCase: boolean; lowerCase: boolean }[] = [];
-  #delimiterDepth = 0;
+  #openingDelimiters: string[] = [];
   #insideDoubleQuotes = false;
   #insideSingleQuotes = false;
   #lastCharacter = '';
@@ -138,7 +138,9 @@ class SentenceBuffer {
   }
 
   get hasOpenDelimiter(): boolean {
-    return this.#delimiterDepth > 0 || this.#insideDoubleQuotes || this.#insideSingleQuotes;
+    return (
+      this.#openingDelimiters.length > 0 || this.#insideDoubleQuotes || this.#insideSingleQuotes
+    );
   }
 
   get suffix(): string {
@@ -185,13 +187,19 @@ class SentenceBuffer {
     for (let index = 0; index < text.length; index++) {
       const character = text[index];
       if (character === '"') {
-        this.#insideDoubleQuotes = opensDoubleQuote(text, index, this.#insideDoubleQuotes);
+        const previous = index === 0 ? this.#lastCharacter : text[index - 1];
+        this.#insideDoubleQuotes =
+          !this.#insideDoubleQuotes &&
+          (previous.length === 0 || /^[\s\p{Punctuation}]$/u.test(previous));
       } else if (character === "'") {
         this.#trackSingleQuote(text, index);
       } else if (openingBracketReg.test(character)) {
-        this.#delimiterDepth++;
+        this.#openingDelimiters.push(character);
       } else if (closingBracketReg.test(character)) {
-        this.#delimiterDepth = Math.max(0, this.#delimiterDepth - 1);
+        const opener = '([{<'[')]}>'.indexOf(character)];
+        if (this.#openingDelimiters.at(-1) === opener) {
+          this.#openingDelimiters.pop();
+        }
       }
     }
     this.#lastCharacter = text.at(-1) ?? this.#lastCharacter;
@@ -201,11 +209,16 @@ class SentenceBuffer {
     const previous = index === 0 ? this.#lastCharacter : text[index - 1];
     const following = text[index + 1] ?? '';
     if (this.#insideSingleQuotes) {
-      this.#insideSingleQuotes = following.length > 0 && !/[\s.,!?;:)\]}]/.test(following);
+      const possessive =
+        previous.toLowerCase() === 's' &&
+        /\s/.test(following) &&
+        strIsTitleCase(text.slice(index + 1));
+      this.#insideSingleQuotes =
+        possessive || (following.length > 0 && !/[\s.,!?;:)\]}]/.test(following));
       return;
     }
     this.#insideSingleQuotes =
-      (previous.length === 0 || /[\s([{<]/.test(previous)) && /\S/.test(following);
+      (previous.length === 0 || /^[\s\p{Punctuation}]$/u.test(previous)) && /\S/.test(following);
   }
 
   trimEnd(): void {
