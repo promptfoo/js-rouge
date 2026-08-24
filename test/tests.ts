@@ -407,6 +407,33 @@ describe('Utility Functions', () => {
     test('should return pairs within skip distance of 3', () => {
       expect(sb(data, 3)).toEqual(['a b', 'a c', 'a d', 'b c', 'b d', 'c d']);
     });
+
+    test('rejects excessive pair counts before materializing bigrams', () => {
+      expect(() => sb(new Array<string>(1600).fill('a'))).toThrow(/materialization limit/);
+    });
+
+    test('accounts for long token values in the materialization limit', () => {
+      expect(() => sb(['a'.repeat(500_000), 'b'.repeat(500_000)])).toThrow(/materialization limit/);
+      expect(sb(['a'.repeat(500_000), 'b'.repeat(500_000)], 0)).toEqual([]);
+    });
+
+    test('rejects oversized inputs within a constrained heap', () => {
+      expectBundledScriptToPass(
+        `
+          try {
+            module.exports.skipBigram(new Array(1600).fill('token'));
+            throw new Error('Oversized skip-bigrams were accepted');
+          } catch (error) {
+            if (!(error instanceof RangeError) || !/materialization limit/.test(error.message)) {
+              throw error;
+            }
+          }
+          process.stdout.write('ok');
+        `,
+        10_000,
+        ['--max-old-space-size=32'],
+      );
+    }, 10_000);
   });
 
   describe('sentenceSegment', () => {
