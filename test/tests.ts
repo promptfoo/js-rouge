@@ -599,7 +599,9 @@ describe('Utility Functions', () => {
         'he moved to calif.',
         'next year.',
       ]);
-      expect(segmentCaseNeutrally(input)).toEqual(segmentCaseNeutrally(input.replace('\n', ' ')));
+      expect(segmentCaseNeutrally(input)).toEqual(
+        segmentCaseNeutrally(input.replaceAll('\n', ' ')),
+      );
     });
 
     test.each(['\n', '\r\n', '\r'])(
