@@ -464,6 +464,8 @@ describe('Utility Functions', () => {
     test.each([
       ['He answered "No." In fact, he left.', ['He answered "No."', 'In fact, he left.']],
       ['He said "No." But I left.', ['He said "No."', 'But I left.']],
+      ['He said "No." But John left.', ['He said "No."', 'But John left.']],
+      ['He said "No." And the manager agreed.', ['He said "No."', 'And the manager agreed.']],
       ['He said "No." And we left.', ['He said "No."', 'And we left.']],
       ['He said "No." In time, we left.', ['He said "No."', 'In time, we left.']],
       ['She paused. "Then we begin."', ['She paused.', '"Then we begin."']],
@@ -483,6 +485,15 @@ describe('Utility Functions', () => {
     test('keeps independent abbreviation continuations invariant under case folding', () => {
       const input = 'Use etc. In fact, this is common.';
       const expected = ['Use etc.', 'In fact, this is common.'];
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        expected.map((sentence) => sentence.toLowerCase()),
+      );
+    });
+
+    test('recognizes independent clauses with noun subjects after abbreviations', () => {
+      const input = 'Use etc. But John left.';
+      const expected = ['Use etc.', 'But John left.'];
       expect(segmentCaseNeutrally(input)).toEqual(expected);
       expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
         expected.map((sentence) => sentence.toLowerCase()),
