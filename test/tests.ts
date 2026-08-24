@@ -438,6 +438,16 @@ describe('Utility Functions', () => {
       expect(segmentCaseNeutrally(input)).toEqual(expected);
     });
 
+    test.each([
+      'we need etc. and more animals.',
+      'at 8 a.m. and later we left.',
+      'i lived in calif. and moved east.',
+      'they worked at acme co. at noon.',
+      'she wrote "hello." then left.',
+    ])('keeps lowercase sentence continuations case-neutrally: %s', (input) => {
+      expect(segmentCaseNeutrally(input)).toEqual([input]);
+    });
+
     test('should match lowercase-equivalent Unicode abbreviations case-neutrally', () => {
       const mixedCase = 'Da\u212a.\nNext.';
       const lowerCase = mixedCase.toLowerCase();
@@ -1399,6 +1409,14 @@ describe('Core Functions', () => {
   );
 
   describe.each(metrics)('%s input handling', (_name, score) => {
+    test('does not change already-lowercase abbreviation scores in case-insensitive mode', () => {
+      const candidate = 'we need etc. and more animals.';
+      const reference = 'and more animals we need etc.';
+      expect(score(candidate, reference, { caseSensitive: false })).toBe(
+        score(candidate, reference),
+      );
+    });
+
     test.each(['\n', '\r\n', '\r'])('keeps wrapped quotes (%j)', (lineBreak) => {
       expect(score(`He said "Stop.${lineBreak}" Next.`, 'He said "Stop." Next.')).toBe(1);
       expect(score(`He said "Stop.${lineBreak}"`, 'He said "Stop."')).toBe(1);

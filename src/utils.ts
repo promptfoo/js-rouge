@@ -97,6 +97,8 @@ const sentenceSuffixLength = Math.max(10, ...GATE_SUBSTITUTIONS.map((word) => wo
 const closingDelimiterReg = /[\])}>"']/;
 const openingBracketReg = /[([{<]/;
 const closingBracketReg = /[\])}>]/;
+const sentenceContinuationReg =
+  /^(?:and|or|but|nor|for|yet|so|at|in|on|of|to|from|with|by|as|then)\b/i;
 
 /** Keep merged fragments separate; boundary rules only need a suffix and word casing. */
 class SentenceBuffer {
@@ -261,7 +263,10 @@ export function sentenceSegment(
       } else if (chunks[idx + 1] && abbrvReg.test(gateSuffix)) {
         const nextChunk = chunks[idx + 1];
         if (
-          (caseNeutral ? startsWithCasedCharacter(nextChunk) : strIsTitleCase(nextChunk)) &&
+          (caseNeutral
+            ? startsWithCasedCharacter(nextChunk) &&
+              !sentenceContinuationReg.test(nextChunk.trimStart())
+            : strIsTitleCase(nextChunk)) &&
           !excepReg.test(gateSuffix)
         ) {
           // Catch abbreviations followed by a capital letter and treat as a boundary.
@@ -446,7 +451,7 @@ function sentenceEnd(
   const gateSuffix = caseNeutral ? suffix.toLowerCase() : suffix;
   const nextCharacter = characterAt(input, next);
   const startsWithLetter = caseNeutral
-    ? isCasedCharacter(nextCharacter)
+    ? isCasedCharacter(nextCharacter) && !sentenceContinuationReg.test(input.slice(next))
     : charIsUpperCase(nextCharacter);
   const startsWithNumber =
     /^\p{Number}$/u.test(nextCharacter) &&
