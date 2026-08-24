@@ -99,6 +99,8 @@ const openingBracketReg = /[([{<]/;
 const closingBracketReg = /[\])}>]/;
 const sentenceContinuationReg =
   /^(?:and|or|but|nor|for|yet|so|at|in|on|of|to|from|with|by|as|then|because|while|after|before|although|though|since|unless|until|when|where|whether|if|once|whereas)\b/i;
+const independentSentenceReg =
+  /^(?:in\s+(?:fact|time)\b|(?:and|but|or|yet|so|then)\s+(?:i|we|he|she|they|you|it)\b)/i;
 
 /** Keep merged fragments separate; boundary rules only need a suffix and word casing. */
 class SentenceBuffer {
@@ -247,7 +249,9 @@ export function sentenceSegment(
         if (
           nextChunk &&
           (chunk.startsWithTitleCase ||
-            (caseNeutral && sentenceContinuationReg.test(nextChunk.trimStart())))
+            (caseNeutral &&
+              sentenceContinuationReg.test(nextChunk.trimStart()) &&
+              /[.!?]["'\])}]\s*[\r\n]/.test(suffix)))
         ) {
           // Catch line breaks embedded within valid sentences
           // i.e. sentences that start with a capital letter
@@ -270,7 +274,8 @@ export function sentenceSegment(
         if (
           (caseNeutral
             ? startsWithCasedCharacter(nextChunk) &&
-              !sentenceContinuationReg.test(nextChunk.trimStart())
+              (!sentenceContinuationReg.test(nextChunk.trimStart()) ||
+                independentSentenceReg.test(nextChunk.trimStart()))
             : strIsTitleCase(nextChunk)) &&
           !excepReg.test(gateSuffix)
         ) {
@@ -481,7 +486,7 @@ function isNeutralSentenceStart(input: string, previousEnd: number, next: number
   const continuation = input.slice(next);
   return (
     !sentenceContinuationReg.test(continuation) ||
-    /^in fact\b/i.test(continuation) ||
+    independentSentenceReg.test(continuation) ||
     input.slice(previousEnd, next).includes('"')
   );
 }

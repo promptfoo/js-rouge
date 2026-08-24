@@ -463,6 +463,9 @@ describe('Utility Functions', () => {
 
     test.each([
       ['He answered "No." In fact, he left.', ['He answered "No."', 'In fact, he left.']],
+      ['He said "No." But I left.', ['He said "No."', 'But I left.']],
+      ['He said "No." And we left.', ['He said "No."', 'And we left.']],
+      ['He said "No." In time, we left.', ['He said "No."', 'In time, we left.']],
       ['She paused. "Then we begin."', ['She paused.', '"Then we begin."']],
     ])('retains capitalized sentence starts after closing delimiters in %s', (input, expected) => {
       expect(segmentCaseNeutrally(input)).toEqual(expected);
@@ -475,6 +478,15 @@ describe('Utility Functions', () => {
       const input = 'Use etc. And more animals.';
       expect(segmentCaseNeutrally(input)).toEqual([input]);
       expect(segmentCaseNeutrally(input.toLowerCase())).toEqual([input.toLowerCase()]);
+    });
+
+    test('keeps independent abbreviation continuations invariant under case folding', () => {
+      const input = 'Use etc. In fact, this is common.';
+      const expected = ['Use etc.', 'In fact, this is common.'];
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        expected.map((sentence) => sentence.toLowerCase()),
+      );
     });
 
     test.each(['because', 'while', 'after', 'before', 'although', 'unless', 'until', 'when'])(
@@ -493,6 +505,13 @@ describe('Utility Functions', () => {
         ]);
       },
     );
+
+    test('retains line boundaries after numeric headings', () => {
+      expect(segmentCaseNeutrally('2020 report\nand sales rose.')).toEqual([
+        '2020 report',
+        'and sales rose.',
+      ]);
+    });
 
     test.each(['\u212a', '\u0130', 'I\u0307\u0323', 'I\u093e', 'I\u20dd', '\u{10400}\u0307'])(
       'should treat combining marks as part of a case-neutral initial: %s',
