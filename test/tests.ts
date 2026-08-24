@@ -509,6 +509,13 @@ describe('Utility Functions', () => {
       );
     });
 
+    test('recognizes list markers after document indentation', () => {
+      expect(ss('  1. The first item 2. The second item')).toEqual([
+        '1. The first item',
+        '2. The second item',
+      ]);
+    });
+
     test('keeps four-dot boundaries invariant under case folding', () => {
       expect(segmentCaseNeutrally('First.... Second.')).toEqual(['First....', 'Second.']);
       expect(segmentCaseNeutrally('first.... second.')).toEqual(['first....', 'second.']);
@@ -528,6 +535,27 @@ describe('Utility Functions', () => {
     test('keeps uppercase email domain labels inside their address', () => {
       expect(ss('Mail Jane.Doe@example.COM for help.')).toEqual([
         'Mail Jane.Doe@example.COM for help.',
+      ]);
+    });
+
+    test.each(['Visit example.COM for help.', 'Visit https://example.COM/path today.'])(
+      'keeps uppercase hostname labels inside %s',
+      (input) => {
+        expect(ss(input)).toEqual([input]);
+      },
+    );
+
+    test.each([
+      ['Hello world."Next sentence."', ['Hello world.', '"Next sentence."']],
+      ['Hello world.(Next sentence.)', ['Hello world.', '(Next sentence.)']],
+    ])('keeps opening delimiters with adjacent sentence starts in %s', (input, expected) => {
+      expect(ss(input)).toEqual(expected);
+    });
+
+    test('does not merge incompatible geographic-acronym continuations', () => {
+      expect(ss('The treaty applies in the E.U. Congress meets tomorrow.')).toEqual([
+        'The treaty applies in the E.U.',
+        'Congress meets tomorrow.',
       ]);
     });
 

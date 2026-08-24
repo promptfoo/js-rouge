@@ -98,7 +98,7 @@ const closingDelimiterReg = /[\])}>"']/;
 const openingBracketReg = /[([{<]/;
 const closingBracketReg = /[\])}>]/;
 const listMarkerReg = /(?:^|\s)(?:(?:[•⁃]\s*)?\d+(?:\.\)|[.)])|\p{Cased}\.)(?=\s+\p{Cased})/gu;
-const geographicAcronymReg = /\b(?:U\.S(?:\.A)?|E\.U)\.$/i;
+const geographicAcronymReg = /\bU\.S(?:\.A)?\.$/i;
 const geographicContinuationReg = /^(?:government|army|navy|military|congress)\b/i;
 
 /** Keep merged fragments separate; boundary rules only need a suffix and word casing. */
@@ -229,7 +229,7 @@ export function sentenceSegment(
         input.slice(Math.max(0, marker.index - 24), marker.index).trimEnd(),
       ),
   );
-  if (listMarkers.length > 1 && listMarkers[0].index === 0) {
+  if (listMarkers.length > 1 && input.slice(0, listMarkers[0].index).trim().length === 0) {
     return listMarkers.flatMap((marker, index) => {
       const markerText = marker[0].trim();
       const body = input
@@ -502,6 +502,9 @@ function sentenceEnd(
   brackets: { depth: number; standalone: boolean },
   caseNeutral: boolean,
 ): number {
+  if (!insideQuotes && isUnspacedDelimitedSentenceStart(input, index, caseNeutral)) {
+    return index + 1;
+  }
   const end = closingDelimiterEnd(input, index, insideQuotes);
   if (end < input.length && !/\s/.test(input[end])) {
     return isUnspacedSentenceBoundary(input, index, end, caseNeutral) ? end : -1;
@@ -510,12 +513,7 @@ function sentenceEnd(
     return end;
   }
 
-  let closedBrackets = 0;
-  for (let i = index + 1; i < end; i++) {
-    if (closingBracketReg.test(input[i])) {
-      closedBrackets++;
-    }
-  }
+  const closedBrackets = countClosingBrackets(input, index + 1, end);
   const closesQuotation = insideQuotes && input[end - 1] === '"';
   if (
     closedBrackets > 0 &&
@@ -552,6 +550,34 @@ function sentenceEnd(
   return abbrvReg.test(gateSuffix) && excepReg.test(gateSuffix) ? -1 : end;
 }
 
+function countClosingBrackets(input: string, start: number, end: number): number {
+  let count = 0;
+  for (let index = start; index < end; index++) {
+    if (closingBracketReg.test(input[index])) {
+      count++;
+    }
+  }
+  return count;
+}
+
+function isUnspacedDelimitedSentenceStart(
+  input: string,
+  index: number,
+  caseNeutral: boolean,
+): boolean {
+  let next = index + 1;
+  if (!/["([{<]/.test(input[next] ?? '')) {
+    return false;
+  }
+  while (next < input.length && /["'([{<]/.test(input[next])) {
+    next++;
+  }
+  const character = characterAt(input, next);
+  return (
+    character.length > 0 && (caseNeutral ? isCasedCharacter(character) : charIsUpperCase(character))
+  );
+}
+
 function isUnspacedSentenceBoundary(
   input: string,
   index: number,
@@ -571,6 +597,11 @@ function isUnspacedSentenceBoundary(
   const preceding = input.slice(Math.max(0, index - 320), next);
   const previousAt = preceding.lastIndexOf('@');
   const insideAddress = previousAt !== -1 && !/\s/.test(preceding.slice(previousAt));
+  const insideHostname =
+    /https?:\/\/|www\./i.test(preceding) ||
+    /^(?:com|org|net|edu|gov|mil|io|dev|app|co|uk|us|ca|ai|info|biz|me|tv)(?=[/.\s]|$)/i.test(
+      following,
+    );
   const initial = caseNeutral ? /^\p{Cased}\./u : /^\p{Lu}\./u;
   const trailingInitial = caseNeutral ? /\b\p{Cased}\.$/u : /\b\p{Lu}\.$/u;
   const nextInitial = caseNeutral ? /^\p{Cased}(?=\s|$)/u : /^\p{Lu}(?=\s|$)/u;
@@ -579,7 +610,8 @@ function isUnspacedSentenceBoundary(
     initial.test(following) ||
     (trailingInitial.test(suffix) && nextInitial.test(following)) ||
     /^[^\s]*@/.test(following) ||
-    insideAddress
+    insideAddress ||
+    insideHostname
   );
 }
 
