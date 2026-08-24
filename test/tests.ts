@@ -1626,6 +1626,8 @@ describe('Utility Functions', () => {
           'He paused... (Perhaps deliberately) before answering.',
           'He paused... (Perhaps, e.g., deliberately) before answering.',
           'He paused... “Perhaps deliberately,” before answering.',
+          "He paused... 'Perhaps it's deliberate,' before answering.",
+          'He paused... ‘Perhaps it’s deliberate,’ before answering.',
         ]) {
           expect(ss(input)).toEqual([input]);
           expect(segmentCaseNeutrally(input)).toEqual([input]);

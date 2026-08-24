@@ -519,6 +519,14 @@ function hasInlineParenthetical(input: string, caseNeutral: boolean): boolean {
   const closing = ')]}>"\'”’»“'[openingIndex];
   let depth = 1;
   for (let index = 1; index < Math.min(input.length, 512); index++) {
+    if (
+      input[index] === closing &&
+      /['’]/.test(closing) &&
+      /^\p{Letter}$/u.test(characterAt(input, index - 1)) &&
+      /^\p{Letter}$/u.test(characterAt(input, index + 1))
+    ) {
+      continue;
+    }
     if (input[index] === opening && opening !== closing) {
       depth++;
     } else if (input[index] === closing && --depth === 0) {
