@@ -660,22 +660,29 @@ describe('Utility Functions', () => {
       '中文README.MD before continuing.',
       'İ12345678.X more',
       'İ́ΑΑΑΑΑΑΑΑ.X more',
+      'αİééééééé.X more',
     ])('preserves case-expanded dotted identifiers: %s', (input) => {
       expect(segmentCaseNeutrally(input)).toEqual([input]);
       expect(segmentCaseNeutrally(input.toLowerCase())).toEqual([input.toLowerCase()]);
     });
 
-    test.each(['κόσμος', 'κόσμος', '\u0301κόσμος', 'İş', 'İşğüşğüşğ', 'I\u0307ş', 'Ḱ'])(
-      'preserves adjacent sentences after ordinary non-ASCII word %s',
-      (word) => {
-        const input = `${word}.No one answered.`;
-        expect(segmentCaseNeutrally(input)).toEqual([`${word}.`, 'No one answered.']);
-        expect(rouge.l(input, `${word}. No one answered.`, { caseSensitive: false })).toBe(1);
-        expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
-          [`${word}.`, 'No one answered.'].map((sentence) => sentence.toLowerCase()),
-        );
-      },
-    );
+    test.each([
+      'κόσμος',
+      'κόσμος',
+      '\u0301κόσμος',
+      'κόσμος-κόσμος',
+      'İş',
+      'İşğüşğüşğ',
+      'I\u0307ş',
+      'Ḱ',
+    ])('preserves adjacent sentences after ordinary non-ASCII word %s', (word) => {
+      const input = `${word}.No one answered.`;
+      expect(segmentCaseNeutrally(input)).toEqual([`${word}.`, 'No one answered.']);
+      expect(rouge.l(input, `${word}. No one answered.`, { caseSensitive: false })).toBe(1);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        [`${word}.`, 'No one answered.'].map((sentence) => sentence.toLowerCase()),
+      );
+    });
 
     test('does not let a truncated mark qualify an unrelated later word', () => {
       const input = 'İ?0b/]]\té.𝒜B';

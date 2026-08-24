@@ -733,18 +733,9 @@ function isUnspacedDelimitedSentenceStart(
   );
 }
 
-function caseNeutralIdentifierContext(input: string, index: number, suffixStart: number): boolean {
-  let start = suffixStart;
-  if (/^\p{Mark}/u.test(input.slice(start, index + 1))) {
-    while (start > 0 && /^\p{Mark}$/u.test(input[start - 1])) {
-      start--;
-    }
-    if (start > 0) {
-      start--;
-    }
-  }
+function caseNeutralIdentifierContext(input: string, index: number): boolean {
   let tokenStart = index;
-  while (tokenStart > start) {
+  while (tokenStart > 0) {
     const previousUnit = input.charCodeAt(tokenStart - 1);
     const width = previousUnit >= 0xdc_00 && previousUnit <= 0xdf_ff ? 2 : 1;
     const character = input.slice(tokenStart - width, tokenStart);
@@ -760,7 +751,7 @@ function caseNeutralIdentifierContext(input: string, index: number, suffixStart:
   const normalized = token.normalize('NFC').toLowerCase().normalize('NFC');
   const stableAscii = normalized.replace(/i\u0307\p{Mark}*/gu, '');
   return (
-    /[a-z0-9_-]/.test(stableAscii) ||
+    /[a-z0-9_]/.test(stableAscii) ||
     (/\p{Script=Latin}/u.test(normalized) && /\p{Script=Greek}/u.test(normalized))
   );
 }
@@ -784,9 +775,8 @@ function isUnspacedSentenceBoundary(
     return !insideUrl;
   }
 
-  const suffixStart = Math.max(0, index + 1 - sentenceSuffixLength);
-  const suffix = input.slice(suffixStart, index + 1);
-  const identifier = caseNeutral && caseNeutralIdentifierContext(input, index, suffixStart);
+  const suffix = input.slice(Math.max(0, index + 1 - sentenceSuffixLength), index + 1);
+  const identifier = caseNeutral && caseNeutralIdentifierContext(input, index);
   const following = input.slice(next);
   const insideAddress =
     precedingToken.includes('@') && !/@[^\s.]+(?:\.[^\s.]+)+\.$/u.test(precedingToken);
