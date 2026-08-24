@@ -500,6 +500,19 @@ describe('Utility Functions', () => {
       );
     });
 
+    test.each([
+      'After that, John smiled.',
+      'Because he was late, John hurried.',
+      'While we waited, John arrived.',
+    ])('recognizes independent sentence-initial subordinators: %s', (continuation) => {
+      const input = `The list includes cats, dogs, etc. ${continuation}`;
+      const expected = ['The list includes cats, dogs, etc.', continuation];
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        expected.map((sentence) => sentence.toLowerCase()),
+      );
+    });
+
     test.each(['because', 'while', 'after', 'before', 'although', 'unless', 'until', 'when'])(
       'keeps subordinating continuation %s inside the sentence',
       (conjunction) => {
