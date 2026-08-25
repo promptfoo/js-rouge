@@ -663,6 +663,7 @@ describe('Utility Functions', () => {
       'αİééééééé.X more',
       'path K.AB more',
       'path K.No more',
+      'K.No more',
     ])('preserves case-expanded dotted identifiers: %s', (input) => {
       expect(segmentCaseNeutrally(input)).toEqual([input]);
       expect(segmentCaseNeutrally(input.toLowerCase())).toEqual([input.toLowerCase()]);
@@ -677,6 +678,7 @@ describe('Utility Functions', () => {
       'İşğüşğüşğ',
       'I\u0307ş',
       'Ḱ',
+      'g\u0303',
     ])('preserves adjacent sentences after ordinary non-ASCII word %s', (word) => {
       const input = `${word}.No one answered.`;
       expect(segmentCaseNeutrally(input)).toEqual([`${word}.`, 'No one answered.']);
@@ -702,11 +704,22 @@ describe('Utility Functions', () => {
       },
     );
 
-    test('preserves an adjacent Unicode one-letter sentence before an I clause', () => {
-      const input = 'Я.I agree.';
-      expect(segmentCaseNeutrally(input)).toEqual(['Я.', 'I agree.']);
+    test.each(['I agree.', 'I 100% agree.'])(
+      'preserves an adjacent Unicode one-letter sentence before %s',
+      (continuation) => {
+        const input = `Я.${continuation}`;
+        expect(segmentCaseNeutrally(input)).toEqual(['Я.', continuation]);
+        for (const score of [rouge.n, rouge.s, rouge.l]) {
+          expect(score(input, `Я. ${continuation}`, { caseSensitive: false })).toBe(1);
+        }
+      },
+    );
+
+    test('does not mistake a decomposed two-letter sentence start for an identifier', () => {
+      const input = 'Stop.E\u0301l left.';
+      expect(segmentCaseNeutrally(input)).toEqual(['Stop.', 'E\u0301l left.']);
       for (const score of [rouge.n, rouge.s, rouge.l]) {
-        expect(score(input, 'Я. I agree.', { caseSensitive: false })).toBe(1);
+        expect(score(input, 'Stop. E\u0301l left.', { caseSensitive: false })).toBe(1);
       }
     });
 
@@ -1477,9 +1490,24 @@ describe('Utility Functions', () => {
       test('scans differently ordered combining marks without quadratic normalization', () => {
         const input = `A${'\u0315\u0316'.repeat(32_000)}.X`;
         const started = Date.now();
-        expect(segmentCaseNeutrally(input)).toEqual([input]);
+        expect(segmentCaseNeutrally(input).join('')).toBe(input);
         expect(Date.now() - started).toBeLessThan(TIMEOUT_MS);
       });
+
+      test('streams repeated marked clusters within a constrained heap', () => {
+        expectBundledScriptToPass(
+          `
+            const summary = 'A\\u0303'.repeat(4_000_000) + '.X';
+            const sentences = module.exports.sentenceSegment(summary, { caseNeutral: true });
+            if (sentences.join('') !== summary) {
+              throw new Error('Marked-cluster content changed');
+            }
+            process.stdout.write('ok');
+          `,
+          20_000,
+          ['--max-old-space-size=80'],
+        );
+      }, 25_000);
 
       test('segments large spaced-ellipsis runs within a constrained heap', () => {
         expectBundledScriptToPass(

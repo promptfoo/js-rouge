@@ -748,15 +748,31 @@ function caseNeutralIdentifierContext(input: string, index: number): boolean {
   if (!/\p{Cased}/u.test(token)) {
     return false;
   }
-  const stableAscii = token
-    .replace(/[Ii]\u0307\p{Mark}*/gu, '')
-    .replace(/[A-Za-z]\p{Mark}/gu, (cluster) => cluster.normalize('NFC'));
   return (
-    /[a-jl-z0-9_]/i.test(stableAscii) ||
-    (/k/i.test(stableAscii) &&
-      (tokenStart > 0 || !/^no\b/i.test(input.slice(index + 1, index + 8)))) ||
+    hasStableAsciiIdentifierEvidence(input, tokenStart, index) ||
     (/\p{Script=Latin}/u.test(token) && /\p{Script=Greek}/u.test(token))
   );
+}
+
+function hasStableAsciiIdentifierEvidence(input: string, start: number, end: number): boolean {
+  const noOneContinuation = /^no\s+one\b/i.test(input.slice(end + 1, end + 16));
+  for (let cursor = start; cursor < end; cursor++) {
+    const code = input.charCodeAt(cursor);
+    if ((code >= 48 && code <= 57) || code === 95) {
+      return true;
+    }
+    const lowerCode = code | 32;
+    if (lowerCode < 97 || lowerCode > 122) {
+      continue;
+    }
+    if (/^\p{Mark}$/u.test(characterAt(input, cursor + 1))) {
+      continue;
+    }
+    if (lowerCode !== 107 || start > 0 || !noOneContinuation) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function isUnspacedSentenceBoundary(
@@ -793,16 +809,15 @@ function isUnspacedSentenceBoundary(
         hostnameLabel === hostnameLabel.toLowerCase() ||
         hostnameLabel === hostnameLabel.toUpperCase()));
   const dottedIdentifier = caseNeutral
-    ? identifier && /^(?:[\p{Cased}\p{Number}_-]\p{M}*){1,2}(?=\s|[/.]|$)/u.test(following)
+    ? identifier &&
+      /^(?:[\p{Cased}\p{Number}_-](?:\u0307\p{M}*)?){1,2}(?=\s|[/.]|$)/u.test(following)
     : /\b\p{Lu}[\p{Letter}\p{Number}_-]*\.$/u.test(suffix) &&
       /^[\p{Lu}\p{Number}_-]+(?=\s|[/.]|$)/u.test(following);
   const initial = caseNeutral ? /^\p{Cased}\p{M}*\./u : /^\p{Lu}\./u;
   const trailingInitial = caseNeutral
     ? /(?:^|[^\p{Letter}\p{Mark}\p{Number}_-])\p{Cased}\p{M}*\.$/u
     : /\b\p{Lu}\.$/u;
-  const nextInitial = caseNeutral
-    ? /^(?!i\s+\p{Letter})\p{Cased}\p{M}*(?=\s|$)/iu
-    : /^\p{Lu}(?=\s|$)/u;
+  const nextInitial = caseNeutral ? /^(?!i(?:\s|$))\p{Cased}\p{M}*(?=\s|$)/iu : /^\p{Lu}(?=\s|$)/u;
   const gateSuffix = caseNeutral ? suffix.toLowerCase() : suffix;
   const contextChangingGreekInitial = /^[Σσς]\p{M}+\.\p{Case_Ignorable}*\p{Cased}/u.test(following);
   const continuesAbbreviation =
