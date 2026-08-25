@@ -1417,6 +1417,21 @@ describe('Utility Functions', () => {
         );
       }, 25_000);
 
+      test('bounds unmatched typographic quotation state within a constrained heap', () => {
+        expectBundledScriptToPass(
+          `
+            const summary = '‘'.repeat(7000000);
+            const sentences = module.exports.sentenceSegment(summary);
+            if (sentences.length !== 1 || sentences[0] !== summary) {
+              throw new Error('Unmatched quotation content changed');
+            }
+            process.stdout.write('ok');
+          `,
+          20_000,
+          ['--max-old-space-size=64'],
+        );
+      }, 25_000);
+
       test('should segment abbreviation chains within a small heap', () => {
         expectBundledScriptToPass(
           `
@@ -1550,6 +1565,87 @@ describe('Utility Functions', () => {
         expect(ss('Wait...  what?')).toEqual(['Wait... what?']);
         expect(ss('Wait...\twhat?')).toEqual(['Wait...\twhat?']);
         expect(ss('Wait...what?')).toEqual(['Wait...what?']);
+      });
+
+      test.each([
+        ['Alpha... Beta.', ['Alpha...', 'Beta.']],
+        ['Alpha... "Beta."', ['Alpha...', '"Beta."']],
+        ['Alpha... (Beta.)', ['Alpha...', '(Beta.)']],
+        ['Alpha... 2024 was different.', ['Alpha...', '2024 was different.']],
+        ['Alpha... 100% of voters agreed.', ['Alpha...', '100% of voters agreed.']],
+        ['Alpha... 100 years have passed.', ['Alpha...', '100 years have passed.']],
+        [
+          'This is e.g. Mr. Smith, who talks slowly... And this is another sentence.',
+          ['This is e.g. Mr. Smith, who talks slowly...', 'And this is another sentence.'],
+        ],
+      ])('recognizes terminal three-dot ellipses in %s', (input, expected) => {
+        expect(ss(input)).toEqual(expected);
+        expect(segmentCaseNeutrally(input)).toEqual(expected);
+        expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+          expected.map((sentence) => sentence.toLowerCase()),
+        );
+      });
+
+      test.each(['Wait... what?', 'Wait... and then continued.'])(
+        'keeps lowercase ellipsis continuations together in %s',
+        (input) => {
+          expect(ss(input)).toEqual([input]);
+          expect(segmentCaseNeutrally(input)).toEqual([input]);
+        },
+      );
+
+      test.each([
+        'She said, "I... I cannot go."',
+        'She said, “I... I cannot go.”',
+        'She said, ‘I can’t... Alpha.’',
+        'She said, «I... Beta.»',
+        'Er sagte: „Ich... Ich kann nicht.“',
+        'We noted (Alpha... Beta) today.',
+      ])('keeps three-dot ellipses inside surrounding delimiters: %s', (input) => {
+        expect(ss(input)).toEqual([input]);
+        expect(segmentCaseNeutrally(input)).toEqual([input]);
+      });
+
+      test.each([
+        'And the winner is... Alice Smith.',
+        'And the winner will be... Alice Smith.',
+        'The winner has been... Alice Smith.',
+        'The winner is being... Alice Smith.',
+        'I... I cannot go.',
+      ])('keeps capitalized ellipsis continuations in the same sentence: %s', (input) => {
+        expect(ss(input)).toEqual([input]);
+        expect(segmentCaseNeutrally(input)).toEqual([input]);
+      });
+
+      test('handles long sequences of merged ellipses in one scan', () => {
+        expect(ss('It is... Alpha '.repeat(4000))).toHaveLength(1);
+      });
+
+      test('keeps inline parentheticals with their ellipsis continuation', () => {
+        for (const input of [
+          'He paused... (Perhaps deliberately) before answering.',
+          'He paused... (Perhaps, e.g., deliberately) before answering.',
+          'He paused... “Perhaps deliberately,” before answering.',
+          "He paused... 'Perhaps it's deliberate,' before answering.",
+          'He paused... ‘Perhaps it’s deliberate,’ before answering.',
+        ]) {
+          expect(ss(input)).toEqual([input]);
+          expect(segmentCaseNeutrally(input)).toEqual([input]);
+        }
+        const uppercase = 'HE PAUSED... (PERHAPS) BEFORE ANSWERING.';
+        expect(segmentCaseNeutrally(uppercase)).toEqual([uppercase]);
+        expect(rouge.l(uppercase, uppercase.toLowerCase(), { caseSensitive: false })).toBe(1);
+      });
+
+      test.each(lineBreaks)('keeps wrapped continuations after inline asides across %j', (wrap) => {
+        const input = `He paused... (Perhaps deliberately)${wrap}before answering.`;
+        const expected = ['He paused... (Perhaps deliberately) before answering.'];
+        expect(ss(input)).toEqual(expected);
+        expect(segmentCaseNeutrally(input)).toEqual(expected);
+      });
+
+      test('scores reference sentences ending in a three-dot ellipsis correctly', () => {
+        expect(rouge.l('Beta Alpha...', 'Alpha... Beta.')).toBeCloseTo(6 / 7);
       });
 
       test.each(lineBreaks)('joins wrapped ellipses across %j', (lineBreak) => {

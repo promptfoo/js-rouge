@@ -112,6 +112,10 @@ const upperCaseReg = /^\p{Uppercase}$/u;
 // Recognize unambiguous page-reference forms: p. 10, p. (10), and p. #10.
 const pageNumberContinuationReg =
   /^\s*(?:\(\s*\p{Number}+\s*\)|#\s*\p{Number}+|\p{Number}+)(?=\s|[.,;:!?)]|$)/u;
+const numericSentenceContinuationReg =
+  /^\S+(?:\s*%|\s+(?:time|year)s?\b|\s+(?:month|week|day|hour|minute|second|star|point|percent)s?(?=\s*[.!?](?:\s|$)|\s*$))/iu;
+const ellipsisQuantityContinuationReg =
+  /^\S+(?:\s*%|\s+(?:time|year|month|week|day|hour|minute|second|star|point|percent)s?)(?=\s*[.!?](?:\s|$)|\s*$)/iu;
 const breakReg = /[\r\n]+/;
 // Match a bounded ellipsis suffix to avoid excessive backtracking.
 const ellipseReg = /\.{2,10}$/;
@@ -136,6 +140,7 @@ class SentenceBuffer {
   #normalizedThrough = 0;
   #words: { titleCase: boolean; lowerCase: boolean }[] = [];
   #openingDelimiters: string[] = [];
+  #typographicQuoteClosers: string[] = [];
   #insideDoubleQuotes = false;
   #insideSingleQuotes = false;
   #lastCharacter = '';
@@ -161,7 +166,10 @@ class SentenceBuffer {
 
   get hasOpenDelimiter(): boolean {
     return (
-      this.#openingDelimiters.length > 0 || this.#insideDoubleQuotes || this.#insideSingleQuotes
+      this.#openingDelimiters.length > 0 ||
+      this.#typographicQuoteClosers.length > 0 ||
+      this.#insideDoubleQuotes ||
+      this.#insideSingleQuotes
     );
   }
 
@@ -208,6 +216,9 @@ class SentenceBuffer {
   #trackDelimiters(text: string): void {
     for (let index = 0; index < text.length; index++) {
       const character = text[index];
+      if (this.#trackTypographicQuote(text, index)) {
+        continue;
+      }
       if (character === '"') {
         const previous = index === 0 ? this.#lastCharacter : text[index - 1];
         this.#insideDoubleQuotes =
@@ -232,6 +243,35 @@ class SentenceBuffer {
       }
     }
     this.#lastCharacter = text.at(-1) ?? this.#lastCharacter;
+  }
+
+  #trackTypographicQuote(text: string, index: number): boolean {
+    const character = text[index];
+    if (character === this.#typographicQuoteClosers.at(-1)) {
+      const previous = index === 0 ? this.#lastCharacter : text[index - 1];
+      if (
+        character === '’' &&
+        /^\p{Letter}$/u.test(previous) &&
+        /^\p{Letter}$/u.test(characterAt(text, index + 1))
+      ) {
+        return false;
+      }
+      this.#typographicQuoteClosers.pop();
+      return true;
+    }
+    if (character === '“' || character === '‘' || character === '«' || character === '„') {
+      if (this.#typographicQuoteClosers.length < 64) {
+        if (character === '«') {
+          this.#typographicQuoteClosers.push('»');
+        } else if (character === '„') {
+          this.#typographicQuoteClosers.push('“');
+        } else {
+          this.#typographicQuoteClosers.push(character === '“' ? '”' : '’');
+        }
+      }
+      return true;
+    }
+    return false;
   }
 
   #trackSingleQuote(text: string, index: number): void {
@@ -428,9 +468,30 @@ export function sentenceSegment(
         // Catch mid-sentence ellipses (and their derivatives) and merge them
         const nextChunk = chunks[idx + 1];
         const nextSentence = nextChunk.trim() || chunks[idx + 2] || '';
+        const sentenceStart = nextSentence.replace(/^[\s"'“‘«„([{<]+/, '');
+        const startsWithLetter = caseNeutral
+          ? startsWithCasedCharacter(sentenceStart) &&
+            (/\.{4}$/.test(suffix) ||
+              (!/^(?:what|and\s+then)\b/i.test(sentenceStart) &&
+                (!sentenceContinuationReg.test(sentenceStart) ||
+                  independentSentenceReg.test(sentenceStart))))
+          : strIsTitleCase(sentenceStart);
+        const startsWithNumber =
+          /^\p{Number}/u.test(sentenceStart) &&
+          !ellipsisQuantityContinuationReg.test(sentenceStart);
+        const parentheticalContext = breakReg.test(nextChunk)
+          ? `${nextChunk.trimStart()}${chunks[idx + 2] ?? ''}`
+          : nextSentence;
+        const inlineParenthetical = hasInlineParenthetical(parentheticalContext, caseNeutral);
+        const startsSentence = (startsWithLetter || startsWithNumber) && !inlineParenthetical;
         if (
-          /\.{4}$/.test(suffix) &&
-          (caseNeutral ? startsWithCasedCharacter(nextSentence) : strIsTitleCase(nextSentence))
+          /\.{3,4}$/.test(suffix) &&
+          startsSentence &&
+          (/\.{4}$/.test(suffix) ||
+            !(
+              chunk.hasOpenDelimiter ||
+              /\b(?:am|is|are|was|were|be|been|being|i)\.{3}$/i.test(suffix)
+            ))
         ) {
           acc.push(chunk.text());
           continue;
@@ -450,6 +511,33 @@ export function sentenceSegment(
 
   // If no matches were found, return the input treated as a single sentence
   return acc.length === 0 ? [input] : acc;
+}
+
+function hasInlineParenthetical(input: string, caseNeutral: boolean): boolean {
+  const opening = input[0];
+  const openingIndex = '([{<"\'“‘«„'.indexOf(opening);
+  if (openingIndex === -1) {
+    return false;
+  }
+  const closing = ')]}>"\'”’»“'[openingIndex];
+  let depth = 1;
+  for (let index = 1; index < Math.min(input.length, 512); index++) {
+    if (
+      input[index] === closing &&
+      /['’]/.test(closing) &&
+      /^\p{Letter}$/u.test(characterAt(input, index - 1)) &&
+      /^\p{Letter}$/u.test(characterAt(input, index + 1))
+    ) {
+      continue;
+    }
+    if (input[index] === opening && opening !== closing) {
+      depth++;
+    } else if (input[index] === closing && --depth === 0) {
+      const continuation = input.slice(index + 1, index + 64);
+      return caseNeutral ? /^\s+\p{Cased}/u.test(continuation) : /^\s+\p{Ll}/u.test(continuation);
+    }
+  }
+  return false;
 }
 
 function nextListMarker(
@@ -686,9 +774,7 @@ function sentenceEnd(
   const startsWithNumber =
     /^\p{Number}$/u.test(nextCharacter) &&
     !abbrvReg.test(gateSuffix) &&
-    !/^\S+(?:\s*%|\s+(?:time|year)s?\b|\s+(?:month|week|day|hour|minute|second|star|point|percent)s?(?=\s*[.!?](?:\s|$)|\s*$))/iu.test(
-      input.slice(next),
-    );
+    !numericSentenceContinuationReg.test(input.slice(next));
   if (!(startsWithLetter || startsWithNumber)) {
     return -1;
   }
