@@ -479,7 +479,10 @@ export function sentenceSegment(
         const startsWithNumber =
           /^\p{Number}/u.test(sentenceStart) &&
           !ellipsisQuantityContinuationReg.test(sentenceStart);
-        const inlineParenthetical = hasInlineParenthetical(nextSentence, caseNeutral);
+        const parentheticalContext = breakReg.test(nextChunk)
+          ? `${nextChunk.trimStart()}${chunks[idx + 2] ?? ''}`
+          : nextSentence;
+        const inlineParenthetical = hasInlineParenthetical(parentheticalContext, caseNeutral);
         const startsSentence = (startsWithLetter || startsWithNumber) && !inlineParenthetical;
         if (
           /\.{3,4}$/.test(suffix) &&
@@ -531,9 +534,7 @@ function hasInlineParenthetical(input: string, caseNeutral: boolean): boolean {
       depth++;
     } else if (input[index] === closing && --depth === 0) {
       const continuation = input.slice(index + 1, index + 64);
-      return caseNeutral
-        ? /^[^\S\r\n]+\p{Cased}/u.test(continuation)
-        : /^[^\S\r\n]+\p{Ll}/u.test(continuation);
+      return caseNeutral ? /^\s+\p{Cased}/u.test(continuation) : /^\s+\p{Ll}/u.test(continuation);
     }
   }
   return false;

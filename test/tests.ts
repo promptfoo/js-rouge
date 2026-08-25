@@ -1637,6 +1637,13 @@ describe('Utility Functions', () => {
         expect(rouge.l(uppercase, uppercase.toLowerCase(), { caseSensitive: false })).toBe(1);
       });
 
+      test.each(lineBreaks)('keeps wrapped continuations after inline asides across %j', (wrap) => {
+        const input = `He paused... (Perhaps deliberately)${wrap}before answering.`;
+        const expected = ['He paused... (Perhaps deliberately) before answering.'];
+        expect(ss(input)).toEqual(expected);
+        expect(segmentCaseNeutrally(input)).toEqual(expected);
+      });
+
       test('scores reference sentences ending in a three-dot ellipsis correctly', () => {
         expect(rouge.l('Beta Alpha...', 'Alpha... Beta.')).toBeCloseTo(6 / 7);
       });
