@@ -562,15 +562,18 @@ interface ListCandidate {
 }
 
 function listMarkerFamily(marker: string, caseNeutral: boolean): RegExp {
+  let start: string;
   if (/\d/.test(marker)) {
-    return /\d/;
+    start = '\\d';
+  } else if (caseNeutral) {
+    start = '^\\s*\\p{Cased}';
+  } else {
+    start = /^[\p{Uppercase}\p{Lt}]/u.test(marker)
+      ? '^\\s*[\\p{Uppercase}\\p{Lt}]'
+      : '^\\s*\\p{Lowercase}';
   }
-  if (caseNeutral) {
-    return /^\s*\p{Cased}/u;
-  }
-  return /^[\p{Uppercase}\p{Lt}]/u.test(marker)
-    ? /^\s*[\p{Uppercase}\p{Lt}]/u
-    : /^\s*\p{Lowercase}/u;
+  const ending = marker.endsWith(')') ? '\\)' : '\\.';
+  return new RegExp(`${start}[^\\r\\n]*${ending}$`, 'u');
 }
 
 function findListCandidate(
@@ -597,7 +600,9 @@ function findListCandidate(
     const identity = caseNeutral ? marker.toLowerCase().toUpperCase().toLowerCase() : marker;
     const joinedNameInitial =
       /^\p{Cased}\p{M}*\.$/u.test(marker) &&
-      /(?:\b(?:and|or)|&)\s*$/i.test(input.slice(Math.max(0, current.index - 8), current.index));
+      /(?:\b(?:and|or)|[,;&])\s*$/i.test(
+        input.slice(Math.max(0, current.index - 8), current.index),
+      );
     const distinctMarker = first?.identity !== identity && !joinedNameInitial;
     if (first !== undefined && (first.emptyPrefix || distinctMarker)) {
       const candidate: ListCandidate = {
@@ -894,11 +899,11 @@ function colonIntroducedNameBoundary(input: string, index: number): number {
     return index + 1;
   }
   const joinsName =
-    /(?:[:&]|\b(?:and|or)\b)\s+\p{Cased}\p{M}*\.$/iu.test(
+    /(?:[:,;&]|\b(?:and|or)\b)\s+\p{Cased}\p{M}*\.$/iu.test(
       input.slice(Math.max(0, index - 40), index + 1),
     ) &&
     /^\s+\p{Cased}\p{Letter}/u.test(input.slice(index + 1, index + 40)) &&
-    /:\s+\p{Cased}\p{M}*\.\s+\p{Letter}+\s+(?:and|or|&)\s+\p{Cased}\p{M}*\.\s+\p{Letter}/iu.test(
+    /:\s+\p{Cased}\p{M}*\.\s+\p{Letter}+(?:\s+(?:and|or|&)|[,;])\s+\p{Cased}\p{M}*\.\s+\p{Letter}/iu.test(
       input.slice(Math.max(0, index - 96), index + 96),
     );
   return joinsName ? -1 : index + 1;

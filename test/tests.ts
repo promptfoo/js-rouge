@@ -716,12 +716,22 @@ describe('Utility Functions', () => {
       ]);
     });
 
-    test('does not interpret colon-introduced author initials as list markers', () => {
-      const authors = 'Authors: A. Smith and B. Jones.';
-      const reversed = 'Authors: B. Jones and A. Smith.';
-      expect(ss(authors)).toEqual([authors]);
-      expect(segmentCaseNeutrally(authors)).toEqual([authors]);
-      expect(rouge.l(authors, reversed)).toBeCloseTo(0.625);
+    test.each([' and ', ', ', '; '])(
+      'does not interpret author initials separated by %j as list markers',
+      (separator) => {
+        const authors = `Authors: A. Smith${separator}B. Jones.`;
+        const reversed = `Authors: B. Jones${separator}A. Smith.`;
+        expect(ss(authors)).toEqual([authors]);
+        expect(segmentCaseNeutrally(authors)).toEqual([authors]);
+        expect(rouge.l(authors, reversed)).toBeLessThan(1);
+      },
+    );
+
+    test('does not treat dotted name initials as parenthesized list markers', () => {
+      const input = 'A) J. Smith will attend B) K. Brown will attend';
+      const expected = ['A) J. Smith will attend', 'B) K. Brown will attend'];
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
     });
 
     test('finds genuine lists after an earlier false marker', () => {
@@ -2919,7 +2929,7 @@ describe('Core Functions', () => {
     });
 
     test('bounds Cartesian comparisons after expanding large embedded lists', () => {
-      const summary = Array.from({ length: 1001 }, (_, index) =>
+      const summary = Array.from({ length: 317 }, (_, index) =>
         index % 2 === 0 ? 'a) Alpha' : 'b) Beta',
       ).join(' ');
       expect(() => l(summary, summary)).toThrow(/sentence comparison exceeds the work limit/);

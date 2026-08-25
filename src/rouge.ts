@@ -11,7 +11,7 @@ import {
 export * from './utils';
 
 const whitespaceOnlyReg = /^[\s\u0085]*$/;
-const maxLcsSentencePairs = 1_000_000;
+const maxLcsSentencePairs = 100_000;
 
 /** Options for ROUGE-N evaluation */
 export interface RougeNOptions {
