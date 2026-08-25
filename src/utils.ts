@@ -564,7 +564,7 @@ interface ListCandidate {
 function listMarkerFamily(marker: string, caseNeutral: boolean): RegExp {
   let start: string;
   if (/\d/.test(marker)) {
-    start = '\\d';
+    start = '^\\s*(?:[•⁃]\\s*)?\\d';
   } else if (caseNeutral) {
     start = '^\\s*\\p{Cased}';
   } else {

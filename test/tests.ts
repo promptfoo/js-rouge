@@ -1630,6 +1630,13 @@ describe('Utility Functions', () => {
     describe('ReDoS prevention', () => {
       const TIMEOUT_MS = 500;
 
+      test('anchors mismatched numeric marker families without backtracking', () => {
+        const input = `1. Alpha 2. Beta ${'9'.repeat(48_000)}) Gamma`;
+        const started = Date.now();
+        expect(ss(input)).toHaveLength(2);
+        expect(Date.now() - started).toBeLessThan(TIMEOUT_MS);
+      });
+
       test('segments large spaced-ellipsis runs within a constrained heap', () => {
         expectBundledScriptToPass(
           `
