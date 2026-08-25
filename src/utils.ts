@@ -626,7 +626,7 @@ function sentenceChunks(input: string, caseNeutral: boolean): string[] {
       const end = sentenceEnd(
         input,
         index,
-        insideQuotes || insideCurlyQuotes || insideSingleQuotes,
+        Number(insideQuotes) + Number(insideCurlyQuotes) + Number(insideSingleQuotes),
         brackets,
         caseNeutral,
         curlyClosingQuote,
@@ -708,17 +708,21 @@ function isProtectedEllipsisPeriod(
 function closingDelimiterEnd(
   input: string,
   index: number,
-  insideQuotes: boolean,
+  quoteDepth: number,
   curlyClosingQuote: string | undefined,
 ): number {
   let end = index + 1;
-  let quotePending = insideQuotes;
+  let pendingQuotes = quoteDepth;
+  let quotePending = pendingQuotes > 0;
   while (end < input.length) {
     if (
       closingDelimiterReg.test(input[end]) ||
       (quotePending && input[end] === curlyClosingQuote)
     ) {
-      quotePending &&= !/["'”]/.test(input[end]) && input[end] !== curlyClosingQuote;
+      if (quotePending && (/["'”]/.test(input[end]) || input[end] === curlyClosingQuote)) {
+        pendingQuotes--;
+        quotePending = pendingQuotes > 0;
+      }
       end++;
       continue;
     }
@@ -746,11 +750,12 @@ function closingDelimiterEnd(
 function sentenceEnd(
   input: string,
   index: number,
-  insideQuotes: boolean,
+  quoteDepth: number,
   brackets: { depth: number; standalone: boolean },
   caseNeutral: boolean,
   curlyClosingQuote: string | undefined,
 ): number {
+  const insideQuotes = quoteDepth > 0;
   if (
     !insideQuotes &&
     brackets.depth === 0 &&
@@ -758,7 +763,7 @@ function sentenceEnd(
   ) {
     return index + 1;
   }
-  const end = closingDelimiterEnd(input, index, insideQuotes, curlyClosingQuote);
+  const end = closingDelimiterEnd(input, index, quoteDepth, curlyClosingQuote);
   if (end < input.length && !/\s/.test(input[end])) {
     return isUnspacedSentenceBoundary(input, index, end, caseNeutral) ? end : -1;
   }
@@ -806,11 +811,17 @@ function sentenceEnd(
 }
 
 function isDialogueAttribution(input: string, closesQuotation: boolean): boolean {
-  if (!closesQuotation) {
+  if (
+    !closesQuotation ||
+    (/^(?:am|is|are|was|were|be|been|being|has|have|had|will|would|can|could|should|must)\b/i.test(
+      input,
+    ) &&
+      /^[^.!?\r\n]*\?/.test(input))
+  ) {
     return false;
   }
   return (
-    /^(?:aloud\b|(?:am|is|are|was|were|be|been|being|has|have|had|will|would|can|could|should|must)\s+(?![^.!?\r\n]{0,256}\?)(?!(?:i|we|he|she|they|you|it|this|that|these|those)\b))/i.test(
+    /^(?:aloud\b|(?:am|is|are|was|were|be|been|being|has|have|had|will|would|can|could|should|must)\s+(?!(?:i|we|he|she|they|you|it|this|that|these|those)\b))/i.test(
       input,
     ) ||
     /^(?:(?!(?:am|is|are|was|were|be|been|being|has|have|had)\b)[\p{Letter}\p{Mark}'’-]+\s+){1,3}(?:said|thought|asked|replied|answered)(?=\s*[,.;!?]|\s*$)/iu.test(

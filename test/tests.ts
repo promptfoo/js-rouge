@@ -1234,6 +1234,13 @@ describe('Utility Functions', () => {
       expect(segmentCaseNeutrally(input)).toEqual(expected);
     });
 
+    test('keeps a spaced outer closing quotation after an inner closer', () => {
+      const input = 'She said "He answered \'No.\' " Next. Last.';
+      const expected = ['She said "He answered \'No.\' "', 'Next.', 'Last.'];
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
     test('keeps spaced single closing quotations with their sentence', () => {
       const input = "He said 'Stop. ' Next.";
       const expected = ["He said 'Stop. '", 'Next.'];
@@ -1294,6 +1301,13 @@ describe('Utility Functions', () => {
         expect(segmentCaseNeutrally(input)).toEqual(expected);
       },
     );
+
+    test('keeps long auxiliary-led questions separate from preceding quotations', () => {
+      const question = `Was Alice ${'really '.repeat(50)}ready?`;
+      const input = `"It ended." ${question} Next.`;
+      expect(ss(input)).toEqual(['"It ended."', question, 'Next.']);
+      expect(segmentCaseNeutrally(input)).toEqual(['"It ended."', question, 'Next.']);
+    });
 
     test('keeps proper-name dialogue attributions with the quotation', () => {
       const input = '“Stop!” Alice said. Next.';
