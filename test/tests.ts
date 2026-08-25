@@ -621,6 +621,14 @@ describe('Utility Functions', () => {
       );
     });
 
+    test('compares case-expanding sharp-S list markers consistently', () => {
+      const input = 'Intro: ß. Alpha ẞ. Beta.';
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        segmentCaseNeutrally(input).map((sentence) => sentence.toLowerCase()),
+      );
+      expect(rouge.l(input, input.toLowerCase(), { caseSensitive: false })).toBe(1);
+    });
+
     test('accepts case-expanded combining marks in alphabetical markers', () => {
       const input = 'Intro: İ. Alpha J. Beta.';
       expect(segmentCaseNeutrally(input)).toEqual(['Intro:', 'İ. Alpha', 'J. Beta.']);
@@ -772,6 +780,12 @@ describe('Utility Functions', () => {
           'b) Beta.',
         ]);
       }
+    });
+
+    test('does not mistake inch marks for opening quotations inside lists', () => {
+      const input = '1) board is 6" wide 2) narrow';
+      expect(ss(input)).toEqual(['1) board is 6" wide', '2) narrow']);
+      expect(segmentCaseNeutrally(input)).toEqual(['1) board is 6" wide', '2) narrow']);
     });
 
     test('ignores apostrophe-led contractions while finding embedded lists', () => {

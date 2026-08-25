@@ -462,7 +462,7 @@ interface ListScanState {
 function listQuoteCloser(input: string, index: number): string | undefined {
   const character = input[index];
   if (character === '"') {
-    return '"';
+    return opensDoubleQuote(input, index, false) ? '"' : undefined;
   }
   if (
     character === "'" &&
@@ -594,7 +594,7 @@ function findListCandidate(
 
     const family = listMarkerFamily(marker, caseNeutral);
     const first = firstByFamily.get(family.source);
-    const identity = caseNeutral ? marker.toUpperCase().toLowerCase() : marker;
+    const identity = caseNeutral ? marker.toLowerCase().toUpperCase().toLowerCase() : marker;
     const joinedNameInitial =
       /^\p{Cased}\p{M}*\.$/u.test(marker) &&
       /(?:\b(?:and|or)|&)\s*$/i.test(input.slice(Math.max(0, current.index - 8), current.index));
