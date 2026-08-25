@@ -662,6 +662,7 @@ describe('Utility Functions', () => {
       'İ́ΑΑΑΑΑΑΑΑ.X more',
       'αİééééééé.X more',
       'path K.AB more',
+      'path K.No more',
     ])('preserves case-expanded dotted identifiers: %s', (input) => {
       expect(segmentCaseNeutrally(input)).toEqual([input]);
       expect(segmentCaseNeutrally(input.toLowerCase())).toEqual([input.toLowerCase()]);
@@ -700,6 +701,14 @@ describe('Utility Functions', () => {
         }
       },
     );
+
+    test('preserves an adjacent Unicode one-letter sentence before an I clause', () => {
+      const input = 'Я.I agree.';
+      expect(segmentCaseNeutrally(input)).toEqual(['Я.', 'I agree.']);
+      for (const score of [rouge.n, rouge.s, rouge.l]) {
+        expect(score(input, 'Я. I agree.', { caseSensitive: false })).toBe(1);
+      }
+    });
 
     test.each(['A.Σ́.No one answered.', "A.Σ́.'No one answered.", 'A.Σ́."No one answered.'])(
       'preserves case-folding context around marked Greek initial in %s',

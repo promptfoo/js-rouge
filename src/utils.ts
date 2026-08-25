@@ -753,7 +753,8 @@ function caseNeutralIdentifierContext(input: string, index: number): boolean {
     .replace(/[A-Za-z]\p{Mark}/gu, (cluster) => cluster.normalize('NFC'));
   return (
     /[a-jl-z0-9_]/i.test(stableAscii) ||
-    (/k/i.test(stableAscii) && !/^no\b/i.test(input.slice(index + 1, index + 8))) ||
+    (/k/i.test(stableAscii) &&
+      (tokenStart > 0 || !/^no\b/i.test(input.slice(index + 1, index + 8)))) ||
     (/\p{Script=Latin}/u.test(token) && /\p{Script=Greek}/u.test(token))
   );
 }
@@ -799,7 +800,9 @@ function isUnspacedSentenceBoundary(
   const trailingInitial = caseNeutral
     ? /(?:^|[^\p{Letter}\p{Mark}\p{Number}_-])\p{Cased}\p{M}*\.$/u
     : /\b\p{Lu}\.$/u;
-  const nextInitial = caseNeutral ? /^\p{Cased}\p{M}*(?=\s|$)/u : /^\p{Lu}(?=\s|$)/u;
+  const nextInitial = caseNeutral
+    ? /^(?!i\s+\p{Letter})\p{Cased}\p{M}*(?=\s|$)/iu
+    : /^\p{Lu}(?=\s|$)/u;
   const gateSuffix = caseNeutral ? suffix.toLowerCase() : suffix;
   const contextChangingGreekInitial = /^[Σσς]\p{M}+\.\p{Case_Ignorable}*\p{Cased}/u.test(following);
   const continuesAbbreviation =
