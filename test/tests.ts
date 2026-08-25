@@ -661,6 +661,7 @@ describe('Utility Functions', () => {
       'İ12345678.X more',
       'İ́ΑΑΑΑΑΑΑΑ.X more',
       'αİééééééé.X more',
+      'path K.AB more',
     ])('preserves case-expanded dotted identifiers: %s', (input) => {
       expect(segmentCaseNeutrally(input)).toEqual([input]);
       expect(segmentCaseNeutrally(input.toLowerCase())).toEqual([input.toLowerCase()]);
@@ -700,12 +701,14 @@ describe('Utility Functions', () => {
       },
     );
 
-    test('preserves case-folding context around marked Greek initials', () => {
-      const input = 'A.Σ́.No one answered.';
-      expect(rouge.n(input, input.toLowerCase(), { caseSensitive: false })).toBe(1);
-      expect(rouge.s(input, input.toLowerCase(), { caseSensitive: false })).toBe(1);
-      expect(rouge.l(input, input.toLowerCase(), { caseSensitive: false })).toBe(1);
-    });
+    test.each(['A.Σ́.No one answered.', "A.Σ́.'No one answered.", 'A.Σ́."No one answered.'])(
+      'preserves case-folding context around marked Greek initial in %s',
+      (input) => {
+        expect(rouge.n(input, input.toLowerCase(), { caseSensitive: false })).toBe(1);
+        expect(rouge.s(input, input.toLowerCase(), { caseSensitive: false })).toBe(1);
+        expect(rouge.l(input, input.toLowerCase(), { caseSensitive: false })).toBe(1);
+      },
+    );
 
     test('does not let a truncated mark qualify an unrelated later word', () => {
       const input = 'İ?0b/]]\té.𝒜B';
