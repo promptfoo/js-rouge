@@ -1171,6 +1171,14 @@ describe('Utility Functions', () => {
       expect(segmentCaseNeutrally(input)).toEqual([input]);
     });
 
+    test.each([
+      ['She said ‘First. Second.’ Next.', ['She said ‘First. Second.’', 'Next.']],
+      ['She said ‘It’s fine. Really.’ Next.', ['She said ‘It’s fine. Really.’', 'Next.']],
+    ])('keeps curly single quotations intact in %s', (input, expected) => {
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
     test('does not mistake apostrophe-prefixed decades for opening quotations', () => {
       expect(
         ss(

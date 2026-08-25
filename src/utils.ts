@@ -105,10 +105,17 @@ function curlyQuotationState(
 ): string | undefined {
   const character = input[index];
   if (character === closingQuote) {
-    return undefined;
+    return character === '’' &&
+      /^\p{Letter}$/u.test(characterAt(input, index - 1)) &&
+      /^\p{Letter}$/u.test(characterAt(input, index + 1))
+      ? closingQuote
+      : undefined;
   }
   if (character === '„') {
     return '“';
+  }
+  if (character === '‘') {
+    return '’';
   }
   return character === '“' ? '”' : closingQuote;
 }
@@ -275,7 +282,7 @@ class SentenceBuffer {
   #trackDelimiters(text: string): void {
     for (let index = 0; index < text.length; index++) {
       const character = text[index];
-      if (/["“”„]/.test(character)) {
+      if (/["“”„‘’]/.test(character)) {
         this.#trackDoubleQuote(text, index);
       } else if (character === "'") {
         this.#trackSingleQuote(text, index);
@@ -770,7 +777,7 @@ function sentenceEnd(
   }
 
   let next = end;
-  while (next < input.length && /[\s"'“„([{<]/.test(input[next])) {
+  while (next < input.length && /[\s"'“„‘([{<]/.test(input[next])) {
     next++;
   }
   if (next === input.length) {
