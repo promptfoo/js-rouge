@@ -580,6 +580,249 @@ describe('Utility Functions', () => {
       ]);
     });
 
+    test('segments numbered lists after introductory prose', () => {
+      const input = 'Intro. 1. Alpha 2. Beta.';
+      expect(ss(input)).toEqual(['Intro.', '1. Alpha', '2. Beta.']);
+      expect(segmentCaseNeutrally(input)).toEqual(['Intro.', '1. Alpha', '2. Beta.']);
+      expect(rouge.n(input, '1. Alpha 2. Beta. Intro.')).toBe(1);
+      expect(rouge.l(input, '1. Alpha 2. Beta. Intro.')).toBe(1);
+    });
+
+    test('segments reordered numbered lists after introductory prose', () => {
+      expect(ss('Intro. 2. Beta 1. Alpha.')).toEqual(['Intro.', '2. Beta', '1. Alpha.']);
+      expect(rouge.l('Intro. 1. Alpha 2. Beta.', 'Intro. 2. Beta 1. Alpha.')).toBe(1);
+    });
+
+    test('accepts dash-delimited introductory prose', () => {
+      expect(ss('Options — 1. Alpha 2. Beta.')).toEqual(['Options —', '1. Alpha', '2. Beta.']);
+    });
+
+    test('keeps mixed-case list markers invariant under case folding', () => {
+      const input = 'Intro: A. Alpha b. Beta.';
+      expect(segmentCaseNeutrally(input)).toEqual(['Intro:', 'A. Alpha', 'b. Beta.']);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(['intro:', 'a. alpha', 'b. beta.']);
+      expect(rouge.l(input, input.toLowerCase(), { caseSensitive: false })).toBe(1);
+    });
+
+    test('compares repeated alphabetical markers case-neutrally', () => {
+      const input = 'Intro: A. Alpha a. Beta.';
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        segmentCaseNeutrally(input).map((sentence) => sentence.toLowerCase()),
+      );
+      expect(rouge.l(input, input.toLowerCase(), { caseSensitive: false })).toBe(1);
+    });
+
+    test('compares final-sigma list markers with full Unicode case folding', () => {
+      const input = 'Intro: Σ. Alpha ς. Beta.';
+      const expected = ['Intro: Σ.', 'Alpha ς.', 'Beta.'];
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input.toUpperCase())).toEqual(
+        expected.map((sentence) => sentence.toUpperCase()),
+      );
+    });
+
+    test('compares case-expanding sharp-S list markers consistently', () => {
+      const input = 'Intro: ß. Alpha ẞ. Beta.';
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        segmentCaseNeutrally(input).map((sentence) => sentence.toLowerCase()),
+      );
+      expect(rouge.l(input, input.toLowerCase(), { caseSensitive: false })).toBe(1);
+    });
+
+    test('accepts case-expanded combining marks in alphabetical markers', () => {
+      const input = 'Intro: İ. Alpha J. Beta.';
+      expect(segmentCaseNeutrally(input)).toEqual(['Intro:', 'İ. Alpha', 'J. Beta.']);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        segmentCaseNeutrally(input).map((sentence) => sentence.toLowerCase()),
+      );
+      expect(rouge.l(input, input.toLowerCase(), { caseSensitive: false })).toBe(1);
+    });
+
+    test('keeps Unicode titlecase markers in the same alphabetical list', () => {
+      expect(ss('ǅ. Alpha ǈ. Beta ǋ. Gamma')).toEqual(['ǅ. Alpha', 'ǈ. Beta', 'ǋ. Gamma']);
+    });
+
+    test('keeps Unicode Roman numeral markers in the same alphabetical list', () => {
+      expect(ss('Ⅰ. Alpha Ⅱ. Beta Ⅲ. Gamma')).toEqual(['Ⅰ. Alpha', 'Ⅱ. Beta', 'Ⅲ. Gamma']);
+    });
+
+    test('accepts uncased and numeric alphabetical list-item bodies', () => {
+      expect(ss('a) 100 widgets b) 200 widgets')).toEqual(['a) 100 widgets', 'b) 200 widgets']);
+      expect(rouge.l('a) 100 widgets b) 200 widgets', 'b) 200 widgets a) 100 widgets')).toBe(1);
+      expect(ss('a) 中文 b) 日文')).toEqual(['a) 中文', 'b) 日文']);
+    });
+
+    test('prefers an outer list family over nested marker pairs', () => {
+      const input = '1. Alpha a) One b) Two 2. Beta';
+      expect(ss(input)).toEqual(['1. Alpha a) One b) Two', '2. Beta']);
+      expect(rouge.l(input, '2. Beta 1. Alpha a) One b) Two')).toBe(1);
+    });
+
+    test('preserves genuinely sparse numbered lists after deferring outliers', () => {
+      expect(ss('Options: 1. First 42. Last')).toEqual(['Options:', '1. First', '42. Last']);
+    });
+
+    test('handles many unmatched parenthesized marker candidates', () => {
+      const input = `(${' a) A'.repeat(4000)}`;
+      expect(ss(input)).toEqual([input]);
+    });
+
+    test('bounds recursion for deeply nested embedded lists', () => {
+      const input = `${'Intro. 1. '.repeat(512)}Leaf. ${'2. Done. '.repeat(512)}`;
+      expect(() => ss(input)).not.toThrow();
+    });
+
+    test('handles sparse numbered marker sequences', () => {
+      const input = Array.from({ length: 2000 }, (_, index) => `End. ${2 * index + 1}. Alpha`).join(
+        ' ',
+      );
+      expect(() => ss(input)).not.toThrow();
+    });
+
+    test('appends large embedded list bodies without exceeding the argument limit', () => {
+      const input = `Intro. 1. ${'A!'.repeat(130_000)} 2. End.`;
+      expect(() => ss(input)).not.toThrow();
+    });
+
+    test.each([
+      ['a) Alpha b) Beta', ['a) Alpha', 'b) Beta']],
+      ['a.) Alpha b.) Beta', ['a.) Alpha', 'b.) Beta']],
+      ['A) Alpha B) Beta', ['A) Alpha', 'B) Beta']],
+      ['Intro. a) Alpha b) Beta', ['Intro.', 'a) Alpha', 'b) Beta']],
+      ['Intro: A. Alpha B. Beta.', ['Intro:', 'A. Alpha', 'B. Beta.']],
+    ])('recognizes parenthesized alphabetical list markers in %s', (input, expected) => {
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
+    test('scores reordered parenthesized alphabetical lists correctly', () => {
+      expect(rouge.l('a) Alpha b) Beta', 'b) Beta a) Alpha')).toBe(1);
+    });
+
+    test('does not interpret names or addresses as embedded lists', () => {
+      const names = 'I met John A. Smith and Mary B. Jones.';
+      expect(ss(names)).toEqual([names]);
+      expect(segmentCaseNeutrally(names.toLowerCase())).toEqual(
+        segmentCaseNeutrally(names).map((sentence) => sentence.toLowerCase()),
+      );
+      expect(rouge.l(names, names.toLowerCase(), { caseSensitive: false })).toBe(1);
+      expect(ss('we hired alice a. smith and bob b. jones.')).toEqual([
+        'we hired alice a. smith and bob b. jones.',
+      ]);
+      expect(ss('The address is 1. Main and 2. Broadway.')).toEqual([
+        'The address is 1.',
+        'Main and 2.',
+        'Broadway.',
+      ]);
+    });
+
+    test.each([' and ', ', ', '; '])(
+      'does not interpret author initials separated by %j as list markers',
+      (separator) => {
+        const authors = `Authors: A. Smith${separator}B. Jones.`;
+        const reversed = `Authors: B. Jones${separator}A. Smith.`;
+        expect(ss(authors)).toEqual([authors]);
+        expect(segmentCaseNeutrally(authors)).toEqual([authors]);
+        expect(rouge.l(authors, reversed)).toBeLessThan(1);
+      },
+    );
+
+    test('does not treat dotted name initials as parenthesized list markers', () => {
+      const input = 'A) J. Smith will attend B) K. Brown will attend';
+      const expected = ['A) J. Smith will attend', 'B) K. Brown will attend'];
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
+    test('finds genuine lists after an earlier false marker', () => {
+      expect(ss('I met John A. Smith. Intro: 1. Alpha 2. Beta.')).toEqual([
+        'I met John A. Smith.',
+        'Intro:',
+        '1. Alpha',
+        '2. Beta.',
+      ]);
+    });
+
+    test('does not treat years as embedded list markers', () => {
+      expect(ss('Results: 1. Alpha was founded in 2020. Growth continued.')).toEqual([
+        'Results: 1.',
+        'Alpha was founded in 2020.',
+        'Growth continued.',
+      ]);
+    });
+
+    test('does not treat sentence-ending counts as embedded list markers', () => {
+      expect(ss('Results: 1. The answer was 42. More analysis followed 2. Final.')).toEqual([
+        'Results:',
+        '1. The answer was 42.',
+        'More analysis followed',
+        '2. Final.',
+      ]);
+      expect(ss('Results: 1. The answer measured 42. More analysis followed 2. Final.')).toEqual([
+        'Results:',
+        '1. The answer measured 42.',
+        'More analysis followed',
+        '2. Final.',
+      ]);
+    });
+
+    test('ignores quoted parentheses while finding embedded lists', () => {
+      expect(ss('The symbol "(" is used. Options: a) Alpha b) Beta.')).toEqual([
+        'The symbol "(" is used.',
+        'Options:',
+        'a) Alpha',
+        'b) Beta.',
+      ]);
+      expect(ss("The symbol '(' is used. Options: a) Alpha b) Beta.")).toEqual([
+        "The symbol '(' is used.",
+        'Options:',
+        'a) Alpha',
+        'b) Beta.',
+      ]);
+      for (const [opening, closing] of [
+        ['“', '”'],
+        ['‘', '’'],
+      ]) {
+        expect(ss(`The symbol ${opening}(${closing} is used. Options: a) Alpha b) Beta.`)).toEqual([
+          `The symbol ${opening}(${closing} is used.`,
+          'Options:',
+          'a) Alpha',
+          'b) Beta.',
+        ]);
+      }
+    });
+
+    test('does not mistake inch marks for opening quotations inside lists', () => {
+      const input = '1) board is 6" wide 2) narrow';
+      expect(ss(input)).toEqual(['1) board is 6" wide', '2) narrow']);
+      expect(segmentCaseNeutrally(input)).toEqual(['1) board is 6" wide', '2) narrow']);
+    });
+
+    test('ignores apostrophe-led contractions while finding embedded lists', () => {
+      expect(ss("'Twas nice. Options: a) Alpha b) Beta.")).toEqual([
+        "'Twas nice.",
+        'Options:',
+        'a) Alpha',
+        'b) Beta.',
+      ]);
+    });
+
+    test('does not split parenthesized labels inside a quotation', () => {
+      const input = 'He said "The winners were (team A) Alice and (team B) Bob."';
+      expect(ss(input)).toEqual([input]);
+    });
+
+    test('caches long numeric markers while deferring overlapping list families', () => {
+      const input = `A. x: ${'9'.repeat(4000)}. x ${'1. x '.repeat(4000)}`;
+      expect(() => rouge.n(input, input)).not.toThrow();
+    });
+
+    test('does not interpret parenthesized labels as list markers', () => {
+      const input = 'The winners were (team A) Alice and (team B) Bob.';
+      expect(ss(input)).toEqual([input]);
+      expect(segmentCaseNeutrally(input)).toEqual([input]);
+    });
+
     test('keeps four-dot boundaries invariant under case folding', () => {
       expect(segmentCaseNeutrally('First.... Second.')).toEqual(['First....', 'Second.']);
       expect(segmentCaseNeutrally('first.... second.')).toEqual(['first....', 'second.']);
@@ -1386,6 +1629,13 @@ describe('Utility Functions', () => {
     // Using 500ms threshold to account for CI environment variability
     describe('ReDoS prevention', () => {
       const TIMEOUT_MS = 500;
+
+      test('anchors mismatched numeric marker families without backtracking', () => {
+        const input = `1. Alpha 2. Beta ${'9'.repeat(48_000)}) Gamma`;
+        const started = Date.now();
+        expect(ss(input)).toHaveLength(2);
+        expect(Date.now() - started).toBeLessThan(TIMEOUT_MS);
+      });
 
       test('segments large spaced-ellipsis runs within a constrained heap', () => {
         expectBundledScriptToPass(
@@ -2683,6 +2933,13 @@ describe('Core Functions', () => {
 
     test('preserves reordered sentence boundaries across NEL separators', () => {
       expect(l('Alpha.\u0085Beta.', 'Beta.\u0085Alpha.')).toBe(1);
+    });
+
+    test('bounds Cartesian comparisons after expanding large embedded lists', () => {
+      const summary = Array.from({ length: 317 }, (_, index) =>
+        index % 2 === 0 ? 'a) Alpha' : 'b) Beta',
+      ).join(' ');
+      expect(() => l(summary, summary)).toThrow(/sentence comparison exceeds the work limit/);
     });
 
     test('should preserve word separation after an ellipsis for custom tokenizers', () => {

@@ -11,6 +11,7 @@ import {
 export * from './utils';
 
 const whitespaceOnlyReg = /^[\s\u0085]*$/;
+const maxLcsSentencePairs = 100_000;
 
 /** Options for ROUGE-N evaluation */
 export interface RougeNOptions {
@@ -427,6 +428,15 @@ export function l(cand: string, ref: string, opts?: RougeLOptions): number {
 
   if (candLength === 0 || refLength === 0) {
     return 0;
+  }
+
+  if (
+    segmenter === utils.sentenceSegment &&
+    getLcs === utils.lcs &&
+    getLcsIndices === undefined &&
+    candSents.length > maxLcsSentencePairs / refSents.length
+  ) {
+    throw new RangeError('ROUGE-L sentence comparison exceeds the work limit');
   }
 
   const matches = countSummaryLcsMatches(candSents, refSents, remaining, getLcs, getLcsIndices);
