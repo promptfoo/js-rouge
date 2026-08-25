@@ -1162,6 +1162,182 @@ describe('Utility Functions', () => {
       ]);
     });
 
+    test.each([
+      "She said 'First! Second!' aloud.",
+      'She said "First! Second!" aloud.',
+      "'Well?' she thought, 'First! Second!' aloud.",
+    ])('keeps internal sentence punctuation inside quoted spans: %s', (input) => {
+      expect(ss(input)).toEqual([input]);
+      expect(segmentCaseNeutrally(input)).toEqual([input]);
+    });
+
+    test.each([
+      ['She said ‘First. Second.’ Next.', ['She said ‘First. Second.’', 'Next.']],
+      ['She said ‘It’s fine. Really.’ Next.', ['She said ‘It’s fine. Really.’', 'Next.']],
+    ])('keeps curly single quotations intact in %s', (input, expected) => {
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
+    test('does not mistake apostrophe-prefixed decades for opening quotations', () => {
+      expect(
+        ss(
+          "I wrote this in the 'nineties. It has four sentences. This is the third, isn't it? And this is the last",
+        ),
+      ).toEqual([
+        "I wrote this in the 'nineties.",
+        'It has four sentences.',
+        "This is the third, isn't it?",
+        'And this is the last',
+      ]);
+    });
+
+    test.each([
+      ["'Tis the season. It is cold.", ["'Tis the season.", 'It is cold.']],
+      ["'twas late. We left.", ["'twas late.", 'We left.']],
+      ["'Til tomorrow. We can wait.", ["'Til tomorrow.", 'We can wait.']],
+      ["'round the bend. We continued.", ["'round the bend.", 'We continued.']],
+      ["It happened in '99. Next event.", ["It happened in '99.", 'Next event.']],
+      ["She told 'em to leave. They refused.", ["She told 'em to leave.", 'They refused.']],
+      ["She said 'cause it rained. We stayed.", ["She said 'cause it rained.", 'We stayed.']],
+    ])('does not interpret apostrophe-led contractions as quotations: %s', (input, expected) => {
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
+    test.each([
+      [
+        'She said "She answered “No.” Then left." Next.',
+        ['She said "She answered “No.” Then left."', 'Next.'],
+      ],
+      [
+        "She said 'She answered “No.” Then left.' Next.",
+        ["She said 'She answered “No.” Then left.'", 'Next.'],
+      ],
+      ['He said "First. “Second.” Then." Next.', ['He said "First. “Second.” Then."', 'Next.']],
+    ])('retains outer quotations around nested curly quotations: %s', (input, expected) => {
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
+    test.each([
+      [
+        'She said "He answered \'No.\'" Next. Last.',
+        ['She said "He answered \'No.\'"', 'Next.', 'Last.'],
+      ],
+      [
+        "She said “He answered 'No.'” Next. Last.",
+        ["She said “He answered 'No.'”", 'Next.', 'Last.'],
+      ],
+    ])('closes an inner single quote before its outer quotation: %s', (input, expected) => {
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
+    test('keeps a spaced outer closing quotation after an inner closer', () => {
+      const input = 'She said "He answered \'No.\' " Next. Last.';
+      const expected = ['She said "He answered \'No.\' "', 'Next.', 'Last.'];
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
+    test('keeps spaced single closing quotations with their sentence', () => {
+      const input = "He said 'Stop. ' Next.";
+      const expected = ["He said 'Stop. '", 'Next.'];
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
+    test('closes s-ending quotations before capitalized continuations', () => {
+      const input = "The response 'Yes' Alice selected was accepted. Bob objected.";
+      const expected = ["The response 'Yes' Alice selected was accepted.", 'Bob objected.'];
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
+    test.each(['in English', 'on Monday', 'from Alice'])(
+      'closes s-ending quoted words before %s',
+      (continuation) => {
+        const input = `The word 'news' ${continuation} is useful. Next sentence.`;
+        const expected = [`The word 'news' ${continuation} is useful.`, 'Next sentence.'];
+        expect(ss(input)).toEqual(expected);
+        expect(segmentCaseNeutrally(input)).toEqual(expected);
+      },
+    );
+
+    test.each([
+      ['“Alpha.” Beta.', ['“Alpha.”', 'Beta.']],
+      ['She said “First! Second!” Next she left.', ['She said “First! Second!”', 'Next she left.']],
+      [
+        'Er sagte „Hallo.“ Dann ging er. Nächster Satz.',
+        ['Er sagte „Hallo.“', 'Dann ging er.', 'Nächster Satz.'],
+      ],
+    ])('keeps curly closing quotations with their sentence in %s', (input, expected) => {
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
+    test('keeps independent reporting-verb sentences separate', () => {
+      const input = '"It ended." He said nothing afterward. Next.';
+      const expected = ['"It ended."', 'He said nothing afterward.', 'Next.'];
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        expected.map((sentence) => sentence.toLowerCase()),
+      );
+      expect(segmentCaseNeutrally('"It ended." Nothing was said. Next.')).toEqual([
+        '"It ended."',
+        'Nothing was said.',
+        'Next.',
+      ]);
+    });
+
+    test.each(['Was it really over?', 'Was Alice ready?', 'Is John ready?', 'Can anyone help?'])(
+      'keeps auxiliary-led question %s separate from preceding quotations',
+      (question) => {
+        const input = `"It ended." ${question} Next.`;
+        const expected = ['"It ended."', question, 'Next.'];
+        expect(ss(input)).toEqual(expected);
+        expect(segmentCaseNeutrally(input)).toEqual(expected);
+      },
+    );
+
+    test('keeps long auxiliary-led questions separate from preceding quotations', () => {
+      const question = `Was Alice ${'really '.repeat(50)}ready?`;
+      const input = `"It ended." ${question} Next.`;
+      expect(ss(input)).toEqual(['"It ended."', question, 'Next.']);
+      expect(segmentCaseNeutrally(input)).toEqual(['"It ended."', question, 'Next.']);
+    });
+
+    test('keeps proper-name dialogue attributions with the quotation', () => {
+      const input = '“Stop!” Alice said. Next.';
+      const expected = ['“Stop!” Alice said.', 'Next.'];
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input.toLowerCase())).toEqual(
+        expected.map((sentence) => sentence.toLowerCase()),
+      );
+      expect(segmentCaseNeutrally('"Stop!" said Alice. Next.')).toEqual([
+        '"Stop!" said Alice.',
+        'Next.',
+      ]);
+      expect(segmentCaseNeutrally('The word “No.” was written. Next.')).toEqual([
+        'The word “No.” was written.',
+        'Next.',
+      ]);
+    });
+
+    test('keeps curly-quoted list markers attached to their items', () => {
+      const input = '1. “Alpha.” 2. “Beta.”';
+      const expected = ['1. “Alpha.”', '2. “Beta.”'];
+      expect(ss(input)).toEqual(expected);
+      expect(segmentCaseNeutrally(input)).toEqual(expected);
+    });
+
+    test('scores reordered curly-quoted reference sentences correctly', () => {
+      expect(rouge.l('Beta “Alpha.”', '“Alpha.” Beta.')).toBeCloseTo(4 / 5);
+    });
+
     test('should keep closing double quotes with their sentence', () => {
       expect(ss('He said... "what?" Next.')).toEqual(['He said... "what?"', 'Next.']);
       expect(ss('He said "hello." Then left.')).toEqual(['He said "hello."', 'Then left.']);
@@ -1386,6 +1562,13 @@ describe('Utility Functions', () => {
     // Using 500ms threshold to account for CI environment variability
     describe('ReDoS prevention', () => {
       const TIMEOUT_MS = 500;
+
+      test('rejects uninterrupted verb-first attribution subjects without backtracking', () => {
+        const input = `"Stop." said ${'a'.repeat(700)}#`;
+        const started = Date.now();
+        expect(ss(input)).toEqual([input]);
+        expect(Date.now() - started).toBeLessThan(TIMEOUT_MS);
+      });
 
       test('segments large spaced-ellipsis runs within a constrained heap', () => {
         expectBundledScriptToPass(
