@@ -4351,8 +4351,10 @@ class CurlyCitationElisions {
 }
 
 function isWordInternalApostrophe(input: string, index: number): boolean {
+  const precedingPair = input.codePointAt(index - 2);
+  const width = precedingPair !== undefined && precedingPair > 0xff_ff ? 2 : 1;
   return (
-    /[\p{Letter}\p{Mark}]$/u.test(input.slice(Math.max(0, index - 2), index)) &&
+    /^[\p{Letter}\p{Mark}]$/u.test(input.slice(Math.max(0, index - width), index)) &&
     /^[\p{Letter}\p{Mark}]$/u.test(characterAt(input, index + 1))
   );
 }

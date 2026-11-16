@@ -117,7 +117,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: '24'
+          node-version: '26'
           package-manager-cache: false
       - run: npm ci
       - run: npm test
@@ -179,15 +179,15 @@ jobs:
           path: release-package
       - name: Verify downloaded package hash
         run: sha256sum --check release-package/SHA256SUMS
-      # Node 24 required for npm OIDC trusted publishing (npm 11.5.1+)
+      # Use a Node release with npm 11.5.1+ for OIDC trusted publishing
       - name: Setup Node.js
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
-          node-version: '24'
+          node-version: '26'
           package-manager-cache: false
           registry-url: 'https://registry.npmjs.org'
       # Publishing uses npm's OIDC trusted publishers for authentication.
-      # This requires npm 11.5.1+ (Node 24 includes npm 11.6.0) and the package
+      # This requires npm 11.5.1+ and the package
       # must be configured on npmjs.com to trust this GitHub repository/workflow.
       # See: https://docs.npmjs.com/trusted-publishers/
       # The --provenance flag signs an attestation for this workflow and archive.
