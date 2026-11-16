@@ -5039,7 +5039,7 @@ function citationDelimiterEnd(
 ): number {
   let end = index + 1;
   const state = { pending, preserveOpeners };
-  for (;;) {
+  while (true) {
     const nextEnd = citationLegacyDelimiterEnd(input, end - 1, hasCitationDoubleQuote(pending));
     const consumed = advanceCitationClosers(input, end, nextEnd, state);
     if (consumed < nextEnd) {
