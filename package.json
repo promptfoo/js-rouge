@@ -51,11 +51,11 @@
   },
   "homepage": "https://github.com/promptfoo/js-rouge",
   "devDependencies": {
-    "@biomejs/biome": "2.6.8",
+    "@biomejs/biome": "2.6.9",
     "@swc/core": "^1.15.5",
     "@swc/jest": "^0.2.39",
     "@types/jest": "^30.0.0",
-    "@types/node": "26.6.6",
+    "@types/node": "26.6.11",
     "esbuild": "^0.28.1",
     "husky": "^9.1.7",
     "jest": "^30.2.0",
